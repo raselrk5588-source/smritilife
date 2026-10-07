@@ -17,13 +17,15 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            mkdir -p /var/www/roni
-            cd /var/www/roni
+            mkdir -p /var/www/roni/smritilife.com
+            cd /var/www/roni/smritilife.com
             if [ ! -d ".git" ]; then
-              git clone https://github.com/raselrk5588-source/smritilife.git .
+              git init
+              git remote add origin https://github.com/raselrk5588-source/smritilife.git
             fi
-            git config --global --add safe.directory /var/www/roni
+            git config --global --add safe.directory /var/www/roni/smritilife.com
             git fetch origin
+            git branch -f ${{ github.ref_name }} origin/${{ github.ref_name }} || true
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
             git clean -fd
