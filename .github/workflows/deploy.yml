@@ -32,6 +32,23 @@ jobs:
             
             # Create .env.production for client so Vite can pick up VITE_API_URL during build
             echo "VITE_API_URL=https://smritilife.com/api" > client/.env.production
+
+            # Create .env for server
+            cat > server/.env << "EOF"
+PORT=5000
+MONGO_URI=mongodb+srv://qubitzonebd_db_user:18UHT5Vf531QhuRd@cluster0.f1jgl4t.mongodb.net/smriti?appName=Cluster0
+JWT_SECRET=smriti_secret_key_2026
+NODE_ENV=production
+EOF
+
+            # Create .env for worker
+            cat > worker/.env << "EOF"
+PORT=5001
+MONGO_URI=mongodb+srv://qubitzonebd_db_user:18UHT5Vf531QhuRd@cluster0.f1jgl4t.mongodb.net/smriti?appName=Cluster0
+REDIS_HOST=close-bee-199444.upstash.io
+REDIS_PORT=6379
+REDIS_PASSWORD=gQAAAAAAAwsUAAIgcDEyMTYzZTlkNmVjZWY0MWViOGQzNjBiNDA4NTJkNzc1MA
+EOF
             
             docker-compose down
             docker-compose up -d --build
