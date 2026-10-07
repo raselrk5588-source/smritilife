@@ -1,20 +1,6 @@
 version: '3.8'
 
 services:
-  mongodb:
-    image: mongo:6.0
-    container_name: smriti_mongodb
-    volumes:
-      - smriti_mongo_data:/data/db
-    networks:
-      - smriti_network
-
-  redis:
-    image: redis:7-alpine
-    container_name: smriti_redis
-    networks:
-      - smriti_network
-
   server:
     build: 
       context: ./server
@@ -22,11 +8,6 @@ services:
     container_name: smriti_server
     ports:
       - "5000:5000"
-    environment:
-      - PORT=5000
-      - MONGO_URI=mongodb://mongodb:27017/smriti
-    depends_on:
-      - mongodb
     networks:
       - smriti_network
 
@@ -35,12 +16,6 @@ services:
       context: ./worker
       dockerfile: Dockerfile
     container_name: smriti_worker
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      - redis
-      - mongodb
     networks:
       - smriti_network
 
@@ -54,8 +29,6 @@ services:
     networks:
       - smriti_network
 
-volumes:
-  smriti_mongo_data:
 networks:
   smriti_network:
     driver: bridge

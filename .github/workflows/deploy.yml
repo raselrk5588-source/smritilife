@@ -29,6 +29,10 @@ jobs:
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
             git clean -fd
+            
+            # Create .env.production for client so Vite can pick up VITE_API_URL during build
+            echo "VITE_API_URL=https://smritilife.com/api" > client/.env.production
+            
             docker-compose down
             docker-compose up -d --build
             
