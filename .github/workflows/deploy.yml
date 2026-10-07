@@ -17,7 +17,11 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
+            mkdir -p /var/www/roni
             cd /var/www/roni
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/raselrk5588-source/smritilife.git .
+            fi
             git config --global --add safe.directory /var/www/roni
             git fetch origin
             git checkout ${{ github.ref_name }}
