@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: smriti_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - smriti_mongo_data:/data/db
+    networks:
+      - smriti_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: smriti_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - smriti_network
+
+  server:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: smriti_server
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongodb:27017/smriti
+    depends_on:
+      - mongodb
+    networks:
+      - smriti_network
+
+  worker:
+    build: 
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: smriti_worker
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+      - mongodb
+    networks:
+      - smriti_network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: smriti_client
+    networks:
+      - smriti_network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: smriti_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - smriti_network
+
+volumes:
+  smriti_mongo_data:
+  caddy_data:
+  caddy_config:
+networks:
+  smriti_network:
+    driver: bridge

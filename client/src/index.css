@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@layer base {
+  html {
+    font-size: 16px;
+  }
+  body {
+    @apply bg-slate-50 text-slate-800 font-sans antialiased;
+  }
+}
+
+html.dark {
+  filter: invert(0.92) hue-rotate(180deg) brightness(1.05) contrast(0.95);
+  background-color: #111;
+}
+
+html.dark img, 
+html.dark video,
+html.dark [style*="background-image"],
+html.dark [class*="primary"],
+html.dark [class*="red-500"], html.dark [class*="red-600"], html.dark [class*="red-700"],
+html.dark [class*="blue-500"], html.dark [class*="blue-600"], html.dark [class*="blue-700"],
+html.dark [class*="purple-500"], html.dark [class*="purple-600"], html.dark [class*="purple-700"],
+html.dark [class*="emerald-500"], html.dark [class*="emerald-600"], html.dark [class*="emerald-700"],
+html.dark [class*="amber-500"], html.dark [class*="amber-600"], html.dark [class*="amber-700"],
+html.dark [class*="orange-500"], html.dark [class*="orange-600"], html.dark [class*="orange-700"],
+html.dark [class*="pink-500"], html.dark [class*="pink-600"], html.dark [class*="pink-700"],
+html.dark [class*="green-500"], html.dark [class*="green-600"], html.dark [class*="green-700"],
+html.dark [class*="teal-500"], html.dark [class*="teal-600"], html.dark [class*="teal-700"] {
+  filter: invert(1.08) hue-rotate(180deg) brightness(0.95) contrast(1.05);
+}
+
+/* Global Elegant Borders for UI Elements */
+div[class*="bg-white"]:not(.border-none):not(.border-transparent), 
+div[class*="bg-slate-50"]:not(.border-none):not(.border-transparent), 
+div[class*="-50 "]:not(.border-none):not(.border-transparent), 
+button:not(.border-none):not(.border-transparent), 
+input:not(.border-none):not(.border-transparent), 
+textarea:not(.border-none):not(.border-transparent) {
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+}
+
+html.dark div[class*="bg-white"]:not(.border-none):not(.border-transparent), 
+html.dark div[class*="bg-slate-50"]:not(.border-none):not(.border-transparent), 
+html.dark div[class*="-50 "]:not(.border-none):not(.border-transparent), 
+html.dark button:not(.border-none):not(.border-transparent), 
+html.dark input:not(.border-none):not(.border-transparent),
+html.dark textarea:not(.border-none):not(.border-transparent) {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}

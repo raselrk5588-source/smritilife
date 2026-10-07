@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Diary Cover -->
+  <rect x="14" y="6" width="36" height="52" rx="4" fill="#047857" />
+  <!-- Pages -->
+  <rect x="44" y="10" width="8" height="44" rx="2" fill="#FDE68A" />
+  <!-- Cover Details -->
+  <rect x="14" y="6" width="8" height="52" rx="4" fill="#064E3B" />
+  <line x1="26" y1="16" x2="40" y2="16" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+  <line x1="26" y1="24" x2="36" y2="24" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Bookmark -->
+  <path d="M30 6v20l4-3 4 3V6z" fill="#EF4444" />
+  
+  <!-- Pen -->
+  <path d="M60 4a4 4 0 0 0-5.65 0l-6 6 5.65 5.65 6-6A4 4 0 0 0 60 4z" fill="#F87171" />
+  <path d="M48.35 10l5.65 5.65-22 22-8.5 2.8 2.8-8.5 22-22z" fill="#FBBF24" />
+  <path d="M26.35 37.65L23.5 40.5" stroke="#4B5563" stroke-width="2" stroke-linecap="round" />
+</svg>

@@ -1,0 +1,7 @@
+smritilife.com {
+    # Proxy API requests to the Node.js server
+    reverse_proxy /api/* smriti_server:5000
+    
+    # Proxy all other requests to the React client
+    reverse_proxy * smriti_client:80
+}
