@@ -1,8 +1,8 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 
 // Ethereal is a free email catching service for developers.
 // We initialize the transporter with a test account.
-let transporter: nodemailer.Transporter | null = null;
+let transporter: Transporter | null = null;
 
 export const initEmailService = async () => {
   if (transporter) return;
