@@ -34,21 +34,17 @@ jobs:
             echo "VITE_API_URL=https://smritilife.com/api" > client/.env.production
 
             # Create .env for server
-            cat > server/.env << "EOF"
-PORT=5000
-MONGO_URI=mongodb+srv://qubitzonebd_db_user:18UHT5Vf531QhuRd@cluster0.f1jgl4t.mongodb.net/smriti?appName=Cluster0
-JWT_SECRET=smriti_secret_key_2026
-NODE_ENV=production
-EOF
+            echo "PORT=5000" > server/.env
+            echo "MONGO_URI=mongodb+srv://qubitzonebd_db_user:18UHT5Vf531QhuRd@cluster0.f1jgl4t.mongodb.net/smriti?appName=Cluster0" >> server/.env
+            echo "JWT_SECRET=smriti_secret_key_2026" >> server/.env
+            echo "NODE_ENV=production" >> server/.env
 
             # Create .env for worker
-            cat > worker/.env << "EOF"
-PORT=5001
-MONGO_URI=mongodb+srv://qubitzonebd_db_user:18UHT5Vf531QhuRd@cluster0.f1jgl4t.mongodb.net/smriti?appName=Cluster0
-REDIS_HOST=close-bee-199444.upstash.io
-REDIS_PORT=6379
-REDIS_PASSWORD=gQAAAAAAAwsUAAIgcDEyMTYzZTlkNmVjZWY0MWViOGQzNjBiNDA4NTJkNzc1MA
-EOF
+            echo "PORT=5001" > worker/.env
+            echo "MONGO_URI=mongodb+srv://qubitzonebd_db_user:18UHT5Vf531QhuRd@cluster0.f1jgl4t.mongodb.net/smriti?appName=Cluster0" >> worker/.env
+            echo "REDIS_HOST=close-bee-199444.upstash.io" >> worker/.env
+            echo "REDIS_PORT=6379" >> worker/.env
+            echo "REDIS_PASSWORD=gQAAAAAAAwsUAAIgcDEyMTYzZTlkNmVjZWY0MWViOGQzNjBiNDA4NTJkNzc1MA" >> worker/.env
             
             docker-compose down
             docker-compose up -d --build
