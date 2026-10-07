@@ -67,8 +67,8 @@ app.use(async (err: any, req: express.Request, res: express.Response, next: expr
   res.status(err.status || 500).json({ message: err.message || 'Server Error' });
 });
 
-// For local development
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+// Start server in all environments except Vercel
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
