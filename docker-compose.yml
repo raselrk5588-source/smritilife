@@ -24,6 +24,8 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: smriti_server
+    ports:
+      - "5000:5000"
     environment:
       - PORT=5000
       - MONGO_URI=mongodb://mongodb:27017/smriti
@@ -51,27 +53,13 @@ services:
       context: ./client
       dockerfile: Dockerfile
     container_name: smriti_client
-    networks:
-      - smriti_network
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: smriti_caddy
-    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
+      - "5173:80"
     networks:
       - smriti_network
 
 volumes:
   smriti_mongo_data:
-  caddy_data:
-  caddy_config:
 networks:
   smriti_network:
     driver: bridge
