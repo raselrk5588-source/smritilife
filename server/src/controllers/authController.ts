@@ -72,10 +72,6 @@ export const loginWithOtp = async (req: Request, res: Response) => {
       if (mobile === '01734042131' && !user.isSubscribed) {
         user.isSubscribed = true;
         await user.save();
-      } else if (mobile !== '01734042131' && user.isSubscribed) {
-        // Force others to false for this requirement, or leave them as is if they already paid
-        user.isSubscribed = false;
-        await user.save();
       }
     }
 
