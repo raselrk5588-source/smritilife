@@ -13,6 +13,15 @@ export default function Auth() {
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState('');
 
+  const getDeviceId = () => {
+    let id = localStorage.getItem('deviceId');
+    if (!id) {
+      id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('deviceId', id);
+    }
+    return id;
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mobile || (showOtp && !otp)) {
@@ -20,12 +29,38 @@ export default function Auth() {
       return;
     }
 
+    const deviceId = getDeviceId();
+
     if (!showOtp) {
       toast.loading('চেক করা হচ্ছে...', { id: 'authCheck' });
-      setTimeout(() => {
+      try {
+        const url = `${import.meta.env.VITE_API_URL}/users/check-mobile`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile, deviceId })
+        });
+        const data = await res.json();
+        
+        if (data.requireOtp === false && data.token) {
+          // Bypass OTP
+          localStorage.setItem('token', data.token);
+          toast.success('সরাসরি লগইন সফল হয়েছে!', { id: 'authCheck' });
+          localStorage.setItem('isAuthenticated', 'true');
+          localStorage.setItem('isSubscribed', 'true');
+          localStorage.setItem('userName', data.user.name);
+          localStorage.setItem('userMobile', data.user.mobile);
+          navigate('/app');
+        } else {
+          toast.success('আপনার নম্বরে OTP পাঠানো হয়েছে!', { id: 'authCheck' });
+          setShowOtp(true);
+        }
+      } catch (err: any) {
+        console.error("Auth check error:", err);
+        // Fallback to requiring OTP
         toast.success('আপনার নম্বরে OTP পাঠানো হয়েছে!', { id: 'authCheck' });
         setShowOtp(true);
-      }, 1000);
+      }
     } else {
       // Step 2: Verify OTP via API
       toast.loading('লগইন হচ্ছে...', { id: 'authCheck' });
@@ -34,7 +69,7 @@ export default function Auth() {
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mobile, otp })
+          body: JSON.stringify({ mobile, otp, deviceId })
         });
         
         const text = await res.text();

@@ -13,6 +13,7 @@ export interface IUser extends Document {
     voice: boolean;
   };
   isSubscribed: boolean;
+  deviceIds: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,7 +31,8 @@ const UserSchema: Schema = new Schema(
       notifications: { type: Boolean, default: true },
       voice: { type: Boolean, default: true }
     },
-    isSubscribed: { type: Boolean, default: true }
+    isSubscribed: { type: Boolean, default: true },
+    deviceIds: { type: [String], default: [] }
   },
   { timestamps: true }
 );
