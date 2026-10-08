@@ -36,46 +36,55 @@ export const sendSMS = async (to: string, message: string) => {
 
 export const sendWhatsApp = async (to: string, message: string, imageUrl?: string) => {
   try {
-    const settings = await SystemSettings.findOne();
-    
-    // Check if we have Twilio credentials in environment or settings
-    const accountSid = settings?.twilioAccountSid || process.env.TWILIO_ACCOUNT_SID;
-    const authToken = settings?.whatsappApiToken || process.env.TWILIO_AUTH_TOKEN;
-    const twilioWhatsAppNumber = settings?.twilioPhoneNumber || process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886'; 
-    
-    if (!accountSid || !authToken) {
-      console.log('⚠️  Twilio credentials not fully configured. Using mock WhatsApp send.');
-      console.log(`💬 To: ${to} | Message: ${message}`);
-      return true;
+    // For Meta WhatsApp Cloud API (Testing configuration)
+    const metaToken = "EAAfJRzwYyIsBSjO1yS0q0CJBVI9scXM3ssgL1czWkXmuvsXNzLzjkxRRMtO4pwIGpmiCdgs674JMjqx17IiJRJXOgp1FkBhuMkQmHl0xYZCa5Kw2BhBRiIittegUucKJWuineTJGX2yklXcnuHE2A1J2jANFR6kBYT3NvGsERdyBLejgaoqUKWXMfxAZDZD";
+    const phoneNumberId = "1351522341377579"; 
+
+    // Meta expects country code without '+' or 'whatsapp:' prefix
+    let formattedTo = to;
+    if (formattedTo.startsWith('+')) {
+      formattedTo = formattedTo.substring(1);
+    } else if (formattedTo.startsWith('01')) {
+      formattedTo = `88${formattedTo}`;
     }
-
-    const client = twilio(accountSid, authToken);
-
-    // Format the number to E.164 format and prefix with 'whatsapp:'
-    // Example: if 'to' is '01700000000', we format to 'whatsapp:+8801700000000'
-    let formattedTo = to.startsWith('+') ? to : `+88${to}`; // Assuming Bangladesh format, adjust as needed
-    formattedTo = `whatsapp:${formattedTo}`;
 
     console.log(`\n======================================`);
-    console.log(`💬 [Real WhatsApp Service] Sending via Twilio to: ${formattedTo}`);
+    console.log(`💬 [Real WhatsApp Service] Sending via Meta API to: ${formattedTo}`);
     
-    const messageOptions: any = {
-      body: message,
-      from: twilioWhatsAppNumber,
-      to: formattedTo
+    // We send a text message by default
+    const payload: any = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: formattedTo,
+      type: "text",
+      text: {
+        preview_url: false,
+        body: message
+      }
     };
 
-    if (imageUrl) {
-      messageOptions.mediaUrl = [imageUrl];
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${metaToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('❌ Failed to send WhatsApp via Meta API:', JSON.stringify(data, null, 2));
+      return false;
     }
 
-    const response = await client.messages.create(messageOptions);
-    console.log(`✅ WhatsApp Sent! Message SID: ${response.sid}`);
+    console.log(`✅ WhatsApp Sent! Message ID: ${data.messages?.[0]?.id}`);
     console.log(`======================================\n`);
     
     return true;
   } catch (error) {
-    console.error('❌ Failed to send WhatsApp via Twilio:', error);
+    console.error('❌ Failed to send WhatsApp via Meta API:', error);
     return false;
   }
 };
