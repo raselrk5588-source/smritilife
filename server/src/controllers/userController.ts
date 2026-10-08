@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
+import Note from '../models/Note';
+import Reminder from '../models/Reminder';
+import SpecialDate from '../models/SpecialDate';
 import mongoose from 'mongoose';
 
 export const getProfile = async (req: Request, res: Response) => {
@@ -10,7 +13,18 @@ export const getProfile = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
-    res.json(user);
+    const notesCount = await Note.countDocuments({ userId: req.user?.id });
+    const remindersCount = await Reminder.countDocuments({ userId: req.user?.id });
+    const specialDatesCount = await SpecialDate.countDocuments({ userId: req.user?.id });
+    
+    res.json({
+      ...user.toObject(),
+      stats: {
+        notes: notesCount,
+        reminders: remindersCount,
+        specialDates: specialDatesCount
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }

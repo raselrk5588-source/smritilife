@@ -18,6 +18,7 @@ export default function Profile() {
   const [showUnsubscribeConfirm, setShowUnsubscribeConfirm] = useState(false);
   
   const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [stats, setStats] = useState({ notes: 0, reminders: 0, specialDates: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch profile on load
@@ -55,6 +56,7 @@ export default function Profile() {
         }
         if (data.username) setUsername(data.username);
         if (data.profilePic) setProfilePic(data.profilePic);
+        if (data.stats) setStats(data.stats);
       })
       .catch(err => console.error('Error fetching profile:', err));
   }, []);
@@ -106,8 +108,7 @@ export default function Profile() {
     }
   };
   
-  // Real stats will be fetched here, defaulting to 0 instead of hardcoded values
-  const [stats, setStats] = useState({ notes: 0, reminders: 0, specialDates: 0 });
+  // Stats state is defined above
 
   return (
     <div className="bg-slate-50 min-h-screen pb-24">
@@ -144,6 +145,12 @@ export default function Profile() {
           </div>
           <h2 className="text-xl font-bold text-slate-800 mt-3">{name}</h2>
           <p className="text-sm text-slate-500 font-medium">{email}</p>
+          {whatsapp && (
+            <div className="flex items-center text-sm text-emerald-600 font-medium mt-1 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+              <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> 
+              {whatsapp}
+            </div>
+          )}
         </div>
         
         {/* Background Decorative element */}
