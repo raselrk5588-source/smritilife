@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Plus, Bell, Calendar, Clock, Pill, Briefcase, Bookmark, Trash2, MoreVertical, ShoppingCart, CreditCard, Gift } from 'lucide-react';
+import { ChevronLeft, Plus, Bell, Calendar, Clock, Pill, Briefcase, Bookmark, Trash2, MoreVertical, ShoppingCart, CreditCard, Gift, Edit } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
@@ -26,6 +26,7 @@ export default function Reminders() {
   
   // State for saved reminders list
   const [savedReminders, setSavedReminders] = useState<any[]>([]);
+  const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
 
   const filteredReminders = activeFilter === 'all' 
     ? savedReminders 
@@ -85,6 +86,35 @@ export default function Reminders() {
   const removeMedicine = (id: number) => setMedicines(medicines.filter(m => m.id !== id));
 
   const handleSaveReminder = async () => {
+    if (editingReminderId) {
+      if (!reminderTitle.trim()) {
+        toast.error(t('রিমাইন্ডারের বিষয় লিখুন', 'Enter a reminder subject'));
+        return;
+      }
+      try {
+        await fetchWithAuth(`${import.meta.env.VITE_API_URL}/reminders/${editingReminderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: reminderTitle,
+            category: reminderType,
+            date: reminderDate || new Date().toISOString(),
+            time: reminderTime || '09:00',
+            status: isAlertOn ? 'Pending' : 'Cancelled'
+          })
+        });
+        fetchReminders();
+        setEditingReminderId(null);
+        setReminderTitle('');
+        setReminderDate('');
+        setReminderTime('');
+        toast.success(t('রিমাইন্ডার আপডেট হয়েছে!', 'Reminder updated!'));
+      } catch (e) {
+        toast.error('Failed to update');
+      }
+      return;
+    }
+
     if (reminderType === 'medicine') {
       const validMeds = medicines.filter(m => m.name.trim() !== '' && m.routine.length > 0);
       if (validMeds.length === 0) {
@@ -165,6 +195,19 @@ export default function Reminders() {
     }
   };
 
+  const handleEditReminder = (rem: any) => {
+    setEditingReminderId(rem.id);
+    let type = rem.type === 'General' || !rem.type ? 'other' : rem.type;
+    setReminderType(type as any);
+    
+    setReminderTitle(rem.title);
+    setReminderDate(rem.originalDate ? rem.originalDate.split('T')[0] : '');
+    setReminderTime(rem.originalTime || '');
+    setIsAlertOn(rem.active);
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="bg-[#f6f8f9] min-h-screen pb-24 font-sans">
       {/* Top Header */}
@@ -186,7 +229,7 @@ export default function Reminders() {
           
           <h2 className="text-[15px] font-bold text-slate-800 mb-4 flex items-center relative z-10">
             <Plus className={`w-4 h-4 mr-1 ${reminderType === 'medicine' ? 'text-red-500' : reminderType === 'work' ? 'text-blue-500' : 'text-purple-500'}`} /> 
-            {t('নতুন রিমাইন্ডার যোগ করুন', 'Add New Reminder')}
+            {t(editingReminderId ? 'রিমাইন্ডার আপডেট করুন' : 'নতুন রিমাইন্ডার যোগ করুন', editingReminderId ? 'Update Reminder' : 'Add New Reminder')}
           </h2>
 
           {/* Category Selector */}
@@ -230,7 +273,7 @@ export default function Reminders() {
           </div>
           
           <div className="space-y-4 relative z-10">
-            {reminderType === 'medicine' ? (
+            {reminderType === 'medicine' && !editingReminderId ? (
               <div className="space-y-4">
                 {medicines.map((med, idx) => (
                   <div key={med.id} className="p-3 bg-red-50/50 border border-red-100 rounded-xl relative">
@@ -381,8 +424,21 @@ export default function Reminders() {
               onClick={handleSaveReminder}
               className={`w-full text-white font-bold py-3.5 rounded-xl transition-all text-sm shadow-md hover:shadow-lg active:scale-[0.98] mt-2 ${reminderType === 'medicine' ? 'bg-red-500 hover:bg-red-600' : reminderType === 'work' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}
             >
-              {t('রিমাইন্ডার সেভ করুন', 'Save Reminder')}
+              {t(editingReminderId ? 'আপডেট করুন' : 'রিমাইন্ডার সেভ করুন', editingReminderId ? 'Update Reminder' : 'Save Reminder')}
             </button>
+            {editingReminderId && (
+              <button 
+                onClick={() => {
+                  setEditingReminderId(null);
+                  setReminderTitle('');
+                  setReminderDate('');
+                  setReminderTime('');
+                }}
+                className="w-full text-slate-500 font-bold py-2 rounded-xl transition-all text-sm hover:bg-slate-100 mt-2 border border-transparent hover:border-slate-200"
+              >
+                বাতিল করুন (Cancel)
+              </button>
+            )}
           </div>
         </div>
 
@@ -438,13 +494,22 @@ export default function Reminders() {
 
                   {/* Actions */}
                   <div className="flex flex-col items-end justify-center ml-2 gap-3">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteReminder(rem.id); }}
-                      className="text-slate-300 hover:text-red-500 transition-colors"
-                      title={t('মুছে ফেলুন', 'Delete')}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditReminder(rem); }}
+                        className="text-slate-300 hover:text-blue-500 transition-colors"
+                        title={t('এডিট করুন', 'Edit')}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteReminder(rem.id); }}
+                        className="text-slate-300 hover:text-red-500 transition-colors"
+                        title={t('মুছে ফেলুন', 'Delete')}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                     <div 
                       onClick={() => toggleReminderStatus(rem.id, rem.active)}
                       className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer ${rem.active ? 'bg-primary' : 'bg-slate-200'}`}

@@ -5,53 +5,136 @@ import toast from 'react-hot-toast';
 export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const [mode, setMode] = useState<'idle' | 'listening' | 'processing' | 'parsed'>('idle');
   const [isEditing, setIsEditing] = useState(false);
-  const [parsedText, setParsedText] = useState('আগামীকাল সকাল ১০ টায় রাহিম ভাইকে\nফোন করতে মনে করিয়ে দিও');
+  const [parsedText, setParsedText] = useState('');
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [parsedData, setParsedData] = useState<any>(null);
 
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setMode('idle');
       setIsEditing(false);
-      setParsedText('আগামীকাল সকাল ১০ টায় রাহিম ভাইকে\nফোন করতে মনে করিয়ে দিও');
+      setParsedText('');
       setLiveTranscript('');
+      setParsedData(null);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleMicClick = () => {
-    if (mode === 'idle') {
+    if (mode !== 'idle') return;
+    
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('আপনার ব্রাউজার ভয়েস রিকগনিশন সাপোর্ট করে না!');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'bn-BD';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
       setMode('listening');
       setLiveTranscript('');
-      
-      const fullText = "আগামীকাল সকাল ১০ টায় রাহিম ভাইকে ফোন করতে মনে করিয়ে দিও...";
-      let currentIndex = 0;
-      
-      const typingInterval = setInterval(() => {
-        if (currentIndex <= fullText.length) {
-          setLiveTranscript(fullText.slice(0, currentIndex));
-          currentIndex++;
-        }
-      }, 50);
+    };
 
-      // Simulate listening for 3 seconds
-      setTimeout(() => {
-        clearInterval(typingInterval);
-        setMode('processing');
-        // Simulate processing for 1.5 seconds
-        setTimeout(() => {
+    let finalTranscript = '';
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      setLiveTranscript(finalTranscript + interimTranscript);
+    };
+
+    recognition.onend = async () => {
+      const textToProcess = liveTranscript || finalTranscript;
+      if (!textToProcess.trim()) {
+        setMode('idle');
+        return;
+      }
+      
+      setMode('processing');
+      try {
+        const url = `${import.meta.env.VITE_API_URL}/ai/parse-command`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ command: textToProcess })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          setParsedData(data.data);
+          setParsedText(data.data.content || data.data.title || textToProcess);
           setMode('parsed');
-        }, 1500);
-      }, 3000);
-    }
+        } else {
+          toast.error('বুঝতে সমস্যা হয়েছে, আবার চেষ্টা করুন');
+          setMode('idle');
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error('নেটওয়ার্ক সমস্যা, আবার চেষ্টা করুন');
+        setMode('idle');
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error(event.error);
+      toast.error('ভয়েস শুনতে সমস্যা হয়েছে');
+      setMode('idle');
+    };
+
+    recognition.start();
   };
 
-  const handleSetReminder = () => {
-    toast.success('রিমাইন্ডার সফলভাবে সেট করা হয়েছে!');
-    setTimeout(() => {
-      onClose();
-    }, 1000);
+  const handleSetReminder = async () => {
+    if (!parsedData) return;
+    
+    toast.loading('সংরক্ষণ করা হচ্ছে...', { id: 'save' });
+    try {
+      let url = `${import.meta.env.VITE_API_URL}/reminders`;
+      let body = { title: parsedText, date: parsedData.date || new Date().toISOString(), time: parsedData.time || "10:00" };
+      
+      if (parsedData.intent === 'create_note') {
+        url = `${import.meta.env.VITE_API_URL}/notes`;
+        body = { title: parsedText, content: parsedText } as any;
+      } else if (parsedData.intent === 'create_special_date') {
+        url = `${import.meta.env.VITE_API_URL}/special-dates`;
+        body = { title: parsedText, date: parsedData.date || new Date().toISOString(), type: parsedData.type || 'Birthday', recurring: true } as any;
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        toast.success('সফলভাবে সেভ করা হয়েছে!', { id: 'save' });
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+      } else {
+        toast.error('সেভ করতে সমস্যা হয়েছে', { id: 'save' });
+      }
+    } catch (err) {
+      toast.error('নেটওয়ার্ক সমস্যা', { id: 'save' });
+    }
   };
 
   return (
@@ -173,31 +256,29 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
               </div>
             )}
 
+            {parsedData && parsedData.intent !== 'create_note' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div className="flex items-center text-slate-600 font-medium text-xs">
                   <Calendar className="w-3.5 h-3.5 mr-2 text-slate-400" />
                   <span className="w-12">তারিখ</span>
                   <span className="text-slate-800">
-                    {(() => {
-                      const tomorrow = new Date(Date.now() + 86400000);
-                      const months = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
-                      const bnNumbers = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-                      const toBn = (num: number) => num.toString().split('').map(d => bnNumbers[parseInt(d)] || d).join('');
-                      return `আগামীকাল (${toBn(tomorrow.getDate())} ${months[tomorrow.getMonth()]}, ${toBn(tomorrow.getFullYear())})`;
-                    })()}
+                    {parsedData.date ? new Date(parsedData.date).toLocaleDateString() : new Date().toLocaleDateString()}
                   </span>
                 </div>
               </div>
               
+              {parsedData.intent === 'create_reminder' && (
               <div className="flex items-center justify-between">
                 <div className="flex items-center text-slate-600 font-medium text-xs">
                   <Clock className="w-3.5 h-3.5 mr-2 text-slate-400" />
                   <span className="w-12">সময়</span>
-                  <span className="text-slate-800">সকাল ১০:০০</span>
+                  <span className="text-slate-800">{parsedData.time || "10:00"}</span>
                 </div>
               </div>
+              )}
             </div>
+            )}
           </div>
         )}
 
@@ -207,8 +288,22 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
             onClick={handleSetReminder}
             className="w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold text-sm py-3.5 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-95 transition-transform animate-in fade-in zoom-in duration-500"
           >
-            <BellRing className="w-4 h-4 mr-2" />
-            রিমাইন্ডার সেট করুন
+            {parsedData?.intent === 'create_note' ? (
+              <>
+                <Edit className="w-4 h-4 mr-2" />
+                নোট সেভ করুন
+              </>
+            ) : parsedData?.intent === 'create_special_date' ? (
+              <>
+                <BellRing className="w-4 h-4 mr-2" />
+                উইশ সেট করুন
+              </>
+            ) : (
+              <>
+                <BellRing className="w-4 h-4 mr-2" />
+                রিমাইন্ডার সেট করুন
+              </>
+            )}
           </button>
         )}
       </div>

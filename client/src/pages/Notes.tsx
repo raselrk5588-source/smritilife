@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Star, Heart, GraduationCap, Briefcase, ShoppingCart, FileText, X, Bell } from 'lucide-react';
+import { Search, Plus, Star, Heart, GraduationCap, Briefcase, ShoppingCart, FileText, X, Bell, Trash2, Edit } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchWithAuth } from '../utils/api';
@@ -14,6 +14,7 @@ export default function Notes() {
   const [newNoteText, setNewNoteText] = useState('');
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [hasReminder, setHasReminder] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
   const fetchNotes = async () => {
     try {
@@ -50,8 +51,14 @@ export default function Notes() {
     }
     
     try {
-      await fetchWithAuth(`${import.meta.env.VITE_API_URL}/notes`, {
-        method: 'POST',
+      const url = editingNoteId 
+        ? `${import.meta.env.VITE_API_URL}/notes/${editingNoteId}`
+        : `${import.meta.env.VITE_API_URL}/notes`;
+        
+      const method = editingNoteId ? 'PATCH' : 'POST';
+
+      await fetchWithAuth(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newNoteTitle,
@@ -64,9 +71,33 @@ export default function Notes() {
       setNewNoteTitle('');
       setNewNoteText('');
       setHasReminder(false);
-      toast.success(t('নোট সেভ করা হয়েছে!', 'Note saved!'));
+      setEditingNoteId(null);
+      toast.success(t(editingNoteId ? 'নোট আপডেট করা হয়েছে!' : 'নোট সেভ করা হয়েছে!', editingNoteId ? 'Note updated!' : 'Note saved!'));
     } catch (e) {
       toast.error('Failed to save note');
+    }
+  };
+
+  const handleEditClick = (note: any, e: any) => {
+    e.stopPropagation();
+    setEditingNoteId(note.id);
+    setNewNoteTitle(note.title);
+    setNewNoteText(note.text || '');
+    setIsAddingNote(true);
+  };
+
+  const handleDeleteNote = async (id: string, e: any) => {
+    e.stopPropagation();
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/notes/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        toast.success(t('নোটটি মুছে ফেলা হয়েছে', 'Note deleted'));
+        fetchNotes();
+      }
+    } catch (e) {
+      toast.error('Failed to delete note');
     }
   };
 
@@ -84,7 +115,12 @@ export default function Notes() {
           <p className="text-white/90 text-[11px] font-medium mt-1 drop-shadow-sm">{t('আপনার সব গুরুত্বপূর্ণ নোট এখানে', 'All your important notes here')}</p>
         </div>
         <button 
-          onClick={() => setIsAddingNote(true)}
+          onClick={() => {
+            setEditingNoteId(null);
+            setNewNoteTitle('');
+            setNewNoteText('');
+            setIsAddingNote(true);
+          }}
           className="bg-white text-primary p-2 rounded-full shadow-md transition-transform hover:scale-105 relative z-10"
         >
           <Plus className="w-5 h-5" />
@@ -162,8 +198,20 @@ export default function Notes() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <button className={`${note.starred ? 'text-amber-400' : 'text-slate-300'}`}>
+                  <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={(e) => handleEditClick(note, e)}
+                      className="text-slate-300 hover:text-blue-500 transition-colors p-1"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={(e) => handleDeleteNote(note.id, e)}
+                      className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <button className={`${note.starred ? 'text-amber-400' : 'text-slate-300'} p-1`}>
                       <Star className={`w-5 h-5 ${note.starred ? 'fill-current' : ''}`} />
                     </button>
                   </div>
@@ -194,8 +242,11 @@ export default function Notes() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-xl animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-lg font-bold text-slate-800">{t('নতুন নোট', 'New Note')}</h2>
-              <button onClick={() => setIsAddingNote(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition">
+              <h2 className="text-lg font-bold text-slate-800">{t(editingNoteId ? 'নোট আপডেট' : 'নতুন নোট', editingNoteId ? 'Update Note' : 'New Note')}</h2>
+              <button onClick={() => {
+                setIsAddingNote(false);
+                setEditingNoteId(null);
+              }} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -258,7 +309,7 @@ export default function Notes() {
               onClick={handleAddNote}
               className="w-full bg-gradient-to-r from-primary to-emerald-600 text-white font-bold py-3.5 rounded-full hover:shadow-lg active:scale-95 transition-transform"
             >
-              {t('নোট সেভ করুন', 'Save Note')}
+              {t(editingNoteId ? 'আপডেট করুন' : 'নোট সেভ করুন', editingNoteId ? 'Update Note' : 'Save Note')}
             </button>
           </div>
         </div>
