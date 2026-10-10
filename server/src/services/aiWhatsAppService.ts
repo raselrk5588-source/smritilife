@@ -49,7 +49,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
   try {
     // Fetch settings to get API key
     const settings = await SystemSettings.findOne();
-    const apiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || settings?.geminiApiKey;
 
     if (!apiKey) {
       console.error("Gemini API Key is missing. Please add it in Admin Panel or .env file.");
