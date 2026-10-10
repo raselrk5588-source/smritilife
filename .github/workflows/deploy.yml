@@ -40,10 +40,10 @@ jobs:
             echo "NODE_ENV=production" >> server/.env
             
             # AI & WhatsApp Settings
-            echo "GEMINI_API_KEY=your_gemini_api_key_here" >> server/.env
-            echo "WHATSAPP_PHONE_NUMBER_ID=1290926227446967" >> server/.env
-            echo "WHATSAPP_BUSINESS_ACCOUNT_ID=1106783452089268" >> server/.env
-            echo "WHATSAPP_ACCESS_TOKEN=EAAUrTb385V0BSmcKXIO9En7guZCIiNaBsi6ZBAUXN1GlLPuxERZA8zZCK17sXBalf8V41xGgwpdFbNJp8lsYr89o81U85rqJWBt65V2kJZBGMeVA8P0xGjiwDRF2cATC6fDFbCAwWc5IBpnuHRbjvU9wh1NTDclXRzeYckMpTZCvhvlTdUVV24EfrId5R9GSiYvXRMTTtnZCGr7rk3guvk0UKc4gW0y6oPSfR1ZBReRm0D3pBLdzHaZCCXWBpZBLawQ4I6U4MYnPZCBLRPVbyG382KZBY23u" >> server/.env
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> server/.env
+            echo "WHATSAPP_PHONE_NUMBER_ID=${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}" >> server/.env
+            echo "WHATSAPP_BUSINESS_ACCOUNT_ID=${{ secrets.WHATSAPP_BUSINESS_ACCOUNT_ID }}" >> server/.env
+            echo "WHATSAPP_ACCESS_TOKEN=${{ secrets.WHATSAPP_ACCESS_TOKEN }}" >> server/.env
             echo "WHATSAPP_VERIFY_TOKEN=smriti_whatsapp_verify_token_2026" >> server/.env
 
             # Create .env for worker
