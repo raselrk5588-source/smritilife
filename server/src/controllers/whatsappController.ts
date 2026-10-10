@@ -14,7 +14,7 @@ const sendMetaWhatsAppMessage = async (to: string, text: string) => {
   }
 
   try {
-    const response = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
+    const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
