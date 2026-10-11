@@ -180,7 +180,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               let scheduledAt = new Date();
               if (!sendNow && wishData.date) {
                 const timeStr = wishData.time || '10:00';
-                scheduledAt = new Date(`${wishData.date}T${timeStr}:00.000Z`);
+                const bdIso = `${wishData.date}T${timeStr}:00+06:00`;
+                const parsedDate = new Date(bdIso);
+                if (!isNaN(parsedDate.getTime())) {
+                  scheduledAt = parsedDate;
+                }
               }
 
               const newWish = await Wish.create({

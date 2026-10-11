@@ -146,8 +146,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       text.includes('anniversary') || text.includes('ঈদ') || text.includes('eid') || text.includes('অভিনন্দন') || text.includes('congrat');
 
     if (isWishIntent) {
-      const phoneMatch = enText.match(/(?:01\d{9}|\+?8801\d{9})/);
+      const phoneMatch = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
       const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
+      // Strip phone number digits so they don't get matched as hour/minute (e.g. +88...)
+      const textWithoutPhone = recipientPhone ? enText.replace(recipientPhone, '') : enText;
 
       let occasion = 'general';
       let occasionBangla = 'শুভেচ্ছা';
@@ -175,13 +177,14 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
       // Time & Date
       let time = '10:00';
-      const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
+      const timeMatch = textWithoutPhone.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
       if (timeMatch) {
         let hour = parseInt(timeMatch[1], 10);
         const minute = timeMatch[2] || '00';
         if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
           if (hour < 12) hour += 12;
         }
+        if (hour >= 24) hour = 10;
         time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
       }
 
@@ -220,15 +223,20 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     // 3. Reminder Creation or Scheduled Message Detection
     if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText)) {
+      const phoneMatch = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
+      const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
+      const textWithoutPhone = recipientPhone ? enText.replace(recipientPhone, '') : enText;
+
       // Extract time
       let time = '10:00';
-      const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
+      const timeMatch = textWithoutPhone.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
       if (timeMatch) {
         let hour = parseInt(timeMatch[1], 10);
         const minute = timeMatch[2] || '00';
         if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
           if (hour < 12) hour += 12;
         }
+        if (hour >= 24) hour = 10;
         time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
       }
 
@@ -239,9 +247,6 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
       const dateStr = targetDate.toISOString().split('T')[0];
 
-      // Check if recipient phone number is provided
-      const phoneMatch = enText.match(/(?:01\d{9}|\+?8801\d{9})/);
-      const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
 
       let customMessage: string | undefined = undefined;
       let title = text
