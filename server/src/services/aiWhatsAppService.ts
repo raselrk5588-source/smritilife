@@ -150,3 +150,52 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     };
   }
 };
+
+export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: Buffer, mimeType: string) => {
+  try {
+    const settings = await SystemSettings.findOne();
+    const apiKey = process.env.GEMINI_API_KEY || settings?.geminiApiKey;
+
+    if (!apiKey) {
+      return {
+        action: 'general_reply',
+        replyText: 'দুঃখিত, এআই সার্ভিস কনফিগার করা নেই।'
+      };
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: SYSTEM_INSTRUCTION
+    });
+
+    const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
+    const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+
+    const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
+Analyze what task or reminder the user wants to set, cancel, or delete, and return EXACTLY the JSON action format specified in system instructions.
+Today's date in Bangladesh is ${dhakaDate}. If the user says 'কাল' or 'tomorrow', set tomorrow's date.
+Remember to return ONLY the raw JSON object.`;
+
+    const audioPart = {
+      inlineData: {
+        data: audioBuffer.toString('base64'),
+        mimeType: cleanMime
+      }
+    };
+
+    const result = await model.generateContent([prompt, audioPart]);
+    const responseText = result.response.text().trim();
+
+    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsedResponse = JSON.parse(cleanJson);
+    return parsedResponse;
+  } catch (error) {
+    console.error("AI Audio Analysis Error:", error);
+    return {
+      action: 'general_reply',
+      replyText: 'দুঃখিত, আপনার ভয়েস মেসেজটি পরিষ্কারভাবে বুঝতে পারিনি। দয়া করে আবার বলুন বা টেক্সট লিখে পাঠান।'
+    };
+  }
+};
+

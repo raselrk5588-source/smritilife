@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
-import { analyzeMessage } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage } from '../services/aiWhatsAppService';
 
 // Function to send a message via Meta API
 const sendMetaWhatsAppMessage = async (to: string, text: string) => {
@@ -42,6 +42,40 @@ const sendMetaWhatsAppMessage = async (to: string, text: string) => {
       if (attempt === 2) break;
       await new Promise(r => setTimeout(r, 1000));
     }
+  }
+};
+
+// Function to download voice audio from Meta API
+const downloadMetaAudio = async (mediaId: string): Promise<{ buffer: Buffer; mimeType: string } | null> => {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!token) return null;
+
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!metaRes.ok) {
+      console.error('Failed to get Meta media URL:', await metaRes.text());
+      return null;
+    }
+    const metaData = (await metaRes.json()) as any;
+    const mediaUrl = metaData.url;
+    const mimeType = metaData.mime_type || 'audio/ogg';
+
+    const fileRes = await fetch(mediaUrl, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!fileRes.ok) {
+      console.error('Failed to download media bytes:', fileRes.status);
+      return null;
+    }
+    const arrayBuffer = await fileRes.arrayBuffer();
+    return { buffer: Buffer.from(arrayBuffer), mimeType };
+  } catch (error) {
+    console.error('Error downloading Meta audio file:', error);
+    return null;
   }
 };
 
@@ -86,13 +120,19 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         const fromNumber = message.from; // Sender's phone number
         
         let userMessage = '';
+        let isAudio = false;
+        let audioMediaId = '';
+        let audioMimeType = 'audio/ogg';
+
         if (message.type === 'text') {
-          userMessage = message.text.body;
+          userMessage = message.text?.body || '';
+        } else if (message.type === 'audio' || message.type === 'voice') {
+          isAudio = true;
+          audioMediaId = message.audio?.id || message.voice?.id || '';
+          audioMimeType = message.audio?.mime_type || message.voice?.mime_type || 'audio/ogg';
         }
 
-        if (!fromNumber || !userMessage) return;
-
-        console.log(`📩 Received WhatsApp Message from ${fromNumber}: "${userMessage}"`);
+        if (!fromNumber || (!userMessage && !isAudio)) return;
 
         // WhatsApp cloud API sends number with country code without +
         // Using a regex to match the end of the number is safer to find the user
@@ -104,8 +144,21 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // Use AI to analyze the message
-        const aiResponse = await analyzeMessage(fromNumber, userMessage);
+        let aiResponse: any;
+
+        if (isAudio && audioMediaId) {
+          console.log(`🎤 Received WhatsApp Voice Note from ${fromNumber}. Downloading audio...`);
+          const audioData = await downloadMetaAudio(audioMediaId);
+          if (audioData) {
+            aiResponse = await analyzeAudioMessage(fromNumber, audioData.buffer, audioData.mimeType);
+          } else {
+            await sendMetaWhatsAppMessage(fromNumber, 'দুঃখিত, আপনার ভয়েস মেসেজটি ডাউনলোড করা যায়নি। দয়া করে আবার চেষ্টা করুন।');
+            return;
+          }
+        } else {
+          console.log(`📩 Received WhatsApp Message from ${fromNumber}: "${userMessage}"`);
+          aiResponse = await analyzeMessage(fromNumber, userMessage);
+        }
 
         switch (aiResponse.action) {
           case 'create_reminder':
