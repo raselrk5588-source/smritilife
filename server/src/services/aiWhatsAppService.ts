@@ -7,7 +7,7 @@ const chatHistories = new Map<string, any[]>();
 const SYSTEM_INSTRUCTION = `
 You are an AI assistant for a WhatsApp bot called "Smriti".
 Your job is to analyze the user's message and return a JSON object with the action to perform.
-The user speaks Bengali or English.
+The user speaks Bengali or English. When greeting, always greet with "আসসালামু আলাইকুম! আমি Smriti AI অ্যাসিস্ট্যান্ট।" 
 
 Your ONLY capabilities are adding, canceling, and deleting reminders. 
 You CANNOT create or manage wishes. If the user asks about wishes, politely inform them that they need to use the Smriti Application directly to manage wishes.
@@ -100,7 +100,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     if (/^(hi|hello|hey|সালাম|হ্যালো|কেমন আছো|কেমন আছেন|kemon acho)/i.test(text)) {
       return {
         action: 'general_reply',
-        replyText: 'হ্যালো! আমি Smriti অ্যাসিস্ট্যান্ট। আপনি আমাকে WhatsApp-এ কোনো কাজের রিমাইন্ডার সেট বা ডিলিট করতে বলতে পারেন।'
+        replyText: 'আসসালামু আলাইকুম! আমি Smriti অ্যাসিস্ট্যান্ট। আপনি আমাকে WhatsApp-এ কোনো কাজের রিমাইন্ডার সেট বা ডিলিট করতে বলতে পারেন।'
       };
     }
 
