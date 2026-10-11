@@ -4,6 +4,7 @@ export interface IReminder extends Document {
   userId: mongoose.Types.ObjectId;
   title: string;
   description?: string;
+  recipientPhone?: string;
   date: Date;
   time: string;
   priority: string;
@@ -19,6 +20,7 @@ const ReminderSchema: Schema = new Schema(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     title: { type: String, required: true },
     description: { type: String },
+    recipientPhone: { type: String },
     date: { type: Date, required: true },
     time: { type: String, required: true },
     priority: { type: String, enum: ['Low', 'Medium', 'High', 'Urgent'], default: 'Medium' },

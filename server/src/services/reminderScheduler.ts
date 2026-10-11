@@ -93,13 +93,29 @@ export const startReminderScheduler = () => {
           if (!claimed) continue;
 
           const user = await User.findById(reminder.userId);
-          const targetNumber = user?.whatsapp || user?.mobile;
+          const senderName = user?.name || 'আপনার পরিচিত জন';
+          const senderNumber = user?.whatsapp || user?.mobile;
 
-          if (targetNumber) {
-            const alertText = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${reminder.time}\n\nআপনার কাজটি সুন্দরভাবে সম্পন্ন হোক!`;
-            
-            await sendWhatsAppAlert(targetNumber, alertText);
-            console.log(`[ReminderScheduler] Reminder "${reminder.title}" dispatched & marked Completed.`);
+          if (reminder.recipientPhone) {
+            // Scheduled message to someone else
+            const messageBody = reminder.description || reminder.title;
+            const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)`;
+
+            await sendWhatsAppAlert(reminder.recipientPhone, thirdPartyAlert);
+            console.log(`[ReminderScheduler] Dispatched third-party message to ${reminder.recipientPhone}`);
+
+            // Also confirm to the sender that their message was delivered
+            if (senderNumber) {
+              await sendWhatsAppAlert(senderNumber, `✅ আসসালামু আলাইকুম! ${reminder.recipientPhone} নম্বরে আপনার নির্ধারিত বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n"${messageBody}"`);
+            }
+          } else {
+            // Standard reminder for self
+            if (senderNumber) {
+              const alertText = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${reminder.time}\n\nআপনার কাজটি সুন্দরভাবে সম্পন্ন হোক!`;
+              
+              await sendWhatsAppAlert(senderNumber, alertText);
+              console.log(`[ReminderScheduler] Reminder "${reminder.title}" dispatched & marked Completed.`);
+            }
           }
         }
       }

@@ -166,6 +166,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               await Reminder.create({
                 userId: user._id,
                 title: aiResponse.data.title || 'New Reminder',
+                description: aiResponse.data.customMessage || aiResponse.data.description,
+                recipientPhone: aiResponse.data.recipientPhone || undefined,
                 date: new Date(aiResponse.data.date || new Date()),
                 time: aiResponse.data.time || '10:00',
                 priority: 'Medium',

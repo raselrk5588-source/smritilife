@@ -28,6 +28,18 @@ Format your response EXACTLY as a JSON object, like this:
   },
   "replyText": "আপনার রিমাইন্ডার সেট করা হয়েছে!"
 }
+OR (if user requests sending a message to a specific phone number at a given time):
+{
+  "action": "create_reminder",
+  "data": {
+    "title": "মেসেজ পাঠানো",
+    "recipientPhone": "01734042131",
+    "customMessage": "আজ আমাদের মিটিং হবে না।",
+    "date": "2026-10-11",
+    "time": "15:00"
+  },
+  "replyText": "ঠিক আছে! আজ দুপুর ৩:০০ টায় 01734042131 নম্বরে আপনার বার্তাটি পাঠিয়ে দেওয়া হবে।"
+}
 OR
 {
   "action": "delete_reminder",
@@ -104,15 +116,15 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // 2. Reminder Creation Detection
-    if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ')) {
+    // 2. Reminder Creation or Scheduled Message Detection
+    if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText)) {
       // Extract time
       let time = '10:00';
       const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
       if (timeMatch) {
         let hour = parseInt(timeMatch[1], 10);
         const minute = timeMatch[2] || '00';
-        if (text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
+        if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
           if (hour < 12) hour += 12;
         }
         time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
@@ -125,11 +137,26 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
       const dateStr = targetDate.toISOString().split('T')[0];
 
-      // Extract title
+      // Check if recipient phone number is provided
+      const phoneMatch = enText.match(/(?:01\d{9}|\+?8801\d{9})/);
+      const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
+
+      let customMessage: string | undefined = undefined;
       let title = text
         .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
         .replace(/(রিমাইন্ডার\s*(সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*করিয়ে\s*দিও|reminder)/gi, '')
         .trim();
+
+      if (recipientPhone) {
+        title = `মেসেজ পাঠানো (${recipientPhone})`;
+        // Clean out instructions to find the actual message
+        customMessage = text
+          .replace(new RegExp(recipientPhone, 'g'), '')
+          .replace(/(নম্বরে|নাম্বারে|number a|a|এ|একটা|মেসেজ|message|করে|পাঠিয়ে|পাঠিয়ে|দিবা|দিও|দিন|করো|যে|j|আজ|কাল|দুপুুর|দুপুর|সকাল|বিকাল|\d{1,2}(?::\d{2})?\s*(টা|টায়|টায়|am|pm)?)/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!customMessage || customMessage.length < 2) customMessage = 'জরুরি বার্তা';
+      }
 
       if (!title || title.length < 2) title = 'জরুরি কাজ';
 
@@ -137,10 +164,14 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         action: 'create_reminder',
         data: {
           title,
+          recipientPhone,
+          customMessage,
           date: dateStr,
           time
         },
-        replyText: `আপনার রিমাইন্ডার "${title}" সময় ${time}-এ সেট করা হয়েছে!`
+        replyText: recipientPhone 
+          ? `ঠিক আছে! সময় ${time}-এ ${recipientPhone} নম্বরে আপনার বার্তাটি পাঠিয়ে দেওয়া হবে।`
+          : `আপনার রিমাইন্ডার "${title}" সময় ${time}-এ সেট করা হয়েছে!`
       };
     }
 
