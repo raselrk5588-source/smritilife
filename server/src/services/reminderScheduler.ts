@@ -3,6 +3,7 @@ import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
 import User from '../models/User';
 import { deliverWishCard } from './wishDeliveryService';
+import { formatTime12Hour } from './aiWhatsAppService';
 
 // Send message via Meta WhatsApp API
 const sendWhatsAppAlert = async (to: string, message: string) => {
@@ -131,7 +132,8 @@ export const startReminderScheduler = () => {
           } else {
             // Standard reminder for self
             if (senderNumber) {
-              const alertText = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${reminder.time}\n\nআপনার কাজটি সুন্দরভাবে সম্পন্ন হোক!`;
+              const displayTime = formatTime12Hour(reminder.time);
+              const alertText = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}\n\nআপনার কাজটি সুন্দরভাবে সম্পন্ন হোক!`;
               
               await sendWhatsAppAlert(senderNumber, alertText);
               console.log(`[ReminderScheduler] Reminder "${reminder.title}" dispatched & marked Completed.`);

@@ -4,6 +4,67 @@ import SystemSettings from '../models/SystemSettings';
 // In-memory chat history for WhatsApp users (In production, save to Redis or DB)
 const chatHistories = new Map<string, any[]>();
 
+/**
+ * Converts 24-hour HH:mm (e.g. "13:00", "01:30") to human-friendly 12-hour format with AM/PM (e.g. "1:00 PM", "1:30 AM")
+ */
+export const formatTime12Hour = (time24?: string): string => {
+  if (!time24 || !time24.includes(':')) return time24 || '';
+  const parts = time24.split(':');
+  let hour = parseInt(parts[0], 10);
+  const minute = parts[1] || '00';
+  if (isNaN(hour)) return time24;
+  
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+  
+  return `${hour}:${minute} ${ampm}`;
+};
+
+/**
+ * Intelligent Bengali/Banglish time parser for phrases like "sokal 9ta", "bikal 4ta", "rat 8ta", "dupur 2ta", "sondha 7ta", "1pm", "4:30 pm"
+ */
+export const parseBengaliTime = (rawText: string): string => {
+  const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+  const text = rawText.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
+  const lower = text.toLowerCase();
+
+  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
+  if (!timeMatch) return '10:00';
+
+  let hour = parseInt(timeMatch[1], 10);
+  const minute = timeMatch[2] || '00';
+  const tag = (timeMatch[3] || '').toLowerCase();
+
+  const isMorning = lower.includes('সকাল') || lower.includes('ভোর') || lower.includes('sokal') || lower.includes('shokal') || lower.includes('vhor') || lower.includes('vor') || tag === 'am';
+  const isNoon = lower.includes('দুপুর') || lower.includes('dupur') || lower.includes('dupor');
+  const isAfternoon = lower.includes('বিকাল') || lower.includes('বিকেল') || lower.includes('bikal') || lower.includes('bikele') || lower.includes('bikale');
+  const isEvening = lower.includes('সন্ধ্যা') || lower.includes('সন্ধে') || lower.includes('sondha') || lower.includes('shondha') || lower.includes('shondhe');
+  const isNight = lower.includes('রাত') || lower.includes('রাত্রে') || lower.includes('rat') || lower.includes('raat') || lower.includes('ratri') || lower.includes('ratre');
+  const isPM = tag === 'pm' || isNoon || isAfternoon || isEvening || isNight;
+
+  if (isPM) {
+    if (hour < 12) {
+      // e.g. 1টা দুপুর/রাত -> 13:00 / 01:00?
+      // In Bengali: "রাত ১টা" = 01:00 AM (after midnight) or late night. But usually 12, 1, 2, 3, 4 at night can be AM.
+      // Standard: 1pm - 11pm are afternoon/evening/night (+12)
+      if (isNight && (hour === 1 || hour === 2 || hour === 3 || hour === 4)) {
+        // Late night/midnight (e.g. 1am, 2am)
+        hour = hour;
+      } else if (isNight && hour === 12) {
+        hour = 0; // midnight 12:00
+      } else {
+        hour += 12;
+      }
+    }
+  } else if (isMorning) {
+    if (hour === 12) hour = 0;
+  }
+
+  if (hour >= 24) hour = 10;
+  return `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
+};
+
 const SYSTEM_INSTRUCTION = `
 You are an AI assistant for a WhatsApp bot called "Smriti".
 Your job is to analyze the user's message and return a JSON object with the action to perform.
@@ -228,15 +289,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     if (isModifyIntent) {
       let time: string | undefined = undefined;
-      const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
-      if (timeMatch) {
-        let hour = parseInt(timeMatch[1], 10);
-        const minute = timeMatch[2] || '00';
-        if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
-          if (hour < 12) hour += 12;
-        }
-        if (hour >= 24) hour = 10;
-        time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
+      if (/(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i.test(text)) {
+        time = parseBengaliTime(text);
       }
 
       let date: string | undefined = undefined;
@@ -319,17 +373,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       if (nameMatch) recipientName = nameMatch[0];
 
       // Time & Date
-      let time = '10:00';
-      const timeMatch = textWithoutPhone.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
-      if (timeMatch) {
-        let hour = parseInt(timeMatch[1], 10);
-        const minute = timeMatch[2] || '00';
-        if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
-          if (hour < 12) hour += 12;
-        }
-        if (hour >= 24) hour = 10;
-        time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
-      }
+      let time = parseBengaliTime(textWithoutPhone);
 
       const targetDate = new Date();
       if (text.includes('কাল') || text.includes('আগামীকাল') || text.toLowerCase().includes('tomorrow')) {
@@ -337,7 +381,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
       const dateStr = targetDate.toISOString().split('T')[0];
 
-      const sendNow = text.includes('এখন') || text.includes('এখনই') || (!text.includes('কাল') && !text.includes('আগামীকাল') && !timeMatch);
+      const sendNow = text.includes('এখন') || text.includes('এখনই') || (!text.includes('কাল') && !text.includes('আগামীকাল') && !textWithoutPhone.match(/(\d{1,2}|[০-৯]{1,2})\s*(টা|টায়|টায়|am|pm)/i));
 
       const defaultWishMessage = occasion === 'birthday'
         ? `শুভ জন্মদিন ${recipientName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
@@ -346,6 +390,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         : occasion === 'eid'
         ? `ঈদ মোবারক! আপনার ও আপনার পরিবারের জন্য রইল পবিত্র ঈদের অফুরন্ত শুভেচ্ছা।`
         : `অনেক অনেক আন্তরিক শুভেচ্ছা ও শুভকামনা! আপনার জীবন সুন্দর ও সাফল্যমণ্ডিত হোক।`;
+
+      const formattedDisplayTime = formatTime12Hour(time);
 
       return {
         action: 'create_wish',
@@ -360,7 +406,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         },
         replyText: sendNow
           ? `🎉 ${recipientPhone || ''} নম্বরে ${recipientName}-র জন্য ${occasionBangla} উইশ কার্ড সফলভাবে পাঠিয়ে দেওয়া হচ্ছে!`
-          : `🎉 ঠিক আছে! ${dateStr} সময় ${time}-এ ${recipientPhone || ''} নম্বরে ${recipientName}-র জন্য ${occasionBangla} উইশ কার্ড স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
+          : `🎉 ঠিক আছে! ${dateStr} সময় ${formattedDisplayTime}-এ ${recipientPhone || ''} নম্বরে ${recipientName}-র জন্য ${occasionBangla} উইশ কার্ড স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
       };
     }
 
@@ -371,17 +417,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       const textWithoutPhone = recipientPhone ? enText.replace(recipientPhone, '') : enText;
 
       // Extract time
-      let time = '10:00';
-      const timeMatch = textWithoutPhone.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
-      if (timeMatch) {
-        let hour = parseInt(timeMatch[1], 10);
-        const minute = timeMatch[2] || '00';
-        if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
-          if (hour < 12) hour += 12;
-        }
-        if (hour >= 24) hour = 10;
-        time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
-      }
+      let time = parseBengaliTime(textWithoutPhone);
 
       // Extract date (কাল = tomorrow, আজ = today)
       const targetDate = new Date();
@@ -389,7 +425,6 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         targetDate.setDate(targetDate.getDate() + 1);
       }
       const dateStr = targetDate.toISOString().split('T')[0];
-
 
       let customMessage: string | undefined = undefined;
       let title = text
@@ -410,6 +445,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
       if (!title || title.length < 2) title = 'জরুরি কাজ';
 
+      const formattedDisplayTime = formatTime12Hour(time);
+
       return {
         action: 'create_reminder',
         data: {
@@ -420,8 +457,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
           time
         },
         replyText: recipientPhone 
-          ? `ঠিক আছে! সময় ${time}-এ ${recipientPhone} নম্বরে আপনার বার্তাটি পাঠিয়ে দেওয়া হবে।`
-          : `আপনার রিমাইন্ডার "${title}" সময় ${time}-এ সেট করা হয়েছে!`
+          ? `ঠিক আছে! সময় ${formattedDisplayTime}-এ ${recipientPhone} নম্বরে আপনার বার্তাটি পাঠিয়ে দেওয়া হবে।`
+          : `আপনার রিমাইন্ডার "${title}" সময় ${formattedDisplayTime}-এ সেট করা হয়েছে!`
       };
     }
 

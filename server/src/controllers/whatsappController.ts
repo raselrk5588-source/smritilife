@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
-import { analyzeMessage, analyzeAudioMessage } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, formatTime12Hour } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 
 // Function to send a message via Meta API
@@ -238,7 +238,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               let text = `📋 আপনার মোট *${reminders.length}টি* রিমাইন্ডার রয়েছে:\n\n`;
               reminders.forEach((r, idx) => {
                 const dStr = r.date ? new Date(r.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
-                text += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${r.time} (${dStr})\n   📊 স্ট্যাটাস: ${r.status}\n\n`;
+                const timeStr = formatTime12Hour(r.time);
+                text += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${timeStr} (${dStr})\n   📊 স্ট্যাটাস: ${r.status}\n\n`;
               });
               text += `💡 পরিবর্তন করতে: "[নাম] রিমাইন্ডারের সময় ৫টায় দাও"\n💡 ডিলিট করতে: "[নাম] ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও"।`;
               await sendMetaWhatsAppMessage(fromNumber, text.trim());
@@ -267,9 +268,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
               if (updatedReminder) {
                 const dStr = updatedReminder.date ? new Date(updatedReminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+                const formattedTime = formatTime12Hour(updatedReminder.time);
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  `✏️ "${updatedReminder.title}" রিমাইন্ডারটি সফলভাবে আপডেট করা হয়েছে!\n⏰ নতুন সময়: ${updatedReminder.time} (${dStr})`
+                  `✏️ "${updatedReminder.title}" রিমাইন্ডারটি সফলভাবে আপডেট করা হয়েছে!\n⏰ নতুন সময়: ${formattedTime} (${dStr})`
                 );
               } else {
                 await sendMetaWhatsAppMessage(
