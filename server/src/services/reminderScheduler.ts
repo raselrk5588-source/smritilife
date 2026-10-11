@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import Reminder from '../models/Reminder';
+import Wish from '../models/Wish';
 import User from '../models/User';
+import { deliverWishCard } from './wishDeliveryService';
 
 // Send message via Meta WhatsApp API
 const sendWhatsAppAlert = async (to: string, message: string) => {
@@ -119,8 +121,38 @@ export const startReminderScheduler = () => {
           }
         }
       }
+
+      // Check and dispatch due wishes (birthday, anniversary, eid, etc.)
+      const dueWishes = await Wish.find({
+        status: { $in: ['Scheduled', 'Processing'] },
+        scheduledAt: { $lte: new Date() }
+      });
+
+      if (dueWishes.length > 0) {
+        console.log(`[ReminderScheduler] Found ${dueWishes.length} due wishes to dispatch as image cards.`);
+
+        for (const wish of dueWishes) {
+          // Atomically claim the wish so it cannot be processed more than once
+          const claimed = await Wish.findOneAndUpdate(
+            { _id: wish._id, status: { $in: ['Scheduled', 'Processing'] } },
+            { $set: { status: 'Sent' } }
+          );
+          if (!claimed) continue;
+
+          const sender = await User.findById(wish.userId);
+          const senderName = sender?.name || 'আপনার শুভাকাঙ্ক্ষী';
+          const senderWhatsApp = sender?.whatsapp || sender?.mobile;
+
+          try {
+            await deliverWishCard(wish, senderName, senderWhatsApp);
+            console.log(`✅ [ReminderScheduler] Wish card dispatched to ${wish.recipientContact}`);
+          } catch (wishErr) {
+            console.error(`[ReminderScheduler] Error delivering wish card ${wish._id}:`, wishErr);
+          }
+        }
+      }
     } catch (error) {
-      console.error('[ReminderScheduler] Error checking reminders:', error);
+      console.error('[ReminderScheduler] Error checking reminders/wishes:', error);
     }
   };
 

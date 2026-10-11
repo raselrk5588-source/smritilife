@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import Wish from '../models/Wish';
+import User from '../models/User';
 import mongoose from 'mongoose';
+import { deliverWishCard } from '../services/wishDeliveryService';
 
 
 
@@ -58,6 +60,21 @@ export const createWish = async (req: Request, res: Response) => {
       smartCardId
     });
     const savedWish = await wish.save();
+
+    // If scheduled for now and has a recipient phone, dispatch the card image right away
+    if (recipientContact && (status === 'Sent' || status === 'Processing' || !scheduledAt || new Date(scheduledAt) <= new Date())) {
+      try {
+        const user = await User.findById(req.user?.id);
+        const senderName = cardData?.senderName || user?.name || 'আপনার শুভাকাঙ্ক্ষী';
+        const senderWhatsApp = user?.whatsapp || user?.mobile;
+        deliverWishCard(savedWish, senderName, senderWhatsApp).catch(err => {
+          console.error('[WishController] Instant wish delivery error:', err);
+        });
+      } catch (err) {
+        console.error('[WishController] Failed to dispatch instant wish card:', err);
+      }
+    }
+
     res.status(201).json(savedWish);
   } catch (error: any) {
     res.status(400).json({ message: error.message });

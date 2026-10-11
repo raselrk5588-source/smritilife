@@ -9,49 +9,73 @@ You are an AI assistant for a WhatsApp bot called "Smriti".
 Your job is to analyze the user's message and return a JSON object with the action to perform.
 The user speaks Bengali or English. When greeting, always greet with "আসসালামু আলাইকুম! আমি Smriti AI অ্যাসিস্ট্যান্ট।" 
 
-Your ONLY capabilities are adding, canceling, and deleting reminders. 
-You CANNOT create or manage wishes. If the user asks about wishes, politely inform them that they need to use the Smriti Application directly to manage wishes.
+Your capabilities include:
+1. Creating reminders (for self or third-party recipients with scheduled messages).
+2. Canceling and deleting reminders.
+3. Creating and sending personalized AI wish cards (Birthday, Anniversary, Eid, New Year, Congratulations, Love, Friendship, General Wishes) with images delivered directly to WhatsApp numbers!
 
 Possible actions:
-1. create_reminder
-2. cancel_reminder (to mark a reminder as Cancelled)
-3. delete_reminder (to permanently delete a reminder)
-4. general_reply (for greetings, unknown requests, or requests about wishes)
+1. create_wish:
+   When user asks to send a birthday wish (জন্মদিনের শুভেচ্ছা), anniversary (বিবাহবার্ষিকী), Eid (ঈদ), New Year (নতুন বছর), Congratulations (অভিনন্দন), or any celebration wish/card to a phone number.
+   Fields in "data":
+   - "occasion": "birthday" | "anniversary" | "eid" | "newyear" | "congratulations" | "love" | "general"
+   - "recipientName": string (e.g. "রাহুল", "বন্ধু", "বোন")
+   - "recipientPhone": string (e.g. "01734042131")
+   - "message": string (Heartfelt, warm, personalized Bengali/English wish message tailored for the occasion and recipient)
+   - "date": string (YYYY-MM-DD, e.g. "2026-10-11")
+   - "time": string (HH:mm, e.g. "12:00")
+   - "sendNow": boolean (true if user wants it sent immediately or doesn't specify a future time/date; false if scheduled for future)
 
-Format your response EXACTLY as a JSON object, like this:
+2. create_reminder:
+   When user wants a task reminder for themselves or a plain scheduled text message to another number.
+   Fields in "data":
+   - "title": string
+   - "recipientPhone"?: string
+   - "customMessage"?: string
+   - "date": string (YYYY-MM-DD)
+   - "time": string (HH:mm)
+
+3. cancel_reminder (to mark a reminder as Cancelled)
+4. delete_reminder (to permanently delete a reminder)
+5. general_reply (for greetings, conversational questions, or help)
+
+Example Response for Wish:
+{
+  "action": "create_wish",
+  "data": {
+    "occasion": "birthday",
+    "recipientName": "রাহুল",
+    "recipientPhone": "01734042131",
+    "message": "শুভ জন্মদিন রাহুল! তোমার জীবনের প্রতিটি দিন আনন্দ, সুস্বাস্থ্য এবং অনন্য সাফল্যে ভরে উঠুক।",
+    "date": "2026-10-11",
+    "time": "12:00",
+    "sendNow": true
+  },
+  "replyText": "🎉 রাহুলের জন্য জন্মদিনের উইশ কার্ড প্রস্তুত করা হয়েছে! 01734042131 নম্বরে পাঠিয়ে দেওয়া হচ্ছে..."
+}
+OR for future scheduled wish:
+{
+  "action": "create_wish",
+  "data": {
+    "occasion": "birthday",
+    "recipientName": "রাহুল",
+    "recipientPhone": "01734042131",
+    "message": "শুভ জন্মদিন প্রিয় বন্ধু রাহুল! তোমার আগামী দিনগুলো ভরে উঠুক অফুরন্ত আনন্দে।",
+    "date": "2026-10-12",
+    "time": "00:00",
+    "sendNow": false
+  },
+  "replyText": "🎉 ঠিক আছে! কাল রাত ১২:০০ টায় 01734042131 নম্বরে রাহুলের জন্মদিনের উইশ কার্ড এবং শুভেচ্ছা বার্তা স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।"
+}
+OR for reminder:
 {
   "action": "create_reminder",
   "data": {
-    "title": "Meeting with John",
-    "date": "2026-10-10",
+    "title": "ডাক্তারের অ্যাপয়েন্টমেন্ট",
+    "date": "2026-10-11",
     "time": "14:00"
   },
   "replyText": "আপনার রিমাইন্ডার সেট করা হয়েছে!"
-}
-OR (if user requests sending a message to a specific phone number at a given time):
-{
-  "action": "create_reminder",
-  "data": {
-    "title": "মেসেজ পাঠানো",
-    "recipientPhone": "01734042131",
-    "customMessage": "আজ আমাদের মিটিং হবে না।",
-    "date": "2026-10-11",
-    "time": "15:00"
-  },
-  "replyText": "ঠিক আছে! আজ দুপুর ৩:০০ টায় 01734042131 নম্বরে আপনার বার্তাটি পাঠিয়ে দেওয়া হবে।"
-}
-OR
-{
-  "action": "delete_reminder",
-  "data": {
-    "searchQuery": "Meeting with John" // Provide a keyword or title the user wants to delete/cancel
-  },
-  "replyText": "আপনার রিমাইন্ডারটি ডিলিট করা হয়েছে!"
-}
-OR
-{
-  "action": "general_reply",
-  "replyText": "উইশ তৈরি করতে দয়া করে Smriti অ্যাপ ব্যবহার করুন। আমি শুধু রিমাইন্ডার সেট বা ডিলিট করতে পারি।"
 }
 
 Only return the JSON. No markdown formatting like \`\`\`json.
@@ -116,7 +140,85 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // 2. Reminder Creation or Scheduled Message Detection
+    // 2. Wish Card Creation Detection (Birthday, Anniversary, Eid, etc.)
+    const isWishIntent = text.includes('উইশ') || text.includes('wish') || text.includes('কার্ড') || text.includes('card') ||
+      text.includes('জন্মদিন') || text.includes('birthday') || text.includes('বিবাহবার্ষিকী') || text.includes('বার্ষিকী') ||
+      text.includes('anniversary') || text.includes('ঈদ') || text.includes('eid') || text.includes('অভিনন্দন') || text.includes('congrat');
+
+    if (isWishIntent) {
+      const phoneMatch = enText.match(/(?:01\d{9}|\+?8801\d{9})/);
+      const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
+
+      let occasion = 'general';
+      let occasionBangla = 'শুভেচ্ছা';
+      if (text.includes('জন্মদিন') || text.toLowerCase().includes('birthday')) {
+        occasion = 'birthday';
+        occasionBangla = 'জন্মদিনের';
+      } else if (text.includes('বিবাহ') || text.includes('বার্ষিকী') || text.toLowerCase().includes('anniversary')) {
+        occasion = 'anniversary';
+        occasionBangla = 'বিবাহবার্ষিকীর';
+      } else if (text.includes('ঈদ') || text.toLowerCase().includes('eid')) {
+        occasion = 'eid';
+        occasionBangla = 'ঈদের';
+      } else if (text.includes('নতুন বছর') || text.toLowerCase().includes('new year')) {
+        occasion = 'newyear';
+        occasionBangla = 'নববর্ষের';
+      } else if (text.includes('অভিনন্দন') || text.toLowerCase().includes('congrat')) {
+        occasion = 'congratulations';
+        occasionBangla = 'অভিনন্দনের';
+      }
+
+      // Check recipient name
+      let recipientName = 'প্রিয়জন';
+      const nameMatch = text.match(/(?:রাহুল|রনি|আরিফ|সাকিব|বন্ধু|ভাই|বোন|স্ত্রী|আম্মু|আব্বু|[A-Z][a-z]+)/);
+      if (nameMatch) recipientName = nameMatch[0];
+
+      // Time & Date
+      let time = '10:00';
+      const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1], 10);
+        const minute = timeMatch[2] || '00';
+        if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
+          if (hour < 12) hour += 12;
+        }
+        time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
+      }
+
+      const targetDate = new Date();
+      if (text.includes('কাল') || text.includes('আগামীকাল') || text.toLowerCase().includes('tomorrow')) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+      const dateStr = targetDate.toISOString().split('T')[0];
+
+      const sendNow = text.includes('এখন') || text.includes('এখনই') || (!text.includes('কাল') && !text.includes('আগামীকাল') && !timeMatch);
+
+      const defaultWishMessage = occasion === 'birthday'
+        ? `শুভ জন্মদিন ${recipientName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
+        : occasion === 'anniversary'
+        ? `শুভ বিবাহবার্ষিকী! আপনাদের দুজনের পথচলা আজীবন অটুট ও আনন্দময় থাকুক।`
+        : occasion === 'eid'
+        ? `ঈদ মোবারক! আপনার ও আপনার পরিবারের জন্য রইল পবিত্র ঈদের অফুরন্ত শুভেচ্ছা।`
+        : `অনেক অনেক আন্তরিক শুভেচ্ছা ও শুভকামনা! আপনার জীবন সুন্দর ও সাফল্যমণ্ডিত হোক।`;
+
+      return {
+        action: 'create_wish',
+        data: {
+          occasion,
+          recipientName,
+          recipientPhone: recipientPhone || '01700000000',
+          message: defaultWishMessage,
+          date: dateStr,
+          time,
+          sendNow
+        },
+        replyText: sendNow
+          ? `🎉 ${recipientPhone || ''} নম্বরে ${recipientName}-র জন্য ${occasionBangla} উইশ কার্ড সফলভাবে পাঠিয়ে দেওয়া হচ্ছে!`
+          : `🎉 ঠিক আছে! ${dateStr} সময় ${time}-এ ${recipientPhone || ''} নম্বরে ${recipientName}-র জন্য ${occasionBangla} উইশ কার্ড স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
+      };
+    }
+
+    // 3. Reminder Creation or Scheduled Message Detection
     if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText)) {
       // Extract time
       let time = '10:00';
@@ -177,7 +279,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     return {
       action: 'general_reply',
-      replyText: 'দুঃখিত, আমি আপনার কথা বুঝতে পারিনি। দয়া করে সহজ ভাষায় রিমাইন্ডারটি বলুন (যেমন: কাল সকাল ১০টায় মিটিং রিমাইন্ডার)।'
+      replyText: 'দুঃখিত, আমি আপনার কথা বুঝতে পারিনি। দয়া করে সহজ ভাষায় রিমাইন্ডার বা উইশ কার্ডের কথা বলুন (যেমন: 01734042131 নাম্বারে রাহুলের জন্মদিনের উইশ কার্ড পাঠাও)।'
     };
   }
 };
@@ -204,7 +306,7 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
-Analyze what task or reminder the user wants to set, cancel, or delete, and return EXACTLY the JSON action format specified in system instructions.
+Analyze what task, reminder, or wish card (birthday, anniversary, eid, etc.) the user wants to send or create, and return EXACTLY the JSON action format specified in system instructions.
 Today's date in Bangladesh is ${dhakaDate}. If the user says 'কাল' or 'tomorrow', set tomorrow's date.
 Remember to return ONLY the raw JSON object.`;
 

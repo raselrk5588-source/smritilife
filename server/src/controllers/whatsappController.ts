@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
+import Wish from '../models/Wish';
 import { analyzeMessage, analyzeAudioMessage } from '../services/aiWhatsAppService';
+import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 
 // Function to send a message via Meta API
 const sendMetaWhatsAppMessage = async (to: string, text: string) => {
@@ -161,6 +163,62 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         switch (aiResponse.action) {
+          case 'create_wish':
+            if (aiResponse.data) {
+              const wishData = aiResponse.data;
+              const recipientPhone = wishData.recipientPhone;
+              const recipientName = wishData.recipientName || 'প্রিয়জন';
+              const occasion = wishData.occasion || 'birthday';
+              const occasionTitle = getOccasionTitle(occasion);
+              const message = wishData.message || `শুভ ${occasionTitle}! আপনার জীবন সুন্দর ও আনন্দময় হোক।`;
+              const imageUrl = wishData.imageUrl || getOccasionImageUrl(occasion);
+              const sendNow = wishData.sendNow !== false;
+
+              // Generate smart card ID for shareable animation link
+              const smartCardId = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+
+              let scheduledAt = new Date();
+              if (!sendNow && wishData.date) {
+                const timeStr = wishData.time || '10:00';
+                scheduledAt = new Date(`${wishData.date}T${timeStr}:00.000Z`);
+              }
+
+              const newWish = await Wish.create({
+                userId: user._id,
+                recipientName,
+                recipientContact: recipientPhone,
+                occasion,
+                message,
+                isSmartCard: true,
+                smartCardId,
+                cardData: {
+                  image: imageUrl,
+                  title: occasionTitle,
+                  senderName: user.name || 'আপনার শুভাকাঙ্ক্ষী',
+                  animation: 'envelope'
+                },
+                scheduledAt,
+                deliveryMethod: ['WhatsApp'],
+                status: sendNow ? 'Sent' : 'Scheduled'
+              });
+
+              if (sendNow && recipientPhone) {
+                // Send wish card image to the recipient immediately!
+                await deliverWishCard(newWish, user.name || 'আপনার শুভাকাঙ্ক্ষী');
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  aiResponse.replyText || `🎉 ${recipientPhone} নম্বরে ${recipientName}-র জন্য ${occasionTitle} কার্ড ও বার্তা সফলভাবে পাঠিয়ে দেওয়া হয়েছে!`
+                );
+              } else {
+                // Scheduled for future delivery by reminderScheduler
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  aiResponse.replyText || `🎉 ঠিক আছে! নির্ধারিত সময়ে ${recipientPhone || ''} নম্বরে ${occasionTitle} কার্ড স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
+                );
+              }
+            }
+            break;
+
           case 'create_reminder':
             if (aiResponse.data) {
               await Reminder.create({
