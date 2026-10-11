@@ -240,8 +240,48 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 const dStr = r.date ? new Date(r.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
                 text += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${r.time} (${dStr})\n   📊 স্ট্যাটাস: ${r.status}\n\n`;
               });
-              text += `💡 ডিলিট করতে লিখতে পারেন: "[নাম] ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও"।`;
+              text += `💡 পরিবর্তন করতে: "[নাম] রিমাইন্ডারের সময় ৫টায় দাও"\n💡 ডিলিট করতে: "[নাম] ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও"।`;
               await sendMetaWhatsAppMessage(fromNumber, text.trim());
+            }
+            break;
+          }
+
+          case 'modify_reminder': {
+            if (aiResponse.data && aiResponse.data.searchQuery) {
+              const query = aiResponse.data.searchQuery.trim();
+              const updateFields: any = {};
+              if (aiResponse.data.time) updateFields.time = aiResponse.data.time;
+              if (aiResponse.data.date) updateFields.date = new Date(aiResponse.data.date);
+              if (aiResponse.data.newTitle) updateFields.title = aiResponse.data.newTitle.trim();
+              // Reset status to Pending in case it was Cancelled or Sent
+              updateFields.status = 'Pending';
+
+              const updatedReminder = await Reminder.findOneAndUpdate(
+                {
+                  userId: user._id,
+                  title: { $regex: new RegExp(query, 'i') }
+                },
+                updateFields,
+                { new: true }
+              );
+
+              if (updatedReminder) {
+                const dStr = updatedReminder.date ? new Date(updatedReminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `✏️ "${updatedReminder.title}" রিমাইন্ডারটি সফলভাবে আপডেট করা হয়েছে!\n⏰ নতুন সময়: ${updatedReminder.time} (${dStr})`
+                );
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `দুঃখিত, "${query}" নামের কোনো রিমাইন্ডার খুঁজে পাওয়া যায়নি। আপনার সব রিমাইন্ডার দেখতে "সব রিমাইন্ডার দেখাও" লিখুন।`
+                );
+              }
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                'কোন রিমাইন্ডারটি এবং কী পরিবর্তন করতে চান তা উল্লেখ করুন (যেমন: "মিটিং রিমাইন্ডার সময় ৫টায় দাও")।'
+              );
             }
             break;
           }

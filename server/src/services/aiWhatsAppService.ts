@@ -13,9 +13,10 @@ Your capabilities include:
 1. Listing/viewing existing reminders ("list_reminders").
 2. Deleting all reminders ("delete_all_reminders").
 3. Creating reminders (for self or third-party recipients with scheduled messages) ("create_reminder").
-4. Canceling a specific reminder by title ("cancel_reminder").
-5. Deleting a specific reminder permanently by title ("delete_reminder").
-6. Creating and sending personalized AI wish cards (Birthday, Anniversary, Eid, New Year, Congratulations, Love, Friendship, General Wishes) with images delivered directly to WhatsApp numbers ("create_wish")!
+4. Modifying/updating date, time, or title of an existing reminder ("modify_reminder").
+5. Canceling a specific reminder by title ("cancel_reminder").
+6. Deleting a specific reminder permanently by title ("delete_reminder").
+7. Creating and sending personalized AI wish cards (Birthday, Anniversary, Eid, New Year, Congratulations, Love, Friendship, General Wishes) with images delivered directly to WhatsApp numbers ("create_wish")!
 
 Possible actions:
 1. list_reminders:
@@ -28,11 +29,25 @@ Possible actions:
    Bengali examples: "সব রিমাইন্ডার ডিলিট করে দাও", "সব রিমাইন্ডার মুছে দাও", "সব ডিলিট করো", "delete all reminders", "clear all reminders".
    Data: {}
 
-3. cancel_reminder:
+3. modify_reminder:
+   When user wants to edit, update, reschedule, or change the time, date, or title of an existing reminder.
+   Bengali/Banglish examples: 
+   - "মিটিং রিমাইন্ডার সময় পরিবর্তন করে বিকাল ৫টায় দাও"
+   - "মিটিং রিমাইন্ডার কাল সকাল ১১টায় পিছিয়ে দাও"
+   - "ডাক্তার রিমাইন্ডারের সময় আপডেট করো রাত ৯টায়"
+   - "meeting reminder time change kore 5pm koro"
+   - "update reminder meeting to tomorrow 4pm"
+   Fields in "data":
+   - "searchQuery": string (The title or keyword of the existing reminder to identify it)
+   - "date"?: string (YYYY-MM-DD if date changed)
+   - "time"?: string (HH:mm if time changed)
+   - "newTitle"?: string (Optional, if user also wants to rename the reminder)
+
+4. cancel_reminder:
    When user wants to cancel or stop a specific reminder.
    Data: { "searchQuery": string } (The title or keyword of the reminder to cancel).
 
-4. delete_reminder:
+5. delete_reminder:
    When user wants to delete a specific reminder permanently.
    Data: { "searchQuery": string } (The title or keyword of the reminder to delete).
 
@@ -137,7 +152,13 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
           systemInstruction: SYSTEM_INSTRUCTION
         });
         const chat = model.startChat({ history });
-        const result = await chat.sendMessage(userMessage);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 7000)
+        );
+        const result: any = await Promise.race([
+          chat.sendMessage(userMessage),
+          timeoutPromise
+        ]);
         const responseText = result.response.text().trim();
         const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
         parsedResponse = JSON.parse(cleanJson);
@@ -198,7 +219,50 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // 4. Cancel / Delete Specific Reminder Detection
+    // 4. Modify / Reschedule / Edit Reminder Detection
+    const isModifyIntent =
+      /(?:পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে)/i.test(text) &&
+      (text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder'));
+
+    if (isModifyIntent) {
+      let time: string | undefined = undefined;
+      const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1], 10);
+        const minute = timeMatch[2] || '00';
+        if (text.includes('দুপুর') || text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
+          if (hour < 12) hour += 12;
+        }
+        if (hour >= 24) hour = 10;
+        time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
+      }
+
+      let date: string | undefined = undefined;
+      if (text.includes('কাল') || text.includes('আগামীকাল') || text.toLowerCase().includes('tomorrow')) {
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + 1);
+        date = targetDate.toISOString().split('T')[0];
+      } else if (text.includes('আজ') || text.toLowerCase().includes('today')) {
+        date = new Date().toISOString().split('T')[0];
+      }
+
+      const query = text
+        .replace(/(\d{1,2}(?::\d{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?|[০-৯]{1,2}(?::[০-৯]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
+        .replace(/(?:রিমাইন্ডার(?:ের)?|reminder|সময়|সময়|তারিখ|দিন|পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে|করো|করে|দাও|দিন|দিতে|হবে|তে|এ|কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত)/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      return {
+        action: 'modify_reminder',
+        data: {
+          searchQuery: query || 'জরুরি',
+          time,
+          date
+        }
+      };
+    }
+
+    // 5. Cancel / Delete Specific Reminder Detection
     const isCancelOrDelete =
       /(?:ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove)/i.test(text) &&
       (text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder'));
@@ -385,7 +449,7 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
-Analyze what task, reminder, action (list_reminders, delete_all_reminders, delete_reminder, cancel_reminder), or wish card (birthday, anniversary, eid, etc.) the user wants to send or create, and return EXACTLY the JSON action format specified in system instructions.
+Analyze what task, reminder, action (list_reminders, modify_reminder, delete_all_reminders, delete_reminder, cancel_reminder), or wish card (birthday, anniversary, eid, etc.) the user wants to send or create, and return EXACTLY the JSON action format specified in system instructions.
 Today's date in Bangladesh is ${dhakaDate}. If the user says 'কাল' or 'tomorrow', set tomorrow's date.
 Remember to return ONLY the raw JSON object.`;
 
