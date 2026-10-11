@@ -65,6 +65,54 @@ export const parseBengaliTime = (rawText: string): string => {
   return `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
 };
 
+/**
+ * Intelligent extractor for the actual message body intended for the recipient.
+ * Handles quoted text, 'j' / 'je' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
+ */
+export const extractScheduledMessage = (rawText: string, recipientPhone?: string): string => {
+  let text = rawText.trim();
+  if (recipientPhone) {
+    text = text.replace(recipientPhone, ' ').trim();
+  }
+
+  // 1. Quoted message (e.g. "koi tumi bhiya..." or '...')
+  const quoteMatch = text.match(/["'“‘]([^"'“‘”]+)["'”’]/);
+  if (quoteMatch && quoteMatch[1].trim().length > 1) {
+    return quoteMatch[1].trim();
+  }
+
+  // 2. Connector clause: 'j ...', 'je ...', 'যে ...' (e.g. "...ar somoi j bari jaba kobe")
+  const jeMatch = text.match(/\b(?:j|je|যে)\s+(.+)$/i);
+  if (jeMatch && jeMatch[1].trim().length > 1) {
+    return jeMatch[1].trim();
+  }
+
+  // 3. Connector colon: 'message: ...' or 'মেসেজ: ...'
+  const colonMatch = text.match(/(?:message|msg|বার্তা|মেসেজ)\s*[:：\-]\s*(.+)$/i);
+  if (colonMatch && colonMatch[1].trim().length > 1) {
+    return colonMatch[1].trim();
+  }
+
+  // 4. Fallback cleanup: strip metadata prefixes cleanly using whole-word boundaries
+  let cleaned = text
+    .replace(/(?:ay|ei|ai|oi)\s*number(?:\s*(?:a|e|te))?/gi, ' ')
+    .replace(/\b(?:number|nombore|nambare|নাম্বারে|নম্বরে)(?:\s*(?:a|e|te))?\b/gi, ' ')
+    .replace(/\b(?:akta|ekta|একটি|একটা)\b/gi, ' ')
+    .replace(/\b(?:message|msg|বার্তা|মেসেজ)\b/gi, ' ')
+    .replace(/\b(?:send\s*kore\s*diba|pathiye\s*dio|pathay\s*dio|send\s*koro|pathao|pathano|pathaiba|পাঠিয়ে\s*দিও|পাঠিয়ে\s*দিন|পাঠাও)\b/gi, ' ')
+    .replace(/\b(?:aj|aaj|কাল|আগামীকাল|আজ|kal|kaal|tomorrow|today)(?:\s*k)?\b/gi, ' ')
+    .replace(/\b(?:rat|raat|sokal|shokal|dupur|bikal|sondha|shondha|রাত|সকাল|দুপুর|বিকাল|সন্ধ্যা)\b/gi, ' ')
+    .replace(/(\d{1,2}(?::\d{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?|[০-৯]{1,2}(?::[০-৯]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, ' ')
+    .replace(/\b(?:ar|er|এর|সময়|somoy|somoi|time)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Strip leading leftover words like "diba", "k", "j", "pathao", ":"
+  cleaned = cleaned.replace(/^(?:diba|dibo|dio|diyo|pathao|pathano|k|j|je|bolba|bolbe|[:：\-])\s+/i, '').trim();
+
+  return cleaned && cleaned.length >= 2 ? cleaned : 'জরুরি বার্তা';
+};
+
 const SYSTEM_INSTRUCTION = `
 You are an AI assistant for a WhatsApp bot called "Smriti".
 Your job is to analyze the user's message and return a JSON object with the action to perform.
@@ -434,13 +482,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
       if (recipientPhone) {
         title = `মেসেজ পাঠানো (${recipientPhone})`;
-        // Clean out instructions to find the actual message
-        customMessage = text
-          .replace(new RegExp(recipientPhone, 'g'), '')
-          .replace(/(নম্বরে|নাম্বারে|number a|a|এ|একটা|মেসেজ|message|করে|পাঠিয়ে|পাঠিয়ে|দিবা|দিও|দিন|করো|যে|j|আজ|কাল|দুপুুর|দুপুর|সকাল|বিকাল|\d{1,2}(?::\d{2})?\s*(টা|টায়|টায়|am|pm)?)/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        if (!customMessage || customMessage.length < 2) customMessage = 'জরুরি বার্তা';
+        customMessage = extractScheduledMessage(text, recipientPhone);
       }
 
       if (!title || title.length < 2) title = 'জরুরি কাজ';
