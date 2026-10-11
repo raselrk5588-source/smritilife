@@ -12,5 +12,5 @@ connectDB();
 console.log('Smriti Background Worker is running...');
 console.log('Waiting for jobs in queues...');
 
-// Start polling for reminders
-startCron();
+// Reminder cron is handled centrally by server's reminderScheduler
+// startCron();

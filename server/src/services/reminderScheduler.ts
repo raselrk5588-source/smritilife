@@ -85,22 +85,21 @@ export const startReminderScheduler = () => {
         console.log(`[ReminderScheduler] Found ${dueReminders.length} due reminders at Dhaka time ${dhakaTimeStr}`);
 
         for (const reminder of dueReminders) {
+          // Atomically claim the reminder so NO other process or duplicate tick can process it
+          const claimed = await Reminder.findOneAndUpdate(
+            { _id: reminder._id, status: 'Pending' },
+            { $set: { status: 'Completed' } }
+          );
+          if (!claimed) continue;
+
           const user = await User.findById(reminder.userId);
           const targetNumber = user?.whatsapp || user?.mobile;
 
           if (targetNumber) {
             const alertText = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${reminder.time}\n\nআপনার কাজটি সুন্দরভাবে সম্পন্ন হোক!`;
             
-            const sent = await sendWhatsAppAlert(targetNumber, alertText);
-            if (sent) {
-              reminder.status = 'Completed';
-              await reminder.save();
-              console.log(`[ReminderScheduler] Reminder "${reminder.title}" marked as Completed.`);
-            }
-          } else {
-            // Mark completed so it doesn't loop
-            reminder.status = 'Completed';
-            await reminder.save();
+            await sendWhatsAppAlert(targetNumber, alertText);
+            console.log(`[ReminderScheduler] Reminder "${reminder.title}" dispatched & marked Completed.`);
           }
         }
       }
