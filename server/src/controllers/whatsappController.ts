@@ -13,29 +13,35 @@ const sendMetaWhatsAppMessage = async (to: string, text: string) => {
     return;
   }
 
-  try {
-    const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: to,
-        type: 'text',
-        text: { body: text }
-      })
-    });
-    
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('Error sending Meta message:', data);
-    } else {
-      console.log(`✅ Meta WhatsApp Reply sent to ${to}: "${text}"`);
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: to,
+          type: 'text',
+          text: { body: text }
+        }),
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('Error sending Meta message:', data);
+      } else {
+        console.log(`✅ Meta WhatsApp Reply sent to ${to}: "${text}"`);
+      }
+      return;
+    } catch (error) {
+      console.error(`Attempt ${attempt} error sending Meta message:`, error);
+      if (attempt === 2) break;
+      await new Promise(r => setTimeout(r, 1000));
     }
-  } catch (error) {
-    console.error('Fetch error sending Meta message:', error);
   }
 };
 
