@@ -33,6 +33,9 @@ app.use(helmet());
 // Connect Database
 connectDB();
 
+import { startReminderScheduler } from './services/reminderScheduler';
+startReminderScheduler();
+
 import { getPublicWish } from './controllers/wishController';
 import { protect } from './middleware/authMiddleware';
 

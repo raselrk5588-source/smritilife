@@ -36,9 +36,8 @@ export const sendSMS = async (to: string, message: string) => {
 
 export const sendWhatsApp = async (to: string, message: string, imageUrl?: string) => {
   try {
-    // For Meta WhatsApp Cloud API (Testing configuration)
-    const metaToken = "EAAfJRzwYyIsBSjO1yS0q0CJBVI9scXM3ssgL1czWkXmuvsXNzLzjkxRRMtO4pwIGpmiCdgs674JMjqx17IiJRJXOgp1FkBhuMkQmHl0xYZCa5Kw2BhBRiIittegUucKJWuineTJGX2yklXcnuHE2A1J2jANFR6kBYT3NvGsERdyBLejgaoqUKWXMfxAZDZD";
-    const phoneNumberId = "1351522341377579"; 
+    const metaToken = process.env.WHATSAPP_ACCESS_TOKEN || "EAAUrTb385V0BSgkTLekOKwPxvjEH1th1T8bGqFuDZANWxtJJtkudLVtxlxOgicsp6xFk6Q8uX8xxaHyTd9VH8HzhnnVNhUdSNOBJ81IxK7oFXaRYVjWBscEZASFpFmlazgRkIEbZBIKqJcLPKO53TZBZAp55Y8zT5d5oUnCbkB0zgdir2Rtu7FvTQjaZA2YzZB1ZBQZDZD";
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || "1290926227446967"; 
 
     // Meta expects country code without '+' or 'whatsapp:' prefix
     let formattedTo = to;

@@ -52,6 +52,8 @@ jobs:
             echo "REDIS_HOST=close-bee-199444.upstash.io" >> worker/.env
             echo "REDIS_PORT=6379" >> worker/.env
             echo "REDIS_PASSWORD=gQAAAAAAAwsUAAIgcDEyMTYzZTlkNmVjZWY0MWViOGQzNjBiNDA4NTJkNzc1MA" >> worker/.env
+            echo "WHATSAPP_PHONE_NUMBER_ID=${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}" >> worker/.env
+            echo "WHATSAPP_ACCESS_TOKEN=${{ secrets.WHATSAPP_ACCESS_TOKEN }}" >> worker/.env
             
             docker-compose down
             docker-compose up -d --build
