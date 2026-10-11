@@ -90,9 +90,63 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     return parsedResponse;
   } catch (error) {
     console.error("AI Analysis Error:", error);
+
+    // Rule-based Fallback Parser if Gemini API fails
+    const text = userMessage.trim();
+    const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+    const enText = text.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
+
+    // 1. Greetings
+    if (/^(hi|hello|hey|সালাম|হ্যালো|কেমন আছো|কেমন আছেন|kemon acho)/i.test(text)) {
+      return {
+        action: 'general_reply',
+        replyText: 'হ্যালো! আমি Smriti অ্যাসিস্ট্যান্ট। আপনি আমাকে WhatsApp-এ কোনো কাজের রিমাইন্ডার সেট বা ডিলিট করতে বলতে পারেন।'
+      };
+    }
+
+    // 2. Reminder Creation Detection
+    if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ')) {
+      // Extract time
+      let time = '10:00';
+      const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1], 10);
+        const minute = timeMatch[2] || '00';
+        if (text.includes('বিকাল') || text.includes('বিকেল') || text.includes('সন্ধ্যা') || text.includes('রাত') || (timeMatch[3] && timeMatch[3].toLowerCase() === 'pm')) {
+          if (hour < 12) hour += 12;
+        }
+        time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
+      }
+
+      // Extract date (কাল = tomorrow, আজ = today)
+      const targetDate = new Date();
+      if (text.includes('কাল') || text.includes('আগামীকাল') || text.toLowerCase().includes('tomorrow')) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+      const dateStr = targetDate.toISOString().split('T')[0];
+
+      // Extract title
+      let title = text
+        .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
+        .replace(/(রিমাইন্ডার\s*(সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*করিয়ে\s*দিও|reminder)/gi, '')
+        .trim();
+
+      if (!title || title.length < 2) title = 'জরুরি কাজ';
+
+      return {
+        action: 'create_reminder',
+        data: {
+          title,
+          date: dateStr,
+          time
+        },
+        replyText: `আপনার রিমাইন্ডার "${title}" সময় ${time}-এ সেট করা হয়েছে!`
+      };
+    }
+
     return {
       action: 'general_reply',
-      replyText: 'দুঃখিত, আমি আপনার কথা বুঝতে পারিনি। দয়া করে আবার বলুন।'
+      replyText: 'দুঃখিত, আমি আপনার কথা বুঝতে পারিনি। দয়া করে সহজ ভাষায় রিমাইন্ডারটি বলুন (যেমন: কাল সকাল ১০টায় মিটিং রিমাইন্ডার)।'
     };
   }
 };
