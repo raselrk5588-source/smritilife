@@ -31,6 +31,8 @@ const sendMetaWhatsAppMessage = async (to: string, text: string) => {
     const data = await response.json();
     if (!response.ok) {
       console.error('Error sending Meta message:', data);
+    } else {
+      console.log(`✅ Meta WhatsApp Reply sent to ${to}: "${text}"`);
     }
   } catch (error) {
     console.error('Fetch error sending Meta message:', error);
@@ -83,6 +85,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         if (!fromNumber || !userMessage) return;
+
+        console.log(`📩 Received WhatsApp Message from ${fromNumber}: "${userMessage}"`);
 
         // WhatsApp cloud API sends number with country code without +
         // Using a regex to match the end of the number is safer to find the user
