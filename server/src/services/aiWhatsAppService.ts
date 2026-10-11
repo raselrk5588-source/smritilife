@@ -10,12 +10,33 @@ Your job is to analyze the user's message and return a JSON object with the acti
 The user speaks Bengali or English. When greeting, always greet with "আসসালামু আলাইকুম! আমি Smriti AI অ্যাসিস্ট্যান্ট।" 
 
 Your capabilities include:
-1. Creating reminders (for self or third-party recipients with scheduled messages).
-2. Canceling and deleting reminders.
-3. Creating and sending personalized AI wish cards (Birthday, Anniversary, Eid, New Year, Congratulations, Love, Friendship, General Wishes) with images delivered directly to WhatsApp numbers!
+1. Listing/viewing existing reminders ("list_reminders").
+2. Deleting all reminders ("delete_all_reminders").
+3. Creating reminders (for self or third-party recipients with scheduled messages) ("create_reminder").
+4. Canceling a specific reminder by title ("cancel_reminder").
+5. Deleting a specific reminder permanently by title ("delete_reminder").
+6. Creating and sending personalized AI wish cards (Birthday, Anniversary, Eid, New Year, Congratulations, Love, Friendship, General Wishes) with images delivered directly to WhatsApp numbers ("create_wish")!
 
 Possible actions:
-1. create_wish:
+1. list_reminders:
+   When user asks to view, check, list, or see their reminders.
+   Bengali examples: "সব রিমাইন্ডার দেখাও", "রিমাইন্ডার লিস্ট দেখাও", "আমার কি কি রিমাইন্ডার আছে?", "রিমাইন্ডার কয়টা আছে?", "show reminders", "list reminders".
+   Data: {}
+
+2. delete_all_reminders:
+   When user asks to delete or clear all of their reminders.
+   Bengali examples: "সব রিমাইন্ডার ডিলিট করে দাও", "সব রিমাইন্ডার মুছে দাও", "সব ডিলিট করো", "delete all reminders", "clear all reminders".
+   Data: {}
+
+3. cancel_reminder:
+   When user wants to cancel or stop a specific reminder.
+   Data: { "searchQuery": string } (The title or keyword of the reminder to cancel).
+
+4. delete_reminder:
+   When user wants to delete a specific reminder permanently.
+   Data: { "searchQuery": string } (The title or keyword of the reminder to delete).
+
+5. create_wish:
    When user asks to send a birthday wish (জন্মদিনের শুভেচ্ছা), anniversary (বিবাহবার্ষিকী), Eid (ঈদ), New Year (নতুন বছর), Congratulations (অভিনন্দন), or any celebration wish/card to a phone number.
    Fields in "data":
    - "occasion": "birthday" | "anniversary" | "eid" | "newyear" | "congratulations" | "love" | "general"
@@ -26,7 +47,7 @@ Possible actions:
    - "time": string (HH:mm, e.g. "12:00")
    - "sendNow": boolean (true if user wants it sent immediately or doesn't specify a future time/date; false if scheduled for future)
 
-2. create_reminder:
+6. create_reminder:
    When user wants a task reminder for themselves or a plain scheduled text message to another number.
    Fields in "data":
    - "title": string
@@ -35,9 +56,7 @@ Possible actions:
    - "date": string (YYYY-MM-DD)
    - "time": string (HH:mm)
 
-3. cancel_reminder (to mark a reminder as Cancelled)
-4. delete_reminder (to permanently delete a reminder)
-5. general_reply (for greetings, conversational questions, or help)
+7. general_reply (for greetings, conversational questions, or help)
 
 Example Response for Wish:
 {
@@ -84,8 +103,13 @@ Only return the JSON. No markdown formatting like \`\`\`json.
 export const analyzeMessage = async (whatsappNumber: string, userMessage: string) => {
   try {
     // Fetch settings to get API key
-    const settings = await SystemSettings.findOne();
-    const apiKey = process.env.GEMINI_API_KEY || settings?.geminiApiKey;
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      try {
+        const settings = await SystemSettings.findOne();
+        apiKey = settings?.geminiApiKey;
+      } catch (err) {}
+    }
 
     if (!apiKey) {
       console.error("Gemini API Key is missing. Please add it in Admin Panel or .env file.");
@@ -96,39 +120,49 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
-      systemInstruction: SYSTEM_INSTRUCTION
-    });
+    
+    // Helper to try models in order: gemini-3.8-flash, then gemini-2.5-flash
+    const candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash'];
+    let parsedResponse: any = null;
 
     if (!chatHistories.has(whatsappNumber)) {
       chatHistories.set(whatsappNumber, []);
     }
     const history = chatHistories.get(whatsappNumber)!;
 
-    const chat = model.startChat({
-      history: history,
-    });
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({ 
+          model: modelName,
+          systemInstruction: SYSTEM_INSTRUCTION
+        });
+        const chat = model.startChat({ history });
+        const result = await chat.sendMessage(userMessage);
+        const responseText = result.response.text().trim();
+        const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsedResponse = JSON.parse(cleanJson);
 
-    const result = await chat.sendMessage(userMessage);
-    const responseText = result.response.text().trim();
-
-    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsedResponse = JSON.parse(cleanJson);
-
-    history.push({ role: 'user', parts: [{ text: userMessage }] });
-    history.push({ role: 'model', parts: [{ text: cleanJson }] });
-
-    if (history.length > 10) {
-      chatHistories.set(whatsappNumber, history.slice(history.length - 10));
+        history.push({ role: 'user', parts: [{ text: userMessage }] });
+        history.push({ role: 'model', parts: [{ text: cleanJson }] });
+        if (history.length > 10) {
+          chatHistories.set(whatsappNumber, history.slice(history.length - 10));
+        }
+        break; // Successfully got response
+      } catch (modelErr: any) {
+        console.warn(`Gemini Model ${modelName} failed:`, modelErr.message || modelErr);
+      }
     }
 
-    return parsedResponse;
+    if (parsedResponse) {
+      return parsedResponse;
+    }
+    throw new Error("All Gemini models failed, falling back to rule-based parser");
   } catch (error) {
-    console.error("AI Analysis Error:", error);
+    console.error("AI Analysis Error (Using Fallback Parser):", error);
 
     // Rule-based Fallback Parser if Gemini API fails
     const text = userMessage.trim();
+    const lower = text.toLowerCase();
     const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
     const enText = text.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
 
@@ -136,11 +170,54 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     if (/^(hi|hello|hey|সালাম|হ্যালো|কেমন আছো|কেমন আছেন|kemon acho)/i.test(text)) {
       return {
         action: 'general_reply',
-        replyText: 'আসসালামু আলাইকুম! আমি Smriti অ্যাসিস্ট্যান্ট। আপনি আমাকে WhatsApp-এ কোনো কাজের রিমাইন্ডার সেট বা ডিলিট করতে বলতে পারেন।'
+        replyText: 'আসসালামু আলাইকুম! আমি Smriti অ্যাসিস্ট্যান্ট।\n- আপনার রিমাইন্ডার দেখতে লিখুন: "সব রিমাইন্ডার দেখাও"\n- সব মুছতে লিখুন: "সব রিমাইন্ডার ডিলিট করে দাও"\n- নতুন রিমাইন্ডার সেট করতে লিখুন: "কাল সকাল ১০টায় মিটিং রিমাইন্ডার"'
       };
     }
 
-    // 2. Wish Card Creation Detection (Birthday, Anniversary, Eid, etc.)
+    // 2. Delete All Reminders Detection
+    const isDeleteAllReminders =
+      /(?:সব|সকল|all)\s*(?:রিমাইন্ডার|reminder)?\s*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|delete|clear|remove)/i.test(text) ||
+      /(?:ডিলিট|মুছে|delete|clear)\s*(?:সব|সকল|all)\s*(?:রিমাইন্ডার|reminder)?/i.test(text);
+
+    if (isDeleteAllReminders) {
+      return {
+        action: 'delete_all_reminders'
+      };
+    }
+
+    // 3. List Reminders Detection (Bengali, Banglish & English)
+    const isListReminders =
+      /(?:সব\s*রিমাইন্ডার|রিমাইন্ডার\s*(?:লিস্ট|গুলো|কয়টা|কতগুলো|কয়টা|দেখা|দেখাও|দেখতে)|list\s*reminder|show\s*(?:my\s*)?reminders?|my\s*reminders|reminder\s*list)/i.test(text) ||
+      /(?:কি\s*কি\s*রিমাইন্ডার|কোন\s*কোন\s*রিমাইন্ডার)/i.test(text) ||
+      /(?:koto\s*gula|koita|koyta|koto|how\s*many|sob|shob|list|dekhao|dekhaw|ache|ase)\b.*reminder/i.test(text) ||
+      /reminder.*\b(?:koto\s*gula|koita|koyta|koto|how\s*many|ache|ase|dekhao|dekhaw|list)/i.test(text);
+
+    if (isListReminders) {
+      return {
+        action: 'list_reminders'
+      };
+    }
+
+    // 4. Cancel / Delete Specific Reminder Detection
+    const isCancelOrDelete =
+      /(?:ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove)/i.test(text) &&
+      (text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder'));
+
+    if (isCancelOrDelete) {
+      const isDelete = /(?:ডিলিট|মুছে|delete|remove)/i.test(text);
+      const query = text
+        .replace(/(?:রিমাইন্ডার|reminder|টা|টি|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
+        .trim();
+
+      return {
+        action: isDelete ? 'delete_reminder' : 'cancel_reminder',
+        data: {
+          searchQuery: query || 'জরুরি'
+        }
+      };
+    }
+
+    // 5. Wish Card Creation Detection (Birthday, Anniversary, Eid, etc.)
     const isWishIntent = text.includes('উইশ') || text.includes('wish') || text.includes('কার্ড') || text.includes('card') ||
       text.includes('জন্মদিন') || text.includes('birthday') || text.includes('বিবাহবার্ষিকী') || text.includes('বার্ষিকী') ||
       text.includes('anniversary') || text.includes('ঈদ') || text.includes('eid') || text.includes('অভিনন্দন') || text.includes('congrat');
@@ -302,16 +379,13 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: SYSTEM_INSTRUCTION
-    });
+    const candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash'];
 
     const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
-Analyze what task, reminder, or wish card (birthday, anniversary, eid, etc.) the user wants to send or create, and return EXACTLY the JSON action format specified in system instructions.
+Analyze what task, reminder, action (list_reminders, delete_all_reminders, delete_reminder, cancel_reminder), or wish card (birthday, anniversary, eid, etc.) the user wants to send or create, and return EXACTLY the JSON action format specified in system instructions.
 Today's date in Bangladesh is ${dhakaDate}. If the user says 'কাল' or 'tomorrow', set tomorrow's date.
 Remember to return ONLY the raw JSON object.`;
 
@@ -322,11 +396,26 @@ Remember to return ONLY the raw JSON object.`;
       }
     };
 
-    const result = await model.generateContent([prompt, audioPart]);
-    const responseText = result.response.text().trim();
+    let parsedResponse: any = null;
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: SYSTEM_INSTRUCTION
+        });
+        const result = await model.generateContent([prompt, audioPart]);
+        const responseText = result.response.text().trim();
+        const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsedResponse = JSON.parse(cleanJson);
+        break;
+      } catch (err: any) {
+        console.warn(`Audio analysis model ${modelName} failed:`, err.message || err);
+      }
+    }
 
-    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsedResponse = JSON.parse(cleanJson);
+    if (!parsedResponse) {
+      throw new Error("All models failed for audio analysis");
+    }
     return parsedResponse;
   } catch (error) {
     console.error("AI Audio Analysis Error:", error);
