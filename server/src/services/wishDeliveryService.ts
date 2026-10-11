@@ -151,7 +151,14 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
   let recipientSalutation = wish.recipientName ? `প্রিয় ${wish.recipientName},\n\n` : '';
   const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}\n\n💌 আপনার জন্য একটি বিশেষ অ্যানিমেটেড উইশ কার্ড পাঠানো হয়েছে:\n${smartCardUrl}\n\n- ভালোবাসা সহ, ${senderName}`;
 
-  const success = await sendMetaWhatsAppImage(wish.recipientContact, imageUrl, fullCaption);
+  // Send the rich image wish card first
+  let success = await sendMetaWhatsAppImage(wish.recipientContact, imageUrl, fullCaption);
+
+  // If image dispatch fails or is dropped, automatically fallback to text wish
+  if (!success) {
+    console.warn(`[WishDelivery] Image dispatch failed for ${wish.recipientContact}, falling back to text wish message...`);
+    success = await sendMetaWhatsAppText(wish.recipientContact, fullCaption);
+  }
 
   if (success && senderWhatsApp) {
     await sendMetaWhatsAppText(
