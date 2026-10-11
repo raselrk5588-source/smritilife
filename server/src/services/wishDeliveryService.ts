@@ -148,8 +148,14 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
   const smartCardUrl = `https://smritilife.com/w/${smartCardId}`;
   const occasionTitle = getOccasionTitle(wish.occasion);
 
-  let recipientSalutation = wish.recipientName ? `প্রিয় ${wish.recipientName},\n\n` : '';
-  const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}\n\n💌 আপনার জন্য একটি বিশেষ অ্যানিমেটেড উইশ কার্ড পাঠানো হয়েছে:\n${smartCardUrl}\n\n- ভালোবাসা সহ, ${senderName}`;
+  let recipientSalutation = (wish.recipientName && wish.recipientName !== 'Unknown') ? `প্রিয় ${wish.recipientName},\n\n` : '';
+  
+  let linkSection = '';
+  if (!wish.message.includes('http://') && !wish.message.includes('https://')) {
+    linkSection = `\n\n💌 আপনার জন্য একটি বিশেষ অ্যানিমেটেড উইশ কার্ড পাঠানো হয়েছে:\n${smartCardUrl}`;
+  }
+
+  const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}${linkSection}\n\n- ভালোবাসা সহ, ${senderName}`;
 
   // Send the rich image wish card first
   let success = await sendMetaWhatsAppImage(wish.recipientContact, imageUrl, fullCaption);
