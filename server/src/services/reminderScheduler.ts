@@ -101,10 +101,28 @@ export const startReminderScheduler = () => {
           if (reminder.recipientPhone) {
             // Scheduled message to someone else
             const messageBody = reminder.description || reminder.title;
-            const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)`;
+            
+            // Check if recipient is already registered in Smriti
+            const cleanRecipientNumber = reminder.recipientPhone.replace(/\D/g, '');
+            const shortRecipientNumber = cleanRecipientNumber.length > 10 ? cleanRecipientNumber.slice(-10) : cleanRecipientNumber;
+            const recipientUser = await User.findOne({
+              $or: [
+                { whatsapp: { $regex: new RegExp(shortRecipientNumber + '$') } },
+                { mobile: { $regex: new RegExp(shortRecipientNumber + '$') } }
+              ]
+            });
+
+            let promoSection = '';
+            if (!recipientUser) {
+              promoSection = `\n\n✨ আপনিও কি স্মৃতি (Smriti) প্ল্যাটফর্ম ব্যবহার করে স্বয়ংক্রিয় রিমাইন্ডার ও বার্তা পাঠাতে চান?\nএখনই রেজিস্ট্রেশন করুন: https://smritilife.com/auth`;
+            } else if (!recipientUser.isSubscribed) {
+              promoSection = `\n\n✨ আপনার স্মৃতি (Smriti) অ্যাকাউন্টটি সক্রিয় রাখতে সাবস্ক্রাইব করুন:\nhttps://smritilife.com/paywall`;
+            }
+
+            const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
 
             await sendWhatsAppAlert(reminder.recipientPhone, thirdPartyAlert);
-            console.log(`[ReminderScheduler] Dispatched third-party message to ${reminder.recipientPhone}`);
+            console.log(`[ReminderScheduler] Dispatched third-party message to ${reminder.recipientPhone} (Registered: ${!!recipientUser})`);
 
             // Also confirm to the sender that their message was delivered
             if (senderNumber) {

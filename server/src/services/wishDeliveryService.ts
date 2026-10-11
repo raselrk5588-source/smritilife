@@ -155,7 +155,22 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
     linkSection = `\n\n💌 আপনার জন্য একটি বিশেষ অ্যানিমেটেড উইশ কার্ড পাঠানো হয়েছে:\n👉 ${smartCardUrl}`;
   }
 
-  const promoSection = `\n\n✨ আপনিও কি প্রিয়জনকে এভাবে স্বয়ংক্রিয় উইশ কার্ড ও প্রয়োজনীয় রিমাইন্ডার পাঠাতে চান?\nএখনই সাবস্ক্রাইব করুন: https://smritilife.com/paywall`;
+  // Check if recipient is already registered in Smriti
+  const cleanRecipientContact = (wish.recipientContact || '').replace(/\D/g, '');
+  const shortRecipientContact = cleanRecipientContact.length > 10 ? cleanRecipientContact.slice(-10) : cleanRecipientContact;
+  const recipientUser = await User.findOne({
+    $or: [
+      { whatsapp: { $regex: new RegExp(shortRecipientContact + '$') } },
+      { mobile: { $regex: new RegExp(shortRecipientContact + '$') } }
+    ]
+  });
+
+  let promoSection = '';
+  if (!recipientUser) {
+    promoSection = `\n\n✨ আপনিও কি প্রিয়জনকে এভাবে স্বয়ংক্রিয় উইশ কার্ড ও প্রয়োজনীয় রিমাইন্ডার পাঠাতে চান?\nএখনই রেজিস্ট্রেশন করুন: https://smritilife.com/auth`;
+  } else if (!recipientUser.isSubscribed) {
+    promoSection = `\n\n✨ আপনিও কি প্রিয়জনকে এভাবে স্বয়ংক্রিয় উইশ কার্ড ও প্রয়োজনীয় রিমাইন্ডার পাঠাতে চান?\nএখনই সাবস্ক্রাইব করুন: https://smritilife.com/paywall`;
+  }
 
   const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}${linkSection}\n\n- ভালোবাসা সহ, ${senderName}${promoSection}`;
 
