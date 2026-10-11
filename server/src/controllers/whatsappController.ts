@@ -139,11 +139,22 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         // WhatsApp cloud API sends number with country code without +
         // Using a regex to match the end of the number is safer to find the user
         const shortNumber = fromNumber.length > 10 ? fromNumber.slice(-10) : fromNumber;
-        const user = await User.findOne({ whatsapp: { $regex: new RegExp(shortNumber + '$') } });
+        const user = await User.findOne({
+          $or: [
+            { whatsapp: { $regex: new RegExp(shortNumber + '$') } },
+            { mobile: { $regex: new RegExp(shortNumber + '$') } }
+          ]
+        });
 
         if (!user) {
           await sendMetaWhatsAppMessage(fromNumber, 'দুঃখিত, এই নম্বরটি Smriti অ্যাপে নিবন্ধিত নয়। দয়া করে আপনার প্রোফাইলে গিয়ে WhatsApp নম্বর আপডেট করুন।');
           return;
+        }
+
+        // If user whatsapp was not set, link it now
+        if (!user.whatsapp) {
+          user.whatsapp = fromNumber;
+          await user.save();
         }
 
         let aiResponse: any;
@@ -302,6 +313,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           case 'create_reminder':
             if (aiResponse.data) {
               const cleanTitle = (aiResponse.data.title || 'নতুন রিমাইন্ডার').trim();
+              const category = aiResponse.data.recipientPhone ? 'message' : (aiResponse.data.category || 'General');
               await Reminder.create({
                 userId: user._id,
                 title: cleanTitle,
@@ -310,7 +322,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 date: new Date(aiResponse.data.date || new Date()),
                 time: aiResponse.data.time || '10:00',
                 priority: 'Medium',
-                category: 'General',
+                category: category,
                 repeat: 'Once',
                 status: 'Pending'
               });

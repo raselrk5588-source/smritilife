@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Plus, Bell, Calendar, Clock, Pill, Briefcase, Bookmark, Trash2, MoreVertical, ShoppingCart, CreditCard, Gift, Edit } from 'lucide-react';
+import { ChevronLeft, Plus, Bell, Calendar, Clock, Pill, Briefcase, Bookmark, Trash2, MoreVertical, ShoppingCart, CreditCard, Gift, Edit, Phone, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
@@ -30,6 +30,12 @@ export default function Reminders() {
 
   const filteredReminders = activeFilter === 'all' 
     ? savedReminders 
+    : activeFilter === 'pending'
+    ? savedReminders.filter(rem => rem.status === 'Pending')
+    : activeFilter === 'completed'
+    ? savedReminders.filter(rem => rem.status === 'Completed')
+    : activeFilter === 'message'
+    ? savedReminders.filter(rem => rem.type === 'message' || !!rem.recipientPhone)
     : savedReminders.filter(rem => rem.type === activeFilter);
 
   // Fetch from backend on load
@@ -38,8 +44,8 @@ export default function Reminders() {
       const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/reminders`);
       if (res.ok) {
         const data = await res.json();
-        // Format to UI structure, excluding completed reminders
-        const formatted = data.filter((item: any) => item.status !== 'Completed').map((item: any) => {
+        // Format to UI structure, showing both active and completed reminders
+        const formatted = data.map((item: any) => {
           let icon = Bookmark;
           let color = 'text-purple-500';
           let bg = 'bg-purple-50';
@@ -49,13 +55,33 @@ export default function Reminders() {
           else if (item.category === 'shopping') { icon = ShoppingCart; color = 'text-emerald-500'; bg = 'bg-emerald-50'; }
           else if (item.category === 'bill') { icon = CreditCard; color = 'text-orange-500'; bg = 'bg-orange-50'; }
           else if (item.category === 'event') { icon = Gift; color = 'text-pink-500'; bg = 'bg-pink-50'; }
+          else if (item.category === 'message' || item.recipientPhone) { icon = MessageSquare; color = 'text-teal-500'; bg = 'bg-teal-50'; }
+
+          // Format 12-hour display time
+          let formattedTime = item.time || '10:00';
+          if (formattedTime.includes(':')) {
+            const parts = formattedTime.split(':');
+            const h = parseInt(parts[0], 10);
+            if (!isNaN(h)) {
+              const ampm = h >= 12 ? 'PM' : 'AM';
+              const h12 = h % 12 === 0 ? 12 : h % 12;
+              formattedTime = `${h12}:${parts[1]} ${ampm}`;
+            }
+          }
+
+          const dateStr = item.date ? new Date(item.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
 
           return {
             id: item._id,
             type: item.category,
             title: item.title,
-            subtitle: item.description || `${new Date(item.date).toLocaleDateString()} • ${item.time}`,
+            description: item.description,
+            recipientPhone: item.recipientPhone,
+            dateStr,
+            formattedTime,
+            subtitle: item.description || `${dateStr} • ${formattedTime}`,
             icon, color, bg,
+            status: item.status || 'Pending',
             active: item.status !== 'Cancelled',
             originalDate: item.date,
             originalTime: item.time
@@ -426,6 +452,9 @@ export default function Reminders() {
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar mb-4 pb-1">
             {[
               { id: 'all', label: t('সব', 'All') },
+              { id: 'pending', label: t('চলমান/পেন্ডিং', 'Pending') },
+              { id: 'completed', label: t('সম্পন্ন', 'Completed') },
+              { id: 'message', label: t('মেসেজ', 'Messages') },
               { id: 'medicine', label: t('ওষুধ', 'Medicine') },
               { id: 'work', label: t('কাজ', 'Work') },
               { id: 'shopping', label: t('শপিং', 'Shopping') },
@@ -446,23 +475,42 @@ export default function Reminders() {
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 shadow-inner">
                 <Bell className="w-8 h-8 text-slate-300" />
               </div>
-              <p className="text-slate-600 text-sm font-bold mb-1">{t('কোনো রিমাইন্ডার সেট করা নেই', 'No reminders set')}</p>
+              <p className="text-slate-600 text-sm font-bold mb-1">{t('কোনো রিমাইন্ডার পাওয়া যায়নি', 'No reminders found')}</p>
               <p className="text-slate-400 text-[11px] font-medium max-w-[200px]">{t('ওপরের ফর্মটি ব্যবহার করে আপনার প্রয়োজনীয় কাজের রিমাইন্ডার যোগ করুন', 'Use the form above to add reminders for your tasks')}</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {filteredReminders.map(rem => (
-                <div key={rem.id} className="bg-white rounded-xl p-3 flex items-center border border-slate-100 shadow-sm relative overflow-hidden">
+                <div key={rem.id} className="bg-white rounded-2xl p-3.5 flex items-start border border-slate-100 shadow-sm relative overflow-hidden">
                   
                   {/* Icon */}
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 shrink-0 ${rem.bg} ${rem.color}`}>
-                    <rem.icon className="w-6 h-6" />
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center mr-3 shrink-0 ${rem.bg} ${rem.color} mt-0.5`}>
+                    <rem.icon className="w-5 h-5" />
                   </div>
 
                   {/* Content */}
-                  <div className="flex-1">
-                    <h3 className="text-sm font-bold text-slate-800">{rem.title}</h3>
-                    <p className="text-[11px] text-slate-500 font-medium mt-1">{rem.subtitle}</p>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h3 className="text-sm font-bold text-slate-800">{rem.title}</h3>
+                      {rem.status === 'Completed' ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ সম্পন্ন</span>
+                      ) : rem.status === 'Cancelled' ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">বাতিল</span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">⏰ পেন্ডিং</span>
+                      )}
+                    </div>
+                    {rem.recipientPhone && (
+                      <div className="text-[11px] font-bold text-teal-700 mb-1 flex items-center">
+                        <Phone className="w-3 h-3 mr-1 inline shrink-0" /> প্রাপক: {rem.recipientPhone}
+                      </div>
+                    )}
+                    {rem.description && (
+                      <p className="text-[12px] text-slate-600 font-medium line-clamp-2 mb-1">{rem.description}</p>
+                    )}
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      📅 {rem.dateStr} • ⏰ {rem.formattedTime}
+                    </p>
                   </div>
 
                   <div className="flex flex-col items-end justify-center ml-2 gap-3">

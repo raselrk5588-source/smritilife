@@ -16,6 +16,8 @@ export default function Home() {
 
   const [todayTasks, setTodayTasks] = useState<any[]>([]);
   const [recentNotes, setRecentNotes] = useState<any[]>([]);
+  const [recentReminders, setRecentReminders] = useState<any[]>([]);
+  const [taskFilter, setTaskFilter] = useState<'all' | 'reminder' | 'note'>('all');
   const [upcomingSpecialDates, setUpcomingSpecialDates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [notesCount, setNotesCount] = useState(0);
@@ -38,6 +40,16 @@ export default function Home() {
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         
+        const format12h = (timeStr: string) => {
+          if (!timeStr || !timeStr.includes(':')) return timeStr || '';
+          const [hStr, mStr] = timeStr.split(':');
+          const h = parseInt(hStr, 10);
+          if (isNaN(h)) return timeStr;
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const h12 = h % 12 === 0 ? 12 : h % 12;
+          return `${h12}:${mStr} ${ampm}`;
+        };
+
         if (notesRes.ok) {
           const notes = await notesRes.json();
           setNotesCount(notes.length);
@@ -62,6 +74,13 @@ export default function Home() {
           const reminders = await remindersRes.json();
           const pendingReminders = reminders.filter((r: any) => r.status !== 'Completed');
           setRemindersCount(pendingReminders.length);
+
+          const sortedReminders = [...reminders].sort((a: any, b: any) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
+          setRecentReminders(sortedReminders.slice(0, 3).map((r: any) => ({
+            ...r,
+            formattedTime: format12h(r.time)
+          })));
+
           const todayReminders = reminders.filter((r: any) => {
             const date = new Date(r.date);
             return date >= startOfToday && date <= endOfToday;
@@ -71,7 +90,8 @@ export default function Home() {
             id: `rem_${r._id}`,
             type: 'reminder',
             title: r.title,
-            time: r.time,
+            recipientPhone: r.recipientPhone,
+            time: format12h(r.time),
             color: 'orange',
             createdAt: new Date(r.createdAt || r.date)
           }))];
@@ -97,7 +117,7 @@ export default function Home() {
         }
 
         allTasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        setTodayTasks(allTasks.slice(0, 3));
+        setTodayTasks(allTasks);
         setRecentNotes(allNotes.slice(0, 2));
         setUpcomingSpecialDates(allSpecialDates.filter((s: any) => new Date(s.date) >= startOfToday).slice(0, 2));
       } catch (e) {
@@ -256,19 +276,44 @@ export default function Home() {
           
           {/* Today's Tasks */}
           <div className="bg-white rounded-2xl md:rounded-3xl p-2.5 md:p-4 shadow-sm border border-slate-100 flex flex-col min-h-[140px] md:min-h-[220px]">
-            <div className="flex justify-between items-center mb-2 md:mb-4">
+            <div className="flex justify-between items-center mb-2">
               <h3 className="font-bold text-slate-800 text-[12px] md:text-sm flex items-center">
                 <Calendar className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-1.5 text-slate-500" /> {t('আজকের কাজ', "Today's Tasks")}
               </h3>
               <Link to="/app/today-tasks" className="text-[10px] md:text-[12px] font-bold text-[#0A7756]">{t('সব দেখুন', 'See all')} {'>'}</Link>
+            </div>
+
+            {/* Quick Filter: All vs Reminders vs Notes */}
+            <div className="flex gap-1 mb-2">
+              {[
+                { id: 'all', label: t('সব', 'All') },
+                { id: 'reminder', label: t('রিমাইন্ডার', 'Reminders') },
+                { id: 'note', label: t('নোট', 'Notes') }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setTaskFilter(f.id as any)}
+                  className={`text-[9px] md:text-[11px] font-bold px-2 py-0.5 rounded-full transition ${taskFilter === f.id ? 'bg-[#0A7756] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
             
             {/* Populated State */}
             <div className="flex-1 flex flex-col space-y-2 mt-1">
               {loading ? (
                 <div className="text-center py-4 text-xs text-slate-400">লোড হচ্ছে...</div>
-              ) : todayTasks.length > 0 ? (
-                todayTasks.map((task) => (
+              ) : (() => {
+                const filtered = taskFilter === 'all' ? todayTasks : todayTasks.filter(t => t.type === taskFilter);
+                if (filtered.length === 0) {
+                  return (
+                    <div className="flex-1 flex flex-col items-center justify-center py-3 text-center">
+                      <p className="text-slate-400 text-[10px] md:text-xs font-medium">{t('কোনো আইটেম পাওয়া যায়নি', 'No items found')}</p>
+                    </div>
+                  );
+                }
+                return filtered.slice(0, 3).map((task) => (
                   <div key={task.id} className={`flex items-start bg-${task.color}-50/50 p-2 rounded-xl border border-${task.color}-100`}>
                     <div className={`w-8 h-8 bg-${task.color}-100 text-${task.color}-600 rounded-full flex items-center justify-center mr-2 shrink-0`}>
                       {task.type === 'note' && <FileText className="w-4 h-4" />}
@@ -282,15 +327,8 @@ export default function Home() {
                       </p>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-4 md:py-6 text-center">
-                  <div className="w-10 h-10 md:w-16 md:h-16 bg-slate-50 rounded-full flex items-center justify-center mb-2 md:mb-3">
-                    <Calendar className="w-5 h-5 md:w-8 md:h-8 text-slate-300" />
-                  </div>
-                  <p className="text-slate-500 text-[10px] md:text-xs font-medium mb-0.5 md:mb-1">{t('আজকের জন্য কোনো কাজ নেই', 'No tasks for today')}</p>
-                </div>
-              )}
+                ));
+              })()}
             </div>
           </div>
 
@@ -389,7 +427,7 @@ export default function Home() {
         <div>
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-bold text-slate-800 text-sm flex items-center">
-              <FileText className="w-4 h-4 mr-1.5 text-slate-500" /> {t('সাম্প্রতিক নোট', 'Recent Notes')}
+              <FileText className="w-4 h-4 mr-1.5 text-blue-500" /> {t('সাম্প্রতিক নোট', 'Recent Notes')}
             </h3>
             <Link to="/app/notes" className="text-[10px] font-bold text-primary">{t('সব দেখুন', 'See all')} {'>'}</Link>
           </div>
@@ -420,8 +458,64 @@ export default function Home() {
                 </div>
                 <p className="text-slate-500 text-xs font-medium mb-1">{t('কোনো নোট পাওয়া যায়নি', 'No notes found')}</p>
                 <p className="text-slate-400 text-[10px] mb-4">{t('আপনার গুরুত্বপূর্ণ তথ্য লিখে রাখুন', 'Write down your important info')}</p>
-                <Link to="/app/notes" className="bg-[#0A7756]/10 text-[#0A7756] text-xs font-bold px-4 py-2 rounded-full hover:bg-[#0A7756]/20 transition inline-block">
+                <Link to="/app/notes" className="bg-blue-50 text-blue-600 text-xs font-bold px-4 py-2 rounded-full hover:bg-blue-100 transition inline-block">
                   {t('+ নতুন নোট', '+ New Note')}
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Your Reminders Section */}
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-bold text-slate-800 text-sm flex items-center">
+              <Bell className="w-4 h-4 mr-1.5 text-orange-500" /> {t('আপনার রিমাইন্ডার', 'Your Reminders')}
+            </h3>
+            <Link to="/app/reminders" className="text-[10px] font-bold text-primary">{t('সব দেখুন', 'See all')} {'>'}</Link>
+          </div>
+          
+          <div className="bg-white rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col min-h-[160px]">
+            {loading ? (
+              <div className="text-center py-4 text-xs text-slate-400">লোড হচ্ছে...</div>
+            ) : recentReminders.length > 0 ? (
+              <div className="space-y-2">
+                {recentReminders.map((rem) => (
+                  <Link key={rem._id} to="/app/reminders" className="flex items-start bg-orange-50/40 p-3 rounded-xl border border-orange-100 hover:shadow-sm transition">
+                    <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mr-3 shrink-0">
+                      <Bell className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <h4 className="text-sm font-bold text-slate-800 truncate">{rem.title}</h4>
+                        {rem.status === 'Completed' ? (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 shrink-0">✓ সম্পন্ন</span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">⏰ পেন্ডিং</span>
+                        )}
+                      </div>
+                      {rem.recipientPhone && (
+                        <p className="text-[11px] text-teal-700 font-bold truncate">📞 প্রাপক: {rem.recipientPhone}</p>
+                      )}
+                      {rem.description && (
+                        <p className="text-[11px] text-slate-600 font-medium truncate mb-0.5">{rem.description}</p>
+                      )}
+                      <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                        📅 {new Date(rem.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' })} • ⏰ {rem.formattedTime || rem.time}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                  <Bell className="w-6 h-6 text-slate-300" />
+                </div>
+                <p className="text-slate-500 text-xs font-medium mb-1">{t('কোনো রিমাইন্ডার পাওয়া যায়নি', 'No reminders found')}</p>
+                <p className="text-slate-400 text-[10px] mb-4">{t('প্রয়োজনীয় কাজের রিমাইন্ডার সেট করে রাখুন', 'Set reminders for your important tasks')}</p>
+                <Link to="/app/reminders" className="bg-orange-50 text-orange-600 text-xs font-bold px-4 py-2 rounded-full hover:bg-orange-100 transition inline-block">
+                  {t('+ নতুন রিমাইন্ডার', '+ New Reminder')}
                 </Link>
               </div>
             )}

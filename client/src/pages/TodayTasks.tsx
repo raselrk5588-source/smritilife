@@ -14,7 +14,18 @@ export default function TodayTasks() {
   const todayStr = `${toBn(today.getDate())} ${months[today.getMonth()]}, ${toBn(today.getFullYear())}`;
   
   const [tasks, setTasks] = useState<any[]>([]);
+  const [filter, setFilter] = useState<'all' | 'reminder' | 'note'>('all');
   const [loading, setLoading] = useState(true);
+
+  const format12h = (timeStr: string) => {
+    if (!timeStr || !timeStr.includes(':')) return timeStr || '';
+    const [hStr, mStr] = timeStr.split(':');
+    const h = parseInt(hStr, 10);
+    if (isNaN(h)) return timeStr;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${mStr} ${ampm}`;
+  };
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -59,8 +70,9 @@ export default function TodayTasks() {
             id: `rem_${r._id}`,
             type: 'reminder',
             title: r.title,
-            time: r.time,
-            desc: r.description || 'রিমাইন্ডার',
+            time: format12h(r.time),
+            recipientPhone: r.recipientPhone,
+            desc: r.recipientPhone ? `প্রাপক: ${r.recipientPhone} • ${r.description || ''}` : (r.description || 'রিমাইন্ডার'),
             color: 'orange',
             createdAt: new Date(r.createdAt || r.date)
           }))];
@@ -112,32 +124,54 @@ export default function TodayTasks() {
       </div>
 
       <div className="px-5 py-6 md:px-8 max-w-5xl mx-auto">
-        <div className="flex justify-between items-end mb-4">
+        <div className="flex justify-between items-end mb-3">
           <h2 className="text-sm md:text-base font-bold text-slate-700">{t('আপনার আজকের সব কাজ', 'All your tasks for today')}</h2>
           <span className="text-[10px] md:text-xs font-bold text-slate-400 bg-slate-200/50 px-2.5 py-1 rounded-full">
             {toBn(tasks.length)} {t('টি কাজ', 'Tasks')}
           </span>
         </div>
 
+        {/* Filter Tabs: All, Reminders, Notes */}
+        <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
+          {[
+            { id: 'all', label: t('সব কাজ', 'All') },
+            { id: 'reminder', label: t('⏰ রিমাইন্ডার', 'Reminders') },
+            { id: 'note', label: t('📝 নোট', 'Notes') }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setFilter(tab.id as any)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition shadow-sm ${filter === tab.id ? 'bg-[#0A7756] text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {loading ? (
           <div className="text-center py-10 text-slate-500 font-medium">লোড হচ্ছে...</div>
-        ) : tasks.length === 0 ? (
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center min-h-[40vh]">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-              <Calendar className="w-8 h-8 text-slate-300" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-700 mb-2">{t('আজকের জন্য কোনো কাজ নেই', 'No tasks for today')}</h3>
-            <p className="text-sm text-slate-500">{t('আপনি নতুন নোট, রিমাইন্ডার বা বিশেষ দিন যোগ করতে পারেন।', 'You can add new notes, reminders, or special days.')}</p>
-          </div>
-        ) : (
-          <div className="space-y-3 md:space-y-4">
-            {tasks.map((task) => (
-              <div key={task.id} className={`bg-white p-4 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border border-${task.color}-100 flex items-start cursor-pointer hover:shadow-md transition group`}>
-                <div className={`w-10 h-10 md:w-12 md:h-12 bg-${task.color}-50 text-${task.color}-500 rounded-full flex items-center justify-center mr-4 shrink-0 group-hover:bg-${task.color}-100 transition`}>
-                  {task.type === 'note' && <FileText className="w-5 h-5 md:w-6 md:h-6" />}
-                  {task.type === 'reminder' && <Bell className="w-5 h-5 md:w-6 md:h-6" />}
-                  {task.type === 'wish' && <Gift className="w-5 h-5 md:w-6 md:h-6" />}
+        ) : (() => {
+          const displayedTasks = filter === 'all' ? tasks : tasks.filter(t => t.type === filter);
+          if (displayedTasks.length === 0) {
+            return (
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center min-h-[30vh]">
+                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                  <Calendar className="w-8 h-8 text-slate-300" />
                 </div>
+                <h3 className="text-base font-bold text-slate-700 mb-1">{t('কোনো তথ্য পাওয়া যায়নি', 'No tasks found')}</h3>
+                <p className="text-xs text-slate-500">{t('এই ক্যাটাগরিতে আজকের জন্য কোনো কাজ নেই।', 'No tasks for this category today.')}</p>
+              </div>
+            );
+          }
+          return (
+            <div className="space-y-3 md:space-y-4">
+              {displayedTasks.map((task) => (
+                <div key={task.id} className={`bg-white p-4 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border border-${task.color}-100 flex items-start cursor-pointer hover:shadow-md transition group`}>
+                  <div className={`w-10 h-10 md:w-12 md:h-12 bg-${task.color}-50 text-${task.color}-500 rounded-full flex items-center justify-center mr-4 shrink-0 group-hover:bg-${task.color}-100 transition`}>
+                    {task.type === 'note' && <FileText className="w-5 h-5 md:w-6 md:h-6" />}
+                    {task.type === 'reminder' && <Bell className="w-5 h-5 md:w-6 md:h-6" />}
+                    {task.type === 'wish' && <Gift className="w-5 h-5 md:w-6 md:h-6" />}
+                  </div>
                 
                 <div className="flex-1 min-w-0 pt-0.5">
                   <div className="flex justify-between items-start mb-1">
@@ -158,7 +192,8 @@ export default function TodayTasks() {
               </div>
             ))}
           </div>
-        )}
+        );
+      })()}
         
         {/* Floating Add Button for Mobile (Optional, since they have FAB) */}
       </div>
