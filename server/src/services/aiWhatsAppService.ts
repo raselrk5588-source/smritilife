@@ -195,10 +195,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // 2. Delete All Reminders Detection
+    // 2. Delete All Reminders Detection (Bengali, Banglish & English)
     const isDeleteAllReminders =
-      /(?:সব|সকল|all)\s*(?:রিমাইন্ডার|reminder)?\s*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|delete|clear|remove)/i.test(text) ||
-      /(?:ডিলিট|মুছে|delete|clear)\s*(?:সব|সকল|all)\s*(?:রিমাইন্ডার|reminder)?/i.test(text);
+      /(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s*(?:রিমাইন্ডার|reminder)?\s*.*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|delete|clear|remove)/i.test(text) ||
+      /(?:ডিলিট|মুছে|delete|clear|remove)\s*(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s*(?:রিমাইন্ডার|reminder)?/i.test(text);
 
     if (isDeleteAllReminders) {
       return {
@@ -206,12 +206,14 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // 3. List Reminders Detection (Bengali, Banglish & English)
-    const isListReminders =
-      /(?:সব\s*রিমাইন্ডার|রিমাইন্ডার\s*(?:লিস্ট|গুলো|কয়টা|কতগুলো|কয়টা|দেখা|দেখাও|দেখতে)|list\s*reminder|show\s*(?:my\s*)?reminders?|my\s*reminders|reminder\s*list)/i.test(text) ||
+    // 3. List Reminders Detection (Bengali, Banglish & English) - Only if NOT a delete/cancel command
+    const hasDeleteWord = /(?:ডিলিট|মুছে|delete|remove|ক্লিয়ার|clear|বাতিল|ক্যান্সেল|cancel)/i.test(text);
+    const isListReminders = !hasDeleteWord && (
+      /(?:সব\s*রিমাইন্ডার|রিমাইন্ডার\s*(?:লিস্ট|গুলো|গুলা|কয়টা|কতগুলো|কয়টা|দেখা|দেখাও|দেখতে)|list\s*reminder|show\s*(?:my\s*)?reminders?|my\s*reminders|reminder\s*list)/i.test(text) ||
       /(?:কি\s*কি\s*রিমাইন্ডার|কোন\s*কোন\s*রিমাইন্ডার)/i.test(text) ||
       /(?:koto\s*gula|koita|koyta|koto|how\s*many|sob|shob|list|dekhao|dekhaw|ache|ase)\b.*reminder/i.test(text) ||
-      /reminder.*\b(?:koto\s*gula|koita|koyta|koto|how\s*many|ache|ase|dekhao|dekhaw|list)/i.test(text);
+      /reminder.*\b(?:koto\s*gula|koita|koyta|koto|how\s*many|ache|ase|dekhao|dekhaw|list)/i.test(text)
+    );
 
     if (isListReminders) {
       return {
