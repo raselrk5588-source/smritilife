@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Sparkles, Image as ImageIcon, Mic, Copy, Download, Share2, Wand2, Calendar } from 'lucide-react';
+import { ChevronLeft, Sparkles, Image as ImageIcon, Mic, Copy, Download, Share2, Wand2, Calendar, Phone, Clock, Trash2, CheckCircle2, Gift, Eye, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { generateWishTemplates } from '../utils/wishGenerator';
@@ -11,6 +11,20 @@ const formatName = (name: string) => {
   return name.trim().split(/\s+/).map(word => 
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   ).join(' ');
+};
+
+const getOccasionBadge = (occasion: string) => {
+  const map: Record<string, string> = {
+    birthday: '🎂 জন্মদিন (Birthday)',
+    anniversary: '💍 বিবাহবার্ষিকী (Anniversary)',
+    eid: '🌙 ঈদ মোবারক (Eid)',
+    newyear: '🎆 শুভ নববর্ষ (New Year)',
+    valentine: '❤️ ভালোবাসা দিবস (Valentine)',
+    mothersday: '💐 মা দিবস (Mother\'s Day)',
+    fathersday: '👔 বাবা দিবস (Father\'s Day)',
+    other: '🎉 বিশেষ দিন (Special Day)'
+  };
+  return map[occasion?.toLowerCase()] || `🎉 ${occasion || 'শুভেচ্ছা'}`;
 };
 
 export default function Wishes() {
@@ -49,6 +63,47 @@ export default function Wishes() {
   const [bgMusic, setBgMusic] = useState('none');
   const [dbTemplates, setDbTemplates] = useState<any[]>([]);
 
+  // Scheduled Wishes List States
+  const [scheduledWishes, setScheduledWishes] = useState<any[]>([]);
+  const [loadingWishes, setLoadingWishes] = useState(false);
+  const [wishFilter, setWishFilter] = useState<'all' | 'scheduled' | 'sent'>('all');
+
+  const fetchWishes = async () => {
+    setLoadingWishes(true);
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setScheduledWishes(data);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load wishes:', err);
+    } finally {
+      setLoadingWishes(false);
+    }
+  };
+
+  const handleDeleteWish = async (id: string) => {
+    if (!window.confirm(t('আপনি কি নিশ্চিত যে এই উইশটি মুছে ফেলতে চান?', 'Are you sure you want to delete this wish?'))) {
+      return;
+    }
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        toast.success(t('উইশটি মুছে ফেলা হয়েছে!', 'Wish deleted!'));
+        fetchWishes();
+      } else {
+        toast.error('Failed to delete wish');
+      }
+    } catch (err) {
+      toast.error('Failed to delete');
+    }
+  };
+
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
@@ -62,6 +117,7 @@ export default function Wishes() {
       }
     };
     fetchTemplates();
+    fetchWishes();
   }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -359,9 +415,20 @@ export default function Wishes() {
           </button>
           <button 
             onClick={() => setActiveTab('voice')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center ${activeTab === 'voice' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center shrink-0 ${activeTab === 'voice' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             <Mic className="w-3.5 h-3.5 mr-1.5" /> {t('ভয়েস', 'Voice')}
+          </button>
+          <button 
+            onClick={() => { setActiveTab('list'); fetchWishes(); }}
+            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center shrink-0 ${activeTab === 'list' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <Calendar className="w-3.5 h-3.5 mr-1.5" /> {t('শিডিউলড তালিকা', 'Scheduled')}
+            {scheduledWishes.length > 0 && (
+              <span className="ml-1 bg-[#0A7756] text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                {scheduledWishes.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -944,6 +1011,171 @@ export default function Wishes() {
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* Tab 4: Scheduled Wishes List */}
+        {activeTab === 'list' && (
+          <div className="bg-white rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 mb-6">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+              <div>
+                <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center">
+                  <Gift className="w-5 h-5 mr-2 text-pink-500" /> {t('আপনার শিডিউলড শুভেচ্ছা তালিকা', 'Your Scheduled Wishes')}
+                </h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {t('কাকে কোন দিন কোন সময়ে উইশ পাঠানো হবে তার সম্পূর্ণ তালিকা', 'Complete list of who will receive wishes and when')}
+                </p>
+              </div>
+              <button 
+                onClick={fetchWishes} 
+                disabled={loadingWishes}
+                className="text-xs font-bold text-primary bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full flex items-center transition"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loadingWishes ? 'animate-spin' : ''}`} />
+                {t('রিফ্রেশ', 'Refresh')}
+              </button>
+            </div>
+
+            {/* Status Filter Tabs */}
+            <div className="flex gap-1.5 mb-4 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: t('সব', 'All') },
+                { id: 'scheduled', label: t('⏳ শিডিউলড / অপেক্ষমাণ', 'Scheduled') },
+                { id: 'sent', label: t('✅ পাঠানো হয়েছে', 'Sent') }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setWishFilter(f.id as any)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm whitespace-nowrap ${wishFilter === f.id ? 'bg-[#0A7756] text-white' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {loadingWishes ? (
+              <div className="py-12 text-center text-slate-400 text-sm font-medium">
+                {t('উইশ তালিকা লোড হচ্ছে...', 'Loading wishes...')}
+              </div>
+            ) : (() => {
+              const filtered = wishFilter === 'all' 
+                ? scheduledWishes 
+                : wishFilter === 'scheduled' 
+                ? scheduledWishes.filter(w => w.status === 'Scheduled' || w.status === 'Pending')
+                : scheduledWishes.filter(w => w.status === 'Sent');
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="py-12 px-4 text-center flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 bg-pink-50 rounded-full flex items-center justify-center mb-3">
+                      <Gift className="w-8 h-8 text-pink-300" />
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-700 mb-1">{t('কোনো উইশ পাওয়া যায়নি', 'No wishes found')}</h3>
+                    <p className="text-xs text-slate-400 max-w-xs mb-4">
+                      {t('আপনি এখনো কাউকে শুভেচ্ছা শিডিউল করেননি। ওপরের "টেক্সট" বা "গ্রিটিং কার্ড" ট্যাব থেকে শিডিউল করতে পারেন।', 'You have not scheduled any wishes yet. Schedule one from Text or Greeting Card tabs above.')}
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('text')}
+                      className="bg-[#0A7756] hover:bg-[#086146] text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm"
+                    >
+                      {t('+ নতুন উইশ শিডিউল করুন', '+ Schedule New Wish')}
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {filtered.map((w) => {
+                    const scheduledDate = new Date(w.scheduledAt || w.createdAt);
+                    const dateFormatted = scheduledDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' });
+                    const timeFormatted = scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                    return (
+                      <div key={w._id} className="bg-gradient-to-br from-white to-slate-50/50 rounded-2xl p-4 border border-slate-200/80 shadow-sm relative overflow-hidden flex flex-col gap-2">
+                        {/* Top Row: Occasion & Status */}
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-pink-50 text-pink-700 border border-pink-100 flex items-center">
+                            {getOccasionBadge(w.occasion)}
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            {w.status === 'Sent' ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center">
+                                <CheckCircle2 className="w-3 h-3 mr-1 inline" /> {t('পাঠানো হয়েছে', 'Sent')}
+                              </span>
+                            ) : w.status === 'Cancelled' ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                {t('বাতিল', 'Cancelled')}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center">
+                                <Clock className="w-3 h-3 mr-1 inline" /> {t('অপেক্ষমাণ (শিডিউলড)', 'Scheduled')}
+                              </span>
+                            )}
+
+                            <button
+                              onClick={() => handleDeleteWish(w._id)}
+                              className="text-slate-300 hover:text-red-500 transition p-1"
+                              title={t('মুছে ফেলুন', 'Delete')}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Middle Row: Recipient & Time */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 block uppercase">{t('প্রাপক', 'Recipient')}</span>
+                            <span className="font-bold text-slate-800 text-sm">
+                              {w.recipientName || 'প্রিয়জন'}
+                            </span>
+                            {w.recipientContact && (
+                              <span className="text-[11px] font-semibold text-teal-700 block mt-0.5 flex items-center">
+                                <Phone className="w-3 h-3 mr-1 inline" /> {w.recipientContact}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 block uppercase">{t('পাঠানোর তারিখ ও সময়', 'Scheduled At')}</span>
+                            <span className="font-bold text-slate-700">
+                              📅 {dateFormatted}
+                            </span>
+                            <span className="text-[11px] font-bold text-indigo-600 block mt-0.5">
+                              ⏰ {timeFormatted}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Message Preview */}
+                        {w.message && (
+                          <div className="bg-white p-3 rounded-xl border border-slate-100 text-xs text-slate-700 italic relative">
+                            "{w.message}"
+                          </div>
+                        )}
+
+                        {/* Smart Card Preview Link */}
+                        {(w.isSmartCard || w.smartCardId) && (
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
+                              ✨ ডিজিটাল স্মার্ট কার্ড
+                            </span>
+                            <Link
+                              to={`/wish/${w.smartCardId || w._id}`}
+                              target="_blank"
+                              className="text-xs font-bold text-primary hover:underline flex items-center"
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1 inline" /> {t('কার্ড প্রিভিউ দেখুন', 'Preview Card')}
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
