@@ -14,24 +14,24 @@ export const formatBangladeshPhone = (phone: string): string => {
 export const getOccasionImageUrl = (occasion: string): string => {
   const occ = (occasion || '').toLowerCase().trim();
   if (occ.includes('birth') || occ.includes('জন্মদিন')) {
-    return 'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?q=80&w=1000&auto=format&fit=crop';
+    return 'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?fm=jpg&w=800&fit=max';
   }
   if (occ.includes('anniversary') || occ.includes('বিবাহ') || occ.includes('বার্ষিকী')) {
-    return 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?q=80&w=1000&auto=format&fit=crop';
+    return 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?fm=jpg&w=800&fit=max';
   }
   if (occ.includes('eid') || occ.includes('ঈদ')) {
-    return 'https://images.unsplash.com/photo-1585036156171-384164a8c675?q=80&w=1000&auto=format&fit=crop';
+    return 'https://images.unsplash.com/photo-1585036156171-384164a8c675?fm=jpg&w=800&fit=max';
   }
   if (occ.includes('new') || occ.includes('বছর') || occ.includes('নববর্ষ') || occ.includes('year')) {
-    return 'https://images.unsplash.com/photo-1467810563316-b5476525c0f9?q=80&w=1000&auto=format&fit=crop';
+    return 'https://images.unsplash.com/photo-1467810563316-b5476525c0f9?fm=jpg&w=800&fit=max';
   }
   if (occ.includes('congrat') || occ.includes('অভিনন্দন') || occ.includes('সাফল্য')) {
-    return 'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?q=80&w=1000&auto=format&fit=crop';
+    return 'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?fm=jpg&w=800&fit=max';
   }
   if (occ.includes('love') || occ.includes('valentine') || occ.includes('ভালোবাসা')) {
-    return 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?q=80&w=1000&auto=format&fit=crop';
+    return 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?fm=jpg&w=800&fit=max';
   }
-  return 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000&auto=format&fit=crop';
+  return 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?fm=jpg&w=800&fit=max';
 };
 
 export const getOccasionTitle = (occasion: string): string => {
@@ -157,21 +157,24 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
 
   const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}${linkSection}\n\n- ভালোবাসা সহ, ${senderName}`;
 
-  // Send the rich image wish card first
-  let success = await sendMetaWhatsAppImage(wish.recipientContact, imageUrl, fullCaption);
+  // 1. Guaranteed Text Wish Delivery (Contains the full wish & interactive card link)
+  const textDelivered = await sendMetaWhatsAppText(wish.recipientContact, fullCaption);
+  console.log(`[WishDelivery] Text wish sent to ${wish.recipientContact}: status=${textDelivered}`);
 
-  // If image dispatch fails or is dropped, automatically fallback to text wish
-  if (!success) {
-    console.warn(`[WishDelivery] Image dispatch failed for ${wish.recipientContact}, falling back to text wish message...`);
-    success = await sendMetaWhatsAppText(wish.recipientContact, fullCaption);
+  // 2. Also send the visual Image Card
+  if (imageUrl) {
+    sendMetaWhatsAppImage(wish.recipientContact, imageUrl, `🎉 ${occasionTitle}!`).catch(err => {
+      console.warn(`[WishDelivery] Image dispatch failed for ${wish.recipientContact}:`, err);
+    });
   }
 
-  if (success && senderWhatsApp) {
+  // 3. Confirm to sender
+  if (textDelivered && senderWhatsApp) {
     await sendMetaWhatsAppText(
       senderWhatsApp,
       `✅ আসসালামু আলাইকুম! ${wish.recipientContact} নম্বরে আপনার নির্ধারিত ${occasionTitle} কার্ডটি সফলভাবে পৌঁছে দেওয়া হয়েছে।`
     );
   }
 
-  return success;
+  return textDelivered;
 };
