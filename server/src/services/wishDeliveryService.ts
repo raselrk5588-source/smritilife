@@ -152,10 +152,12 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
   
   let linkSection = '';
   if (!wish.message.includes('http://') && !wish.message.includes('https://')) {
-    linkSection = `\n\n💌 আপনার জন্য একটি বিশেষ অ্যানিমেটেড উইশ কার্ড পাঠানো হয়েছে:\n${smartCardUrl}`;
+    linkSection = `\n\n💌 আপনার জন্য একটি বিশেষ অ্যানিমেটেড উইশ কার্ড পাঠানো হয়েছে:\n👉 ${smartCardUrl}`;
   }
 
-  const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}${linkSection}\n\n- ভালোবাসা সহ, ${senderName}`;
+  const promoSection = `\n\n✨ আপনিও কি প্রিয়জনকে এভাবে স্বয়ংক্রিয় উইশ কার্ড ও প্রয়োজনীয় রিমাইন্ডার পাঠাতে চান?\nএখনই সাবস্ক্রাইব করুন: https://smritilife.com/paywall`;
+
+  const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}${linkSection}\n\n- ভালোবাসা সহ, ${senderName}${promoSection}`;
 
   // 1. Guaranteed Text Wish Delivery (Contains the full wish & interactive card link)
   const textDelivered = await sendMetaWhatsAppText(wish.recipientContact, fullCaption);

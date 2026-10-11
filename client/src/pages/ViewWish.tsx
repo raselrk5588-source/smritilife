@@ -239,14 +239,29 @@ export default function ViewWish() {
                 <p className="text-white/70 text-sm font-medium">{wishData.signOff}</p>
                 <p className="text-amber-300 font-bold text-2xl mt-1 drop-shadow-sm">{wishData.sender}</p>
               </div>
+
+              {/* Subscription CTA for Recipient */}
+              <div className="pt-4 mt-4 border-t border-white/10">
+                <Link
+                  to="/paywall"
+                  className="inline-flex items-center justify-center gap-2 w-full py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 text-slate-900 font-extrabold text-sm shadow-lg hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  <span>✨ নিজের জন্য বা প্রিয়জনকে উইশ পাঠাতে সাবস্ক্রাইব করুন</span>
+                </Link>
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Powered by footer */}
-      <div className="fixed bottom-6 text-center w-full z-10 opacity-50">
-        <p className="text-white text-xs font-medium tracking-wide">Made with ❤️ using <Link to="/" className="font-bold underline hover:text-amber-300 transition-colors">Smriti (স্মৃতি)</Link></p>
+      <div className="fixed bottom-4 text-center w-full z-10">
+        <p className="text-white/80 text-xs font-medium tracking-wide">
+          Made with ❤️ using{' '}
+          <Link to="/paywall" className="font-bold underline text-amber-300 hover:text-amber-200 transition-colors">
+            Smriti (স্মৃতি) - সাবস্ক্রিপশন নিন
+          </Link>
+        </p>
       </div>
 
       {/* CSS for animations */}
