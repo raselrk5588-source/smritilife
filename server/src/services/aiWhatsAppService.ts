@@ -360,6 +360,16 @@ export const extractScheduledMessage = (rawText: string, recipientPhone?: string
     return kMatch[1].trim();
   }
 
+  // 5B. Direct message text immediately following send verb (no connector word):
+  // e.g. "bou k message daw i love you", "roni k msg daw meeting kal hobe"
+  const directVerbMsgMatch = text.match(/(?:message|msg|massage|meseg|sms|text|বার্তা|মেসেজ)\s*(?:দাও|দিও|পাঠাও|send|daw|dao|dio|diba)\s+(.+)$/i);
+  if (directVerbMsgMatch && directVerbMsgMatch[1].trim().length > 1) {
+    const candidate = directVerbMsgMatch[1].trim().replace(/^(?:k|j|je|যে|bolba|bolbe|বলে|বলো|[:：\-])\s+/i, '').trim();
+    if (candidate.length > 0) {
+      return candidate;
+    }
+  }
+
   // 6. Fallback cleanup: strip metadata prefixes cleanly
   let cleaned = text
     .replace(/(?:ay|ei|ai|oi)\s*(?:mnbr|nmbr|numbr|nbr|number|ফোন|নম্বর|নাম্বার)(?:\s*(?:a|e|te))?/gi, ' ')
@@ -451,7 +461,8 @@ Possible actions:
    - "sendNow": boolean (true if user wants it sent immediately or doesn't specify a future time/date; false if scheduled for future)
 
 6. create_reminder:
-   When user wants a task reminder for themselves or wants to send a message to one or multiple contacts (e.g. "একটা মেসেজ দাও রনি, বউকে যে কাল আমরা ঘুরতে যাব", "রনি আর বউকে মেসেজ দাও...", "সবাইকে মেসেজ দাও যে কাল অফিস ছুটি").
+   When user wants a task reminder for themselves or wants to send a message to one or multiple contacts (e.g. "bou k message daw i love you", "একটা মেসেজ দাও রনি, বউকে যে কাল আমরা ঘুরতে যাব", "রনি আর বউকে মেসেজ দাও...", "সবাইকে মেসেজ দাও যে কাল অফিস ছুটি").
+   If user says e.g. "bou k message daw i love you", "customMessage" is "i love you", "recipientNames" is ["Bou"], and "sendNow" is true.
    Fields in "data":
    - "title": string
    - "recipientNames"?: string[] (e.g. ["রনি", "Bou"] if sent to specific contacts from contact list)
@@ -1099,7 +1110,9 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     // 3. Reminder Creation or Scheduled Message Detection
     const hasBanglishDate = /\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu)\b/i.test(text);
     const hasRelativeDuration = matchRelativeDuration(text) !== null;
-    const hasReminderIntent = text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || hasBanglishDate || hasRelativeDuration || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText) || /\b(?:mone|korai|koriye|diow|diyo|dio|diba|bazar|osud|kaje|hobe)\b/i.test(text);
+    const hasMessageKeyword = /\b(?:message|msg|massage|meseg|sms|text|মেসেজ|বার্তা)\b/i.test(text);
+    const hasSendVerb = /\b(?:daw|dao|dio|diyo|diba|send|pathao|pathay|দাও|দিও|পাঠাও|পাঠিয়ে)\b/i.test(text);
+    const hasReminderIntent = text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || hasBanglishDate || hasRelativeDuration || hasMessageKeyword || (hasMessageKeyword && hasSendVerb) || /(?:01\d{9}|\+?8801\d{9})/.test(enText) || /\b(?:mone|korai|koriye|diow|diyo|dio|diba|daw|dao|bazar|osud|kaje|hobe)\b/i.test(text);
 
     if (hasReminderIntent) {
       const phoneMatch = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
