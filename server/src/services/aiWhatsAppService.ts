@@ -1461,8 +1461,13 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
 export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: Buffer, mimeType: string) => {
   try {
-    const settings = await SystemSettings.findOne();
-    const apiKey = process.env.GEMINI_API_KEY || settings?.geminiApiKey;
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      try {
+        const settings = await SystemSettings.findOne();
+        apiKey = settings?.geminiApiKey;
+      } catch (dbErr) {}
+    }
 
     if (!apiKey) {
       return {
