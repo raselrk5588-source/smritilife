@@ -428,15 +428,16 @@ Possible actions:
    Data: {}
 
 3. modify_reminder:
-   When user wants to edit, update, reschedule, or change the time, date, or title of an existing reminder.
+   When user wants to edit, update, reschedule, or change the time, date, or title of an existing reminder by name or list item number.
    Bengali/Banglish examples: 
-   - "মিটিং রিমাইন্ডার সময় পরিবর্তন করে বিকাল ৫টায় দাও"
-   - "মিটিং রিমাইন্ডার কাল সকাল ১১টায় পিছিয়ে দাও"
-   - "ডাক্তার রিমাইন্ডারের সময় আপডেট করো রাত ৯টায়"
-   - "meeting reminder time change kore 5pm koro"
-   - "update reminder meeting to tomorrow 4pm"
+   - "1 number ta somoy 5tay daw" -> action: "modify_reminder", data: { "index": 1, "time": "17:00" }
+   - "১ নম্বরটার সময় পরিবর্তন করে কাল বিকাল ৪টায় দাও" -> action: "modify_reminder", data: { "index": 1, "time": "16:00" }
+   - "2 no ta 11am koro" -> action: "modify_reminder", data: { "index": 2, "time": "11:00" }
+   - "মিটিং রিমাইন্ডার সময় পরিবর্তন করে বিকাল ৫টায় দাও" -> action: "modify_reminder", data: { "searchQuery": "মিটিং", "time": "17:00" }
+   - "update reminder meeting to tomorrow 4pm" -> action: "modify_reminder", data: { "searchQuery": "meeting", "time": "16:00" }
    Fields in "data":
-   - "searchQuery": string (The title or keyword of the existing reminder to identify it)
+   - "index"?: number (1-based index if user refers to list item e.g. 1 for "1 number ta")
+   - "searchQuery"?: string (The title or keyword of the existing reminder to identify it)
    - "date"?: string (YYYY-MM-DD if date changed)
    - "time"?: string (HH:mm if time changed)
    - "newTitle"?: string (Optional, if user also wants to rename the reminder)
@@ -994,11 +995,27 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 4. Modify / Reschedule / Edit Reminder Detection
-    const isModifyIntent =
-      /(?:পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে)/i.test(text) &&
-      (text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder'));
+    const hasModifyVerb = /(?:পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে|somoy|সময়|time)/i.test(text);
+    const hasIndexMention = /(\d+|[০-৯]+)\s*(?:number|nmbr|numbr|mnbr|nbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি|tar|টার)?/i.test(enText) ||
+      /(?:protom|first|প্রথম|last|shesh|শেষ|লাস্ট)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি|tar|টার))?/i.test(text);
+    const hasExplicitReminderWord = text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder');
+    const hasTimeInText = /(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)/i.test(text) || /(?:minute|ghonta|hour|মিনিট|ঘণ্টা)/i.test(text);
+
+    const isModifyIntent = (hasModifyVerb && (hasExplicitReminderWord || hasIndexMention)) ||
+      (hasIndexMention && /(?:দাও|করো|দিন|কর|koro|dao|daw|diba|set)/i.test(text) && hasTimeInText);
 
     if (isModifyIntent) {
+      // Check if user specified a list index
+      let targetIndex: number | undefined = undefined;
+      const indexMatch = enText.match(/(\d+)\s*(?:number|nmbr|numbr|mnbr|nbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি|tar|টার)?/i);
+      if (indexMatch) {
+        targetIndex = parseInt(indexMatch[1], 10);
+      } else if (/(?:protom|first|প্রথম)(?:\s*(?:ta|ti|টা|টি|tar|টার))?/i.test(text)) {
+        targetIndex = 1;
+      } else if (/(?:last|shesh|শেষ|লাস্ট)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি|tar|টার))?/i.test(text)) {
+        targetIndex = -1;
+      }
+
       let time: string | undefined = undefined;
       if (/(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i.test(text)) {
         time = parseBengaliTime(text);
@@ -1010,14 +1027,16 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
       const query = text
         .replace(/(\d{1,2}(?::\d{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?|[০-৯]{1,2}(?::[০-৯]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
-        .replace(/(?:রিমাইন্ডার(?:ের)?|reminder|সময়|সময়|তারিখ|দিন|পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে|করো|করে|দাও|দিন|দিতে|হবে|তে|এ|কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত)/gi, ' ')
+        .replace(/(\d+|[০-৯]+)\s*(?:number|nmbr|numbr|mnbr|nbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি|tar|টার)?/gi, '')
+        .replace(/(?:রিমাইন্ডার(?:ের)?|reminder|সময়|সময়|somoy|তারিখ|দিন|পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে|করো|করে|দাও|দিন|দিতে|হবে|তে|এ|কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত)/gi, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
       return {
         action: 'modify_reminder',
         data: {
-          searchQuery: query || 'জরুরি',
+          index: targetIndex,
+          searchQuery: targetIndex ? `${targetIndex}` : (query || 'জরুরি'),
           time,
           date
         }

@@ -880,19 +880,52 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           case 'modify_reminder': {
-            if (aiResponse.data && aiResponse.data.searchQuery) {
-              const query = aiResponse.data.searchQuery.trim();
-              const updateFields: any = {};
-              if (aiResponse.data.time) updateFields.time = aiResponse.data.time;
-              if (aiResponse.data.date) updateFields.date = new Date(aiResponse.data.date);
-              if (aiResponse.data.newTitle) updateFields.title = aiResponse.data.newTitle.trim();
-              // Reset status to Pending in case it was Cancelled or Sent
-              updateFields.status = 'Pending';
+            const data = aiResponse.data || {};
+            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
+            const query = (data.searchQuery || '').trim();
 
-              const updatedReminder = await Reminder.findOneAndUpdate(
+            const updateFields: any = {};
+            if (data.time) updateFields.time = data.time;
+            if (data.date) updateFields.date = new Date(data.date);
+            if (data.newTitle) updateFields.title = data.newTitle.trim();
+            updateFields.status = 'Pending';
+
+            let updatedReminder = null;
+
+            if (itemIndex !== undefined) {
+              const pendingReminders = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
+              let target = null;
+              if (itemIndex === -1 && pendingReminders.length > 0) {
+                target = pendingReminders[pendingReminders.length - 1];
+              } else if (itemIndex >= 1 && itemIndex <= pendingReminders.length) {
+                target = pendingReminders[itemIndex - 1];
+              }
+
+              if (target) {
+                updatedReminder = await Reminder.findByIdAndUpdate(target._id, updateFields, { new: true });
+                if (updatedReminder) {
+                  const dStr = updatedReminder.date ? new Date(updatedReminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+                  const formattedTime = formatTime12Hour(updatedReminder.time);
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `✏️ আপনার ${itemIndex === -1 ? 'সর্বশেষ' : itemIndex + ' নম্বর'} রিমাইন্ডার "${updatedReminder.title}" সফলভাবে আপডেট করা হয়েছে!\n⏰ নতুন সময়: ${formattedTime} (${dStr})`
+                  );
+                  break;
+                }
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `দুঃখিত, ${itemIndex} নম্বরে কোনো পেন্ডিং রিমাইন্ডার খুঁজে পাওয়া যায়নি।`
+                );
+                break;
+              }
+            }
+
+            if (query) {
+              updatedReminder = await Reminder.findOneAndUpdate(
                 {
                   userId: user._id,
-                  title: { $regex: new RegExp(query, 'i') }
+                  title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
                 },
                 updateFields,
                 { new: true }
@@ -908,13 +941,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               } else {
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  `দুঃখিত, "${query}" নামের কোনো রিমাইন্ডার খুঁজে পাওয়া যায়নি। আপনার সব রিমাইন্ডার দেখতে "সব রিমাইন্ডার দেখাও" লিখুন।`
+                  `দুঃখিত, "${query}" নামের কোনো রিমাইন্ডার খুঁজে পাওয়া যায়নি।`
                 );
               }
             } else {
               await sendMetaWhatsAppMessage(
                 fromNumber,
-                'কোন রিমাইন্ডারটি এবং কী পরিবর্তন করতে চান তা উল্লেখ করুন (যেমন: "মিটিং রিমাইন্ডার সময় ৫টায় দাও")।'
+                'কোন রিমাইন্ডারটি এবং কী পরিবর্তন করতে চান তা উল্লেখ করুন (যেমন: "১ নম্বরটা বিকাল ৫টায় দাও" বা "মিটিং ৫টায় দাও")।'
               );
             }
             break;
