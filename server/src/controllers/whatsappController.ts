@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
+import TodoList from '../models/TodoList';
 import AITrainingRule from '../models/AITrainingRule';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
@@ -343,6 +344,46 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // --- STEP 1: Handle Interactive Button Clicks ---
+        if (buttonId.startsWith('todo_toggle_')) {
+          // Format: todo_toggle_{listId}_{itemId}
+          const parts = buttonId.replace('todo_toggle_', '').split('_');
+          const listId = parts[0];
+          const itemId = parts[1];
+
+          const todoList = await TodoList.findById(listId);
+          if (todoList) {
+            const item = todoList.items.find(i => i.id === itemId);
+            if (item) {
+              item.completed = !item.completed;
+              if (item.completed) item.completedAt = new Date();
+              await todoList.save();
+
+              const remaining = todoList.items.filter(i => !i.completed).length;
+              const remainingText = `${remaining}টি বাকি`;
+              let listText = `📋 *${todoList.title}*   (${remainingText})\n\n`;
+              todoList.items.forEach(it => {
+                const box = it.completed ? '☑️' : '◻️';
+                listText += `${box} ${it.text}\n`;
+              });
+
+              const firstUnchecked = todoList.items.find(i => !i.completed);
+              if (firstUnchecked) {
+                await sendMetaWhatsAppButtons(
+                  fromNumber,
+                  listText.trim(),
+                  [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                );
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `${listText.trim()}\n\n🎉 অসাধারণ! "${todoList.title}"-এর সব কাজ সম্পন্ন হয়েছে!`
+                );
+              }
+              return;
+            }
+          }
+        }
+
         if (buttonId.startsWith('rem_done_')) {
           const remId = buttonId.replace('rem_done_', '');
           const reminder = await Reminder.findByIdAndUpdate(remId, { status: 'Completed' }, { new: true });
@@ -789,6 +830,166 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি ডিলিট করতে চান তার নাম লিখুন (যেমন: "মিটিং ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও")।');
             }
             break;
+
+          case 'manage_todolist': {
+            const data = aiResponse.data || {};
+            const type = data.type || 'create';
+            let listTitle = (data.title || 'আজকের টু-ডু').trim();
+            const rawItems: string[] = Array.isArray(data.items) ? data.items : [];
+            const itemText = data.itemText ? data.itemText.trim() : '';
+
+            let category = 'general';
+            if (/বাজার|shopping/i.test(listTitle)) category = 'shopping';
+            else if (/আজকের|daily|আজ/i.test(listTitle)) category = 'daily';
+            else if (/কাজ|work/i.test(listTitle)) category = 'work';
+
+            let todoList = await TodoList.findOne({
+              userId: user._id,
+              title: { $regex: new RegExp(listTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
+            });
+
+            if (type === 'create') {
+              const newItems = rawItems.map(txt => ({
+                id: Math.random().toString(36).substring(2, 9),
+                text: txt.trim(),
+                completed: false
+              })).filter(i => i.text.length > 0);
+
+              if (todoList) {
+                // If list already exists, update/replace or merge items
+                todoList.items = newItems;
+                await todoList.save();
+              } else {
+                todoList = await TodoList.create({
+                  userId: user._id,
+                  title: listTitle,
+                  category,
+                  items: newItems
+                });
+              }
+
+              const remaining = todoList.items.filter(i => !i.completed).length;
+              const remainingText = `${remaining}টি বাকি`;
+              let listCard = `লিস্ট করে রেখেছি।\n\n`;
+              listCard += `📋 *${todoList.title}*   (${remainingText})\n`;
+              listCard += `─────────────────\n`;
+              todoList.items.forEach(it => {
+                const box = it.completed ? '☑️' : '◻️';
+                listCard += `${box} ${it.text}\n`;
+              });
+
+              const firstUnchecked = todoList.items.find(i => !i.completed);
+              if (firstUnchecked) {
+                await sendMetaWhatsAppButtons(
+                  fromNumber,
+                  listCard.trim(),
+                  [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                );
+              } else {
+                await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
+              }
+            } else if (type === 'add_items') {
+              const itemsToAdd = rawItems.map(txt => ({
+                id: Math.random().toString(36).substring(2, 9),
+                text: txt.trim(),
+                completed: false
+              })).filter(i => i.text.length > 0);
+
+              if (!todoList) {
+                todoList = await TodoList.create({
+                  userId: user._id,
+                  title: listTitle,
+                  category,
+                  items: itemsToAdd
+                });
+              } else {
+                todoList.items.push(...itemsToAdd);
+                await todoList.save();
+              }
+
+              const remaining = todoList.items.filter(i => !i.completed).length;
+              const remainingText = `${remaining}টি বাকি`;
+              let listCard = `*${todoList.title}*-এ যোগ করেছি।\n\n`;
+              listCard += `📋 *${todoList.title}*   (${remainingText})\n`;
+              listCard += `─────────────────\n`;
+              todoList.items.forEach(it => {
+                const box = it.completed ? '☑️' : '◻️';
+                listCard += `${box} ${it.text}\n`;
+              });
+
+              const firstUnchecked = todoList.items.find(i => !i.completed);
+              if (firstUnchecked) {
+                await sendMetaWhatsAppButtons(
+                  fromNumber,
+                  listCard.trim(),
+                  [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                );
+              } else {
+                await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
+              }
+            } else if (type === 'complete_item' && itemText) {
+              if (todoList) {
+                const matchedItem = todoList.items.find(i => i.text.toLowerCase().includes(itemText.toLowerCase()));
+                if (matchedItem) {
+                  matchedItem.completed = true;
+                  matchedItem.completedAt = new Date();
+                  await todoList.save();
+
+                  const remaining = todoList.items.filter(i => !i.completed).length;
+                  const remainingText = `${remaining}টি বাকি`;
+                  let listCard = `🎉 "${matchedItem.text}" সম্পন্ন হিসেবে মার্ক করা হলো!\n\n`;
+                  listCard += `📋 *${todoList.title}*   (${remainingText})\n`;
+                  listCard += `─────────────────\n`;
+                  todoList.items.forEach(it => {
+                    const box = it.completed ? '☑️' : '◻️';
+                    listCard += `${box} ${it.text}\n`;
+                  });
+                  await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
+                } else {
+                  await sendMetaWhatsAppMessage(fromNumber, `লিস্টে "${itemText}" খুঁজে পাওয়া যায়নি।`);
+                }
+              } else {
+                await sendMetaWhatsAppMessage(fromNumber, `আপনার "${listTitle}" নামের কোনো তালিকা পাওয়া যায়নি।`);
+              }
+            } else {
+              // View / List
+              if (!todoList || todoList.items.length === 0) {
+                // Check if any other todo list exists
+                const anyList = await TodoList.findOne({ userId: user._id }).sort({ updatedAt: -1 });
+                if (anyList && anyList.items.length > 0) {
+                  todoList = anyList;
+                }
+              }
+
+              if (!todoList || todoList.items.length === 0) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `📋 বর্তমানে কোনো টু-ডু বা চেকলিস্ট নেই।\nনতুন লিস্ট তৈরি করতে লিখুন:\n"আজকের টু-ডু লিস্ট করো: কাজ ১, কাজ ২, কাজ ৩"`
+                );
+              } else {
+                const remaining = todoList.items.filter(i => !i.completed).length;
+                const remainingText = `${remaining}টি বাকি`;
+                let listCard = `📋 *${todoList.title}*   (${remainingText})\n`;
+                listCard += `─────────────────\n`;
+                todoList.items.forEach(it => {
+                  const box = it.completed ? '☑️' : '◻️';
+                  listCard += `${box} ${it.text}\n`;
+                });
+
+                const firstUnchecked = todoList.items.find(i => !i.completed);
+                if (firstUnchecked) {
+                  await sendMetaWhatsAppButtons(
+                    fromNumber,
+                    listCard.trim(),
+                    [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                  );
+                } else {
+                  await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
+                }
+              }
+            }
+            break;
+          }
 
           case 'general_reply':
           default:

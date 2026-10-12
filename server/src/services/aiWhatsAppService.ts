@@ -363,7 +363,20 @@ Possible actions:
    - "date": string (YYYY-MM-DD)
    - "time": string (HH:mm)
 
-7. general_reply (for greetings, conversational questions, or help)
+7. manage_todolist:
+   When the user wants to create, view, add items to, or complete items in a To-Do list, Shopping list, or Checklist!
+   Examples in Bengali/Banglish:
+   - "আজকের টু-ডু লিস্ট করো: ব্যাংকে যাওয়া, বিদ্যুৎ বিল দেওয়া, বাজার করা" -> action: "manage_todolist", type: "create", title: "আজকের টু-ডু", items: ["ব্যাংকে যাওয়া", "বিদ্যুৎ বিল দেওয়া", "বাজার করা"]
+   - "বাজারের লিস্টে চাল, ডাল, তেল, পেঁয়াজ আর ডিম যোগ করো" -> action: "manage_todolist", type: "add_items", title: "বাজারের লিস্ট", items: ["চাল", "ডাল", "তেল", "পেঁয়াজ", "ডিম"]
+   - "আজকের টু-ডু দেখাও" বা "বাজারের লিস্ট দেখাও" বা "আমার টু-ডু লিস্ট কি কি" -> action: "manage_todolist", type: "view", title: "আজকের টু-ডু"
+   - "চাল কেনা শেষ" বা "ব্যাংকে যাওয়া সম্পন্ন" -> action: "manage_todolist", type: "complete_item", itemText: "চাল"
+   Fields in "data":
+   - "type": "create" | "add_items" | "view" | "complete_item" | "clear"
+   - "title": string (e.g. "আজকের টু-ডু", "বাজারের লিস্ট", "কাজের লিস্ট")
+   - "items"?: string[] (list of items parsed from the user's message)
+   - "itemText"?: string (item to mark done)
+
+8. general_reply (for greetings, conversational questions, or help)
 
 Example Response for Wish:
 {
@@ -590,6 +603,65 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
           filter: isToday ? 'today' : 'all'
         }
       };
+    }
+
+    // 4.5 To-Do List / Shopping Checklist Detection (Fallback)
+    const isTodoListIntent =
+      /(?:টু[\-\s]*ডু|todo|to[\-\s]*do|লিস্ট|চেকলিস্ট|checklist|ফর্দ|বাজারের\s*লিস্ট|কাজের\s*লিস্ট)/i.test(text) ||
+      /(?:লিস্টে|ফর্দে|লিস্ট\s*করো|যোগ\s*করো|add\s*to\s*list)/i.test(text);
+
+    if (isTodoListIntent) {
+      const isAdd = /(?:যোগ\s*করো|এড\s*করো|add|রাখো|ঢুকাও|লিখো)/i.test(text);
+      const isView = /(?:দেখাও|লিস্ট\s*কি|কয়টা\s*আছে|বাকি|show|view|status|কি\s*কি)/i.test(text) && !text.includes(':') && !text.includes('করো');
+
+      let listTitle = 'আজকের টু-ডু';
+      const beforeColon = text.includes(':') ? text.split(':')[0] : text;
+      if (/বাজার|shopping/i.test(beforeColon)) {
+        listTitle = 'বাজারের লিস্ট';
+      } else if (/কাজের|অফিস|work/i.test(beforeColon)) {
+        listTitle = 'কাজের লিস্ট';
+      } else if (/টু[\-\s]*ডু|todo/i.test(beforeColon)) {
+        listTitle = 'আজকের টু-ডু';
+      }
+
+      // Extract items separated by comma, 'আর', 'এবং', 'and', newline or colon
+      let itemString = '';
+      if (text.includes(':') || text.includes('：')) {
+        itemString = text.split(/[:：]/)[1] || '';
+      } else {
+        itemString = text
+          .replace(/^(?:বাজারের\s*লিস্টে|আজকের\s*টু[\-\s]*ডু\s*(?:লিস্টে)?|কাজের\s*লিস্টে|টু[\-\s]*ডু\s*লিস্টে|লিস্টে|ফর্দে)\s*/gi, '')
+          .replace(/(?:যোগ\s*করো|এড\s*করো|এড\s*কর|যোগ\s*কর|add|রাখো|তুলে\s*রাখো|লিখো|লিস্ট\s*করো|লিস্ট\s*কর)\s*$/gi, '')
+          .trim();
+      }
+
+      let parsedItems: string[] = [];
+      if (itemString) {
+        // Split by comma, Arabic comma, newline, or 'আর' / 'এবং' / 'ও' / 'and' with optional surrounding spaces
+        parsedItems = itemString
+          .split(/[,،\n]|\s+(?:আর|এবং|ও|and)\s+|\s*,\s*/i)
+          .map(s => s.trim().replace(/[।\.!?]/g, ''))
+          .filter(s => s.length > 0 && !/^(?:যোগ|এড|করো|কর|add|please|তুলে|রাখো)$/i.test(s));
+      }
+
+      if (parsedItems.length > 0) {
+        return {
+          action: 'manage_todolist',
+          data: {
+            type: isAdd ? 'add_items' : 'create',
+            title: listTitle,
+            items: parsedItems
+          }
+        };
+      } else if (isView || text.includes('লিস্ট')) {
+        return {
+          action: 'manage_todolist',
+          data: {
+            type: 'view',
+            title: listTitle
+          }
+        };
+      }
     }
 
     // 4. Modify / Reschedule / Edit Reminder Detection
