@@ -845,7 +845,15 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${liveClockPrompt}\n${dynamicRulesPrompt}`;
 
     // Candidate models in order of stability and quota availability
-    const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-flash'];
+    const candidateModels = [
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash'
+    ];
     let parsedResponse: any = null;
 
     if (!chatHistories.has(whatsappNumber)) {
@@ -1464,13 +1472,21 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-flash'];
+    const candidateModels = [
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash'
+    ];
 
     const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
-Analyze what task, reminder, action (list_reminders, modify_reminder, delete_all_reminders, delete_reminder, cancel_reminder), or wish card (birthday, anniversary, eid, etc.) the user wants to send or create, and return EXACTLY the JSON action format specified in system instructions.
+Analyze what task, reminder, action (create_reminder, list_reminders, modify_reminder, delete_all_reminders, delete_reminder, cancel_reminder, create_wish, save_note, get_note, save_contact, get_contact, manage_todolist, general_reply) the user wants to perform, and return EXACTLY the JSON action format specified in system instructions.
 Today's date in Bangladesh is ${dhakaDate}. If the user says 'কাল' or 'tomorrow', set tomorrow's date.
 Remember to return ONLY the raw JSON object.`;
 
@@ -1490,7 +1506,8 @@ Remember to return ONLY the raw JSON object.`;
         });
         const result = await model.generateContent([prompt, audioPart]);
         const responseText = result.response.text().trim();
-        const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        const cleanJson = jsonMatch ? jsonMatch[0] : responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
         parsedResponse = JSON.parse(cleanJson);
         break;
       } catch (err: any) {
