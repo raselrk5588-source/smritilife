@@ -145,6 +145,67 @@ export const getOccasionWishPhrase = (occasion: string): string => {
   return 'শুভেচ্ছা';
 };
 
+export const sendMetaWhatsAppTemplate = async (
+  to: string,
+  templateName: string,
+  parameters: string[],
+  languageCode: string = 'bn'
+): Promise<boolean> => {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneNumberId) {
+    console.error('[WishDelivery] Meta WhatsApp credentials missing');
+    return false;
+  }
+
+  const formattedTo = formatBangladeshPhone(to);
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: formattedTo,
+          type: 'template',
+          template: {
+            name: templateName,
+            language: { code: languageCode },
+            components: [
+              {
+                type: 'body',
+                parameters: parameters.map(p => ({ type: 'text', text: p }))
+              }
+            ]
+          }
+        }),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn(`[WishDelivery] Attempt ${attempt} template "${templateName}" error:`, data);
+        if (attempt === 2) return false;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        console.log(`✅ [WishDelivery] Meta Template "${templateName}" sent successfully to ${formattedTo}!`);
+        return true;
+      }
+    } catch (error) {
+      console.error(`[WishDelivery] Attempt ${attempt} network error for template:`, error);
+      if (attempt === 2) return false;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  return false;
+};
+
 export const deliverWishCard = async (wish: IWish, senderName: string, senderWhatsApp?: string): Promise<boolean> => {
   if (!wish.recipientContact) {
     console.warn(`[WishDelivery] Wish ${wish._id} has no recipientContact`);
@@ -159,9 +220,24 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
   // Short, clean wish notification with the interactive card link
   const conciseMessage = `🎉 ${sender} আপনাকে ${wishPhrase} জানিয়েছেন!\n\n👉 ${smartCardUrl}`;
 
-  // 1. Deliver the concise wish text with card link
-  const textDelivered = await sendMetaWhatsAppText(wish.recipientContact, conciseMessage);
-  console.log(`[WishDelivery] Concise wish sent to ${wish.recipientContact}: status=${textDelivered}`);
+  // 1. Deliver the wish: Try template first to bypass Meta 24-hour customer window
+  const templateName = process.env.WHATSAPP_WISH_TEMPLATE_NAME || 'wish_card_notification';
+  const templateLang = process.env.WHATSAPP_WISH_TEMPLATE_LANG || 'bn';
+
+  let textDelivered = await sendMetaWhatsAppTemplate(
+    wish.recipientContact,
+    templateName,
+    [sender, wishPhrase, smartCardUrl],
+    templateLang
+  );
+
+  // If template delivery failed (e.g., template not yet created/approved on Meta), fallback to direct text
+  if (!textDelivered) {
+    console.log(`[WishDelivery] Template not delivered, attempting direct text message fallback for ${wish.recipientContact}`);
+    textDelivered = await sendMetaWhatsAppText(wish.recipientContact, conciseMessage);
+  }
+
+  console.log(`[WishDelivery] Final wish delivery status to ${wish.recipientContact}: ${textDelivered}`);
 
   // 2. Confirm to sender
   if (textDelivered && senderWhatsApp) {

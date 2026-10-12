@@ -114,9 +114,22 @@ export const extractScheduledMessage = (rawText: string, recipientPhone?: string
 };
 
 const SYSTEM_INSTRUCTION = `
-You are an AI assistant for a WhatsApp bot called "Smriti".
+You are an AI assistant for a WhatsApp bot called "Smriti" (স্মৃতি).
 Your job is to analyze the user's message and return a JSON object with the action to perform.
-The user speaks Bengali or English. When greeting, always greet with "আসসালামু আলাইকুম! আমি Smriti AI অ্যাসিস্ট্যান্ট।" 
+The user speaks Bengali, Banglish, or English. Always be warm, friendly, polite, and helpful.
+
+When the user sends greetings (hi, hello, hlw, salam), asks who you are, asks your name, asks how you are, asks what you do, or has casual conversation:
+- Action: "general_reply"
+- Data: {}
+- "replyText": A sweet, polite, and natural response in clear Bengali.
+  * For greeting ("hi", "hello", "hlw", "assalamu alaikum", etc.):
+    "আসসালামু আলাইকুম! আমি স্মৃতি (Smriti), আপনার এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
+  * For name question ("তোমার নাম কি?", "tumar nam ki", "who are you"):
+    "আসসালামু আলাইকুম! আমার নাম স্মৃতি (Smriti), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
+  * For how are you ("কেমন আছো?", "kemon acho"):
+    "আলহামদুলিল্লাহ, আমি বেশ ভালো আছি! আশা করি আপনিও ভালো আছেন। 😊 আজ আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
+  * For what you do or help ("কী করতে পারো?", "help"):
+    "আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট স্মৃতি (Smriti)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে সুন্দর উইশ কার্ড পাঠিয়ে দেওয়া\n\nআপনি কী করতে চান বলুন?"
 
 Your capabilities include:
 1. Listing/viewing existing reminders ("list_reminders").
@@ -126,6 +139,7 @@ Your capabilities include:
 5. Canceling a specific reminder by title ("cancel_reminder").
 6. Deleting a specific reminder permanently by title ("delete_reminder").
 7. Creating and sending personalized AI wish cards (Birthday, Anniversary, Eid, New Year, Congratulations, Love, Friendship, General Wishes) with images delivered directly to WhatsApp numbers ("create_wish")!
+8. Friendly conversational responses ("general_reply").
 
 Possible actions:
 1. list_reminders:
@@ -296,11 +310,37 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
     const enText = text.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
 
-    // 1. Greetings
-    if (/^(hi|hello|hey|সালাম|হ্যালো|কেমন আছো|কেমন আছেন|kemon acho)/i.test(text)) {
+    // 1. Greetings & Casual Conversational Questions
+    const isNameQuestion = /(?:তোমার|তুমার|আপনার|apnar|tumar|tomar)\s*(?:নাম|name)\s*(?:কি|কী|ki)|(?:who\s*are\s*you|ke\s*tumi|কে\s*তুমি|তুমি\s*কে|কে\s*আপনি)/i.test(text);
+    const isHowAreYou = /(?:কেমন\s*আছো|কেমন\s*আছেন|kemon\s*acho|kemon\s*asen|kemon\s*achen|how\s*are\s*you)/i.test(text);
+    const isWhatCanYouDo = /(?:কি\s*করতে\s*পারো|কী\s*করতে\s*পারো|ki\s*korte\s*paro|what\s*can\s*you\s*do|তুমি\s*কি\s*করো|help|সাহায্য)/i.test(text);
+    const isGreeting = /^(?:hi|hello|hlw|hey|heyy|সালাম|হ্যালো|হাই|assalamu\s*alaikum|as[\-\s]*salamu\s*alaikum|slaam|salam|assalam)\b/i.test(text);
+
+    if (isNameQuestion) {
       return {
         action: 'general_reply',
-        replyText: 'আসসালামু আলাইকুম! আমি Smriti অ্যাসিস্ট্যান্ট।\n- আপনার রিমাইন্ডার দেখতে লিখুন: "সব রিমাইন্ডার দেখাও"\n- সব মুছতে লিখুন: "সব রিমাইন্ডার ডিলিট করে দাও"\n- নতুন রিমাইন্ডার সেট করতে লিখুন: "কাল সকাল ১০টায় মিটিং রিমাইন্ডার"'
+        replyText: 'আসসালামু আলাইকুম! আমার নাম স্মৃতি (Smriti), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?'
+      };
+    }
+
+    if (isHowAreYou) {
+      return {
+        action: 'general_reply',
+        replyText: 'আলহামদুলিল্লাহ, আমি বেশ ভালো আছি! আশা করি আপনিও ভালো আছেন। 😊 আজ আপনাকে কীভাবে সাহায্য করতে পারি বলুন?'
+      };
+    }
+
+    if (isWhatCanYouDo) {
+      return {
+        action: 'general_reply',
+        replyText: 'আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট "স্মৃতি" (Smriti)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে আকর্ষণীয় অ্যানিমেটেড উইশ কার্ড পাঠিয়ে দেওয়া\n\nআপনি কী করতে চান বলুন?'
+      };
+    }
+
+    if (isGreeting) {
+      return {
+        action: 'general_reply',
+        replyText: 'আসসালামু আলাইকুম! আমি স্মৃতি (Smriti), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?'
       };
     }
 
@@ -506,7 +546,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     return {
       action: 'general_reply',
-      replyText: 'দুঃখিত, আমি আপনার কথা বুঝতে পারিনি। দয়া করে সহজ ভাষায় রিমাইন্ডার বা উইশ কার্ডের কথা বলুন (যেমন: 01734042131 নাম্বারে রাহুলের জন্মদিনের উইশ কার্ড পাঠাও)।'
+      replyText: 'আমি আপনার বার্তাটি ঠিক বুঝতে পারিনি। আপনি কি কোনো কাজের রিমাইন্ডার সেট করতে চান, নাকি কাউকে উইশ কার্ড পাঠাতে চান? একটু বুঝিয়ে বললে আমি সাথে সাথে করে দেব।'
     };
   }
 };
