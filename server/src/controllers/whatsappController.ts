@@ -2,8 +2,82 @@ import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
-import { analyzeMessage, analyzeAudioMessage, formatTime12Hour } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
+
+export interface ReminderActionState {
+  reminderId: string;
+  title: string;
+  waitingForTime: boolean;
+  expiresAt: number;
+}
+
+// In-memory state tracking for active reminder prompts
+export const userReminderState = new Map<string, ReminderActionState>();
+
+// Function to send interactive buttons via Meta API
+export const sendMetaWhatsAppButtons = async (
+  to: string,
+  bodyText: string,
+  buttons: Array<{ id: string; title: string }>
+): Promise<boolean> => {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneNumberId) return false;
+
+  let formattedTo = to.trim();
+  if (formattedTo.startsWith('+')) formattedTo = formattedTo.substring(1);
+  else if (formattedTo.startsWith('01')) formattedTo = `88${formattedTo}`;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: formattedTo,
+          type: 'interactive',
+          interactive: {
+            type: 'button',
+            body: { text: bodyText },
+            action: {
+              buttons: buttons.slice(0, 3).map(b => ({
+                type: 'reply',
+                reply: {
+                  id: b.id,
+                  title: b.title.substring(0, 20)
+                }
+              }))
+            }
+          }
+        }),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn(`[WhatsAppButtons] Attempt ${attempt} button error:`, data);
+        if (attempt === 2) return false;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        console.log(`✅ [WhatsAppButtons] Interactive buttons sent successfully to ${formattedTo}`);
+        return true;
+      }
+    } catch (err) {
+      console.error(`[WhatsAppButtons] Network exception attempt ${attempt}:`, err);
+      if (attempt === 2) return false;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  return false;
+};
 
 // Function to send a message via Meta API
 const sendMetaWhatsAppMessage = async (to: string, text: string) => {
@@ -122,19 +196,28 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         const fromNumber = message.from; // Sender's phone number
         
         let userMessage = '';
+        let buttonId = '';
         let isAudio = false;
         let audioMediaId = '';
         let audioMimeType = 'audio/ogg';
 
         if (message.type === 'text') {
           userMessage = message.text?.body || '';
+        } else if (message.type === 'interactive') {
+          if (message.interactive?.type === 'button_reply') {
+            buttonId = message.interactive.button_reply?.id || '';
+            userMessage = message.interactive.button_reply?.title || '';
+          }
+        } else if (message.type === 'button') {
+          buttonId = message.button?.payload || '';
+          userMessage = message.button?.text || '';
         } else if (message.type === 'audio' || message.type === 'voice') {
           isAudio = true;
           audioMediaId = message.audio?.id || message.voice?.id || '';
           audioMimeType = message.audio?.mime_type || message.voice?.mime_type || 'audio/ogg';
         }
 
-        if (!fromNumber || (!userMessage && !isAudio)) return;
+        if (!fromNumber || (!userMessage && !isAudio && !buttonId)) return;
 
         // WhatsApp cloud API sends number with country code without +
         // Using a regex to match the end of the number is safer to find the user
@@ -157,6 +240,104 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           await user.save();
         }
 
+        // --- STEP 1: Handle Interactive Button Clicks ---
+        if (buttonId.startsWith('rem_done_')) {
+          const remId = buttonId.replace('rem_done_', '');
+          const reminder = await Reminder.findByIdAndUpdate(remId, { status: 'Completed' }, { new: true });
+          userReminderState.delete(user._id.toString());
+          const title = reminder?.title || 'কাজটি';
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🎉 দারুণ! "${title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো। আপনার দিনটি শুভ হোক!`
+          );
+          return;
+        }
+
+        if (buttonId.startsWith('rem_reschedule_')) {
+          const remId = buttonId.replace('rem_reschedule_', '');
+          const reminder = await Reminder.findById(remId);
+          userReminderState.set(user._id.toString(), {
+            reminderId: remId,
+            title: reminder?.title || 'রিমাইন্ডারটি',
+            waitingForTime: true,
+            expiresAt: Date.now() + 2 * 60 * 60 * 1000
+          });
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `⏰ কোনো সমস্যা নেই! আপনি কখন বা কোন সময়ে এটি পুনঃনির্ধারণ করতে চান বলুন (যেমন: "আজ বিকাল ৫টায়" বা "কাল সকাল ১০টায়")।`
+          );
+          return;
+        }
+
+        // --- STEP 2: Handle Conversational Yes / No / Reschedule for Active Reminders ---
+        const cleanText = userMessage.trim();
+        let activeState = userReminderState.get(user._id.toString());
+
+        // If not in memory state, check if there is a recently alerted/snoozed reminder in DB
+        if (!activeState || activeState.expiresAt < Date.now()) {
+          const recentSnoozed = await Reminder.findOne({
+            userId: user._id,
+            status: 'Snoozed'
+          }).sort({ updatedAt: -1 });
+
+          if (recentSnoozed) {
+            activeState = {
+              reminderId: recentSnoozed._id.toString(),
+              title: recentSnoozed.title,
+              waitingForTime: false,
+              expiresAt: Date.now() + 2 * 60 * 60 * 1000
+            };
+            userReminderState.set(user._id.toString(), activeState);
+          }
+        }
+
+        const isYesIntent = /^(?:হ্যাঁ|হ্যা|হাঁ|হুম|জি|করেছি|করছি|হয়ে\s*গেছে|হয়েগেছে|সম্পন্ন|yes|done|completed|yep|yeah|koresi|hoise|join\s*koresi)\b/i.test(cleanText);
+        const isNoIntent = /^(?:না|নো|না\s*করিনি|না\s*করি\s*নাই|করি\s*নাই|করিনি|no|nope|reschedule|kori\s*ni|hoy\s*ni|join\s*kori\s*ni)\b/i.test(cleanText);
+
+        if (activeState && isYesIntent) {
+          await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Completed' });
+          userReminderState.delete(user._id.toString());
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🎉 চমৎকার! "${activeState.title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো!`
+          );
+          return;
+        }
+
+        if (activeState && (isNoIntent || activeState.waitingForTime)) {
+          // Check if message has a time mentioned (e.g. "না, বিকাল ৫টায় দাও" or just "বিকাল ৫টায়")
+          const hasTimeMatch = cleanText.match(/(?:(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/i);
+          if (hasTimeMatch && hasTimeMatch[1]) {
+            const parsedTime = parseBengaliTime(cleanText);
+            let targetDate = new Date();
+            if (cleanText.includes('কাল') || cleanText.includes('আগামীকাল') || cleanText.toLowerCase().includes('tomorrow')) {
+              targetDate.setDate(targetDate.getDate() + 1);
+            }
+            await Reminder.findByIdAndUpdate(activeState.reminderId, {
+              time: parsedTime,
+              date: targetDate,
+              status: 'Pending'
+            });
+            userReminderState.delete(user._id.toString());
+            const dStr = targetDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `✅ ঠিক আছে! "${activeState.title}" রিমাইন্ডারটি পুনঃনির্ধারণ করা হলো:\n⏰ নতুন সময়: ${formatTime12Hour(parsedTime)} (${dStr})`
+            );
+            return;
+          }
+
+          // If no time is provided yet, prompt for time
+          activeState.waitingForTime = true;
+          userReminderState.set(user._id.toString(), activeState);
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `⏰ কোনো সমস্যা নেই! আপনি কখন বা কোন সময়ে রিমাইন্ডারটি পুনঃনির্ধারণ করতে চান বলুন (যেমন: "আজ বিকাল ৫টায়" বা "কাল সকাল ১০টায়")।`
+          );
+          return;
+        }
+
+        // --- STEP 3: Regular AI Message & Audio Analysis ---
         let aiResponse: any;
 
         if (isAudio && audioMediaId) {

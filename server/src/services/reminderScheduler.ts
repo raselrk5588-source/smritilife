@@ -4,6 +4,7 @@ import Wish from '../models/Wish';
 import User from '../models/User';
 import { deliverWishCard } from './wishDeliveryService';
 import { formatTime12Hour } from './aiWhatsAppService';
+import { sendMetaWhatsAppButtons, userReminderState } from '../controllers/whatsappController';
 
 // Send message via Meta WhatsApp API
 const sendWhatsAppAlert = async (to: string, message: string) => {
@@ -85,13 +86,12 @@ export const startReminderScheduler = () => {
       });
 
       if (dueReminders.length > 0) {
-        console.log(`[ReminderScheduler] Found ${dueReminders.length} due reminders at Dhaka time ${dhakaTimeStr}`);
-
         for (const reminder of dueReminders) {
-          // Atomically claim the reminder so NO other process or duplicate tick can process it
+          const isSelf = !reminder.recipientPhone;
+          // Atomically claim the reminder: For self-reminders, set to 'Snoozed' awaiting Yes/No confirmation
           const claimed = await Reminder.findOneAndUpdate(
             { _id: reminder._id, status: 'Pending' },
-            { $set: { status: 'Completed' } }
+            { $set: { status: isSelf ? 'Snoozed' : 'Completed' } }
           );
           if (!claimed) continue;
 
@@ -130,13 +130,36 @@ export const startReminderScheduler = () => {
               await sendWhatsAppAlert(senderNumber, `✅ আসসালামু আলাইকুম! ${reminder.recipientPhone} নম্বরে আপনার নির্ধারিত বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n"${messageBody}"`);
             }
           } else {
-            // Standard reminder for self
+            // Standard reminder for self - Smart Interactive Yes/No Prompt!
             if (senderNumber) {
               const displayTime = formatTime12Hour(reminder.time);
-              const alertText = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}\n\nআপনার কাজটি সুন্দরভাবে সম্পন্ন হোক!`;
-              
-              await sendWhatsAppAlert(senderNumber, alertText);
-              console.log(`[ReminderScheduler] Reminder "${reminder.title}" dispatched & marked Completed.`);
+              const isMeeting = /(?:মিটিং|meeting|কল|call|ইন্টারভিউ|interview|ক্লাস|class|ওয়েবিনার|webinar)/i.test(reminder.title);
+              const question = isMeeting
+                ? 'আপনি কি মিটিংয়ে যোগ দিয়েছেন বা কাজটি সম্পন্ন করেছেন?'
+                : 'আপনি কি কাজটি সম্পন্ন করেছেন?';
+
+              const alertBody = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}\n\n${question}`;
+
+              // Track in active state for tracking response
+              userReminderState.set(reminder.userId.toString(), {
+                reminderId: reminder._id.toString(),
+                title: reminder.title,
+                waitingForTime: false,
+                expiresAt: Date.now() + 4 * 60 * 60 * 1000
+              });
+
+              const buttons = [
+                { id: `rem_done_${reminder._id}`, title: 'হ্যাঁ, করেছি ✅' },
+                { id: `rem_reschedule_${reminder._id}`, title: 'না, পুনঃনির্ধারণ ⏰' }
+              ];
+
+              const buttonsSent = await sendMetaWhatsAppButtons(senderNumber, alertBody, buttons);
+              if (!buttonsSent) {
+                // Fallback to text message with instructions
+                const fallbackText = `${alertBody}\n\n👉 সম্পন্ন হলে লিখুন: "হ্যাঁ" বা "Yes"\n👉 পুনঃনির্ধারণ করতে লিখুন: "না" বা নতুন সময় (যেমন: "আজ বিকাল ৫টায়")`;
+                await sendWhatsAppAlert(senderNumber, fallbackText);
+              }
+              console.log(`[ReminderScheduler] Interactive prompt sent for "${reminder.title}" to ${senderNumber}`);
             }
           }
         }
