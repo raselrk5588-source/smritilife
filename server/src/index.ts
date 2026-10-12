@@ -1,4 +1,7 @@
 import dns from 'dns';
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {}
 dns.setDefaultResultOrder('ipv4first');
 
 import express from 'express';
