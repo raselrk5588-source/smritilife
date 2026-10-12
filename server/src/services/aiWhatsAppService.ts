@@ -143,9 +143,9 @@ Your capabilities include:
 
 Possible actions:
 1. list_reminders:
-   When user asks to view, check, list, or see their reminders.
-   Bengali examples: "সব রিমাইন্ডার দেখাও", "রিমাইন্ডার লিস্ট দেখাও", "আমার কি কি রিমাইন্ডার আছে?", "রিমাইন্ডার কয়টা আছে?", "show reminders", "list reminders".
-   Data: {}
+   When user asks to view, check, list, or see their pending reminders or asks what reminders are due today (e.g. "আজ কি রিমাইন্ডার আছে", "আজকের রিমাইন্ডার", "সব রিমাইন্ডার দেখাও", "কি কি পেন্ডিং আছে").
+   Fields in "data":
+   - "filter"?: "today" | "all" (Set "today" if user specifically asks for today's reminders e.g. "আজ কি রিমাইন্ডার আছে", "আজকের রিমাইন্ডার", "aj ki reminder ache", "today's reminders". Otherwise set "all" or omit).
 
 2. delete_all_reminders:
    When user asks to delete or clear all of their reminders.
@@ -359,14 +359,21 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     const hasDeleteWord = /(?:ডিলিট|মুছে|delete|remove|ক্লিয়ার|clear|বাতিল|ক্যান্সেল|cancel)/i.test(text);
     const isListReminders = !hasDeleteWord && (
       /(?:সব\s*রিমাইন্ডার|রিমাইন্ডার\s*(?:লিস্ট|গুলো|গুলা|কয়টা|কতগুলো|কয়টা|দেখা|দেখাও|দেখতে)|list\s*reminder|show\s*(?:my\s*)?reminders?|my\s*reminders|reminder\s*list)/i.test(text) ||
-      /(?:কি\s*কি\s*রিমাইন্ডার|কোন\s*কোন\s*রিমাইন্ডার)/i.test(text) ||
+      /(?:কি\s*কি\s*রিমাইন্ডার|কোন\s*কোন\s*রিমাইন্ডার|কি\s*রিমাইন্ডার|কিসের\s*রিমাইন্ডার)/i.test(text) ||
+      /(?:আজ\s*কি\s*রিমাইন্ডার|আজকের\s*রিমাইন্ডার|aj\s*ki\s*reminder|ajker\s*reminder|today(?:'s)?\s*reminder)/i.test(text) ||
+      /(?:পেন্ডিং|pending).*(?:রিমাইন্ডার|reminder|লিস্ট|list|আছে|ase|ache)/i.test(text) ||
+      /(?:কি\s*পেন্ডিং|কী\s*পেন্ডিং|ki\s*pending|what(?:'s)?\s*pending)/i.test(text) ||
       /(?:koto\s*gula|koita|koyta|koto|how\s*many|sob|shob|list|dekhao|dekhaw|ache|ase)\b.*reminder/i.test(text) ||
       /reminder.*\b(?:koto\s*gula|koita|koyta|koto|how\s*many|ache|ase|dekhao|dekhaw|list)/i.test(text)
     );
 
     if (isListReminders) {
+      const isToday = /(?:আজ|আজকের|aj|ajker|today)/i.test(text);
       return {
-        action: 'list_reminders'
+        action: 'list_reminders',
+        data: {
+          filter: isToday ? 'today' : 'all'
+        }
       };
     }
 

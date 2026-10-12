@@ -235,24 +235,45 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             break;
 
           case 'list_reminders': {
-            const reminders = await Reminder.find({
+            const isToday = aiResponse.data?.filter === 'today';
+            const queryFilter: any = {
               userId: user._id,
-              status: { $ne: 'Cancelled' }
-            }).sort({ date: 1, time: 1 });
+              status: 'Pending'
+            };
+
+            if (isToday) {
+              const dhakaDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+              const todayStart = new Date(`${dhakaDateStr}T00:00:00.000Z`);
+              const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999Z`);
+              queryFilter.date = { $gte: todayStart, $lte: todayEnd };
+            }
+
+            const reminders = await Reminder.find(queryFilter).sort({ date: 1, time: 1 });
 
             if (reminders.length === 0) {
-              await sendMetaWhatsAppMessage(
-                fromNumber,
-                '📋 আপনার বর্তমানে কোনো সক্রিয় রিমাইন্ডার নেই।\n\nনতুন রিমাইন্ডার সেট করতে বার্তা পাঠান (যেমন: "কাল সকাল ১০টায় মিটিং রিমাইন্ডার")।'
-              );
+              if (isToday) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  '📋 আজ আপনার কোনো পেন্ডিং রিমাইন্ডার নেই।\n\nনতুন রিমাইন্ডার সেট করতে বার্তা পাঠান (যেমন: "আজ বিকাল ৫টায় মিটিং রিমাইন্ডার")।'
+                );
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  '📋 আপনার বর্তমানে কোনো পেন্ডিং রিমাইন্ডার নেই।\n\nনতুন রিমাইন্ডার সেট করতে বার্তা পাঠান (যেমন: "কাল সকাল ১০টায় মিটিং রিমাইন্ডার")।'
+                );
+              }
             } else {
-              let text = `📋 আপনার মোট *${reminders.length}টি* রিমাইন্ডার রয়েছে:\n\n`;
+              const headerTitle = isToday
+                ? `📋 আজ আপনার *${reminders.length}টি* পেন্ডিং রিমাইন্ডার রয়েছে:`
+                : `📋 আপনার মোট *${reminders.length}টি* পেন্ডিং রিমাইন্ডার রয়েছে:`;
+
+              let text = `${headerTitle}\n\n`;
               reminders.forEach((r, idx) => {
                 const dStr = r.date ? new Date(r.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
                 const timeStr = formatTime12Hour(r.time);
-                text += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${timeStr} (${dStr})\n   📊 স্ট্যাটাস: ${r.status}\n\n`;
+                text += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${timeStr} (${dStr})\n\n`;
               });
-              text += `💡 পরিবর্তন করতে: "[নাম] রিমাইন্ডারের সময় ৫টায় দাও"\n💡 ডিলিট করতে: "[নাম] ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও"।`;
+              text += `💡 পরিবর্তন করতে: "[নাম] রিমাইন্ডারের সময় ৫টায় দাও"\n💡 ডিলিট করতে: "[নাম] ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও"`;
               await sendMetaWhatsAppMessage(fromNumber, text.trim());
             }
             break;
