@@ -142,17 +142,18 @@ export default function Landing() {
       <header className="sticky top-0 z-50 bg-white/75 backdrop-blur-2xl border-b border-white/60 shadow-[0_4px_30px_rgba(10,119,86,0.03)] transition-all">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           
-          {/* Logo with Heart Leaf icon & AI Badge */}
+          {/* Logo with Robot AI Avatar & AI Badge */}
           <div 
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none group shrink-0"
           >
-            <div className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-[#0A7756] to-[#12A57A] flex items-center justify-center shadow-md shadow-[#0A7756]/25 group-hover:scale-105 group-hover:shadow-lg transition-all duration-300">
-              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                <path d="M12 5v14" />
-              </svg>
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
+            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center group-hover:scale-105 transition-all duration-300">
+              <img 
+                src="/robot-icon.png" 
+                alt="SmritiLife AI" 
+                className="w-full h-full rounded-full object-cover shadow-md shadow-[#0A7756]/20 ring-2 ring-emerald-500/30" 
+              />
+              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -361,10 +362,12 @@ export default function Landing() {
                     {/* WhatsApp Top Header with Verified AI Badge */}
                     <div className="bg-[#075E54] px-4 py-2.5 text-white flex items-center justify-between shadow-sm">
                       <div className="flex items-center gap-2.5">
-                        <div className="relative w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-400 to-teal-300 p-0.5 flex items-center justify-center shadow-xs">
-                          <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-[#0A7756]">
-                            <Bot className="w-4 h-4 text-[#0A7756]" />
-                          </div>
+                        <div className="relative w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+                          <img 
+                            src="/robot-icon.png" 
+                            alt="SmritiLife AI" 
+                            className="w-full h-full rounded-full object-cover border border-emerald-300/40 shadow-xs" 
+                          />
                           <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white" />
                         </div>
                         <div>
