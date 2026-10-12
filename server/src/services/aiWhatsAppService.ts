@@ -277,6 +277,48 @@ export const cleanPersonName = (rawName: string): { name: string; relationship?:
 };
 
 /**
+ * Intelligent extractor for multiple recipients or broadcast keywords.
+ * Supports patterns like "roni, bou k ekta message daw", "রনি, বউ আর আম্মুকে মেসেজ পাঠাও", "সবাইকে মেসেজ দাও".
+ */
+export const extractMessageRecipients = (rawText: string): { names: string[]; isBroadcastAll: boolean } => {
+  const text = (rawText || '').trim();
+
+  // 1. Check broadcast to all contacts
+  if (/(?:সবাইকে|সকলকে|সবাই\s*কে|sobai\s*k|sobaike|all\s*contacts|everyone|সব\s*কন্ট্যাক্টকে|সকল\s*কন্ট্যাক্টকে)\b/i.test(text)) {
+    return { names: ['সবাই'], isBroadcastAll: true };
+  }
+
+  // 2. Pattern A: Names before message command:
+  // e.g. "roni, bou k akta message daw", "রনি, আকাশ আর রাকিবকে মেসেজ পাঠাও"
+  let namesPart = '';
+  const matchA = text.match(/(?:^|\s)([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও)/i);
+  if (matchA && matchA[1]) {
+    namesPart = matchA[1];
+  } else {
+    // 3. Pattern B: Message command before names:
+    // e.g. "akta message daw roni,bou k j...", "একটি মেসেজ দাও রনি আর বউকে যে..."
+    const matchB = text.match(/(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও)\s+([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)(?:\s+(?:j|je|যে|for|নিয়ে))?/i);
+    if (matchB && matchB[1]) {
+      namesPart = matchB[1];
+    }
+  }
+
+  if (namesPart) {
+    // Split by comma, 'and', 'ar', 'আর', 'ও', 'এবং', '&'
+    const splitNames = namesPart
+      .split(/[,،&]|\s+(?:and|ar|আর|ও|এবং)\s+/i)
+      .map(n => cleanPersonName(n).name)
+      .filter(n => n && n.length >= 2 && !/^(?:message|msg|মেসেজ|akta|ekta|একটা|দিও|দাও|send|me|আমাকে|তাকে)$/i.test(n));
+
+    if (splitNames.length > 0) {
+      return { names: splitNames, isBroadcastAll: false };
+    }
+  }
+
+  return { names: [], isBroadcastAll: false };
+};
+
+/**
  * Intelligent extractor for the actual message body intended for the recipient.
  * Handles quoted text, 'j' / 'je' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
  */
@@ -397,13 +439,18 @@ Possible actions:
    - "sendNow": boolean (true if user wants it sent immediately or doesn't specify a future time/date; false if scheduled for future)
 
 6. create_reminder:
-   When user wants a task reminder for themselves or a plain scheduled text message to another number.
+   When user wants a task reminder for themselves or wants to send a message to one or multiple contacts (e.g. "একটা মেসেজ দাও রনি, বউকে যে কাল আমরা ঘুরতে যাব", "রনি আর বউকে মেসেজ দাও...", "সবাইকে মেসেজ দাও যে কাল অফিস ছুটি").
    Fields in "data":
    - "title": string
-   - "recipientPhone"?: string
-   - "customMessage"?: string
+   - "recipientNames"?: string[] (e.g. ["রনি", "Bou"] if sent to specific contacts from contact list)
+   - "recipientName"?: string (single recipient name, e.g. "রনি")
+   - "recipientPhone"?: string (single phone number if mentioned)
+   - "recipientPhones"?: string[] (array of numbers if multiple numbers mentioned)
+   - "broadcastAll"?: boolean (true if user asks to send to everyone/all contacts: "সবাইকে মেসেজ দাও", "sobaike message dao", "send to all")
+   - "customMessage"?: string (The actual message to be sent to them, e.g. "কাল আমরা ঘুরতে যাব")
    - "date": string (YYYY-MM-DD)
    - "time": string (HH:mm)
+   - "sendNow"?: boolean (true if user wants it sent immediately or didn't specify a future hour/minute)
 
 7. manage_todolist:
    When the user wants to create, view, add items to, or complete items in a To-Do list, Shopping list, or Checklist!
@@ -1065,25 +1112,34 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         .replace(/\s+/g, ' ')
         .trim();
 
-      let recipientName: string | undefined = undefined;
+      let recipientNames: string[] = [];
+      let isBroadcastAll = false;
       if (recipientPhone) {
         title = `মেসেজ পাঠানো (${recipientPhone})`;
         customMessage = extractScheduledMessage(text, recipientPhone);
       } else {
-        // Check if user is asking to send a message to a person: e.g. "রনিকে একটা মেসেজ দাও যে...", "roni k akta message daw j..."
-        const toPersonMatch = text.match(/(?:^|\s)([a-zA-Z\u0980-\u09FF]{2,15})\s*(?:-?কে|-?k|-?ke|-?er|-?এর|-?re|-?রে)?\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও)/i);
-        if (toPersonMatch && toPersonMatch[1]) {
-          const candidate = toPersonMatch[1].trim();
-          if (!/^(?:আমাকে|তাকে|তারে|একজনকে|আমারে|me|him|her)$/i.test(candidate)) {
-            recipientName = candidate;
-            title = `মেসেজ পাঠানো (${recipientName})`;
-            customMessage = extractScheduledMessage(text);
-          }
+        const recipientsResult = extractMessageRecipients(text);
+        if (recipientsResult.isBroadcastAll) {
+          isBroadcastAll = true;
+          recipientNames = ['সবাই'];
+          title = `সবাইকে মেসেজ পাঠানো`;
+          customMessage = extractScheduledMessage(text);
+        } else if (recipientsResult.names.length > 0) {
+          recipientNames = recipientsResult.names;
+          title = `মেসেজ পাঠানো (${recipientNames.join(', ')})`;
+          customMessage = extractScheduledMessage(text);
         }
       }
 
       if (!title || title.length < 2) title = 'জরুরি কাজ';
 
+      // Check if user specifically scheduled for future time/date outside the message body
+      const textOutsideMessage = customMessage ? textWithoutPhone.replace(customMessage, ' ') : textWithoutPhone;
+      const hasSpecificTimeMention = /(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)/i.test(textOutsideMessage) ||
+        /(?:minute|hour|ghonta|মিনিট|ঘণ্টা)/i.test(textOutsideMessage) ||
+        /\b(?:কাল|আগামীকাল|পরশু|kal|kaal|kalke|agamikal|porshu)\b/i.test(textOutsideMessage);
+
+      const sendNow = !hasSpecificTimeMention && !!(recipientPhone || recipientNames.length > 0 || isBroadcastAll);
       const formattedDisplayTime = formatTime12Hour(time);
 
       return {
@@ -1091,14 +1147,17 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         data: {
           title,
           recipientPhone,
-          recipientName,
+          recipientNames: recipientNames.length > 0 ? recipientNames : undefined,
+          recipientName: recipientNames.length === 1 ? recipientNames[0] : undefined,
+          broadcastAll: isBroadcastAll,
           customMessage,
           date: dateStr,
-          time
+          time,
+          sendNow
         },
         replyText: recipientPhone 
-          ? `ঠিক আছে! সময় ${formattedDisplayTime}-এ ${recipientPhone} নম্বরে আপনার বার্তাটি পাঠিয়ে দেওয়া হবে।`
-          : `আপনার রিমাইন্ডার "${title}" সময় ${formattedDisplayTime}-এ সেট করা হয়েছে!`
+          ? (sendNow ? `ঠিক আছে! ${recipientPhone} নম্বরে এখনই আপনার বার্তাটি পাঠিয়ে দেওয়া হচ্ছে...` : `ঠিক আছে! সময় ${formattedDisplayTime}-এ ${recipientPhone} নম্বরে আপনার বার্তাটি পাঠিয়ে দেওয়া হবে।`)
+          : `আপনার রিমাইন্ডার "${title}" সেট করা হয়েছে!`
       };
     }
 

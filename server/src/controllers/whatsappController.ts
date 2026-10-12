@@ -934,60 +934,162 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           case 'create_reminder':
             if (aiResponse.data) {
               const cleanTitle = (aiResponse.data.title || 'নতুন রিমাইন্ডার').trim();
-              let targetPhone = aiResponse.data.recipientPhone || undefined;
-              let contactFoundName: string | undefined = undefined;
+              const customMsg = aiResponse.data.customMessage || aiResponse.data.description || '';
+              const sendNow = !!aiResponse.data.sendNow;
+              const reminderDate = new Date(aiResponse.data.date || new Date());
+              const reminderTime = aiResponse.data.time || '10:00';
+              const formattedTime = formatTime12Hour(reminderTime);
 
-              // If recipientPhone was not explicitly in the message, check if user mentioned a contact name!
-              const targetName = aiResponse.data.recipientName || (aiResponse.data.title?.match(/মেসেজ\s*পাঠানো\s*\(([^)]+)\)/)?.[1]);
-              if (!targetPhone && targetName) {
-                const cleanName = targetName.trim();
-                const matchedContact = await Contact.findOne({
-                  userId: user._id,
-                  $or: [
-                    { name: { $regex: new RegExp(`^${cleanName}$`, 'i') } },
-                    { nickname: { $regex: new RegExp(`^${cleanName}$`, 'i') } },
-                    { name: { $regex: new RegExp(cleanName, 'i') } }
-                  ]
-                });
+              // 1. Gather all target recipients (Multi-contact broadcast support)
+              const resolvedRecipients: Array<{ name: string; phone: string }> = [];
+              const notFoundNames: string[] = [];
 
-                if (matchedContact && matchedContact.phone) {
-                  targetPhone = matchedContact.phone.replace(/[\s\-\(\)]/g, '');
-                  contactFoundName = matchedContact.name;
-                } else {
-                  // Prompt user that this contact was not found
+              if (aiResponse.data.broadcastAll) {
+                // Broadcast to all saved contacts
+                const allContacts = await Contact.find({ userId: user._id, phone: { $exists: true, $ne: '' } });
+                for (const c of allContacts) {
+                  if (c.phone) {
+                    const cleanP = c.phone.replace(/[\s\-\(\)]/g, '');
+                    if (cleanP && !resolvedRecipients.some(r => r.phone === cleanP)) {
+                      resolvedRecipients.push({ name: c.name, phone: cleanP });
+                    }
+                  }
+                }
+
+                if (resolvedRecipients.length === 0) {
                   await sendMetaWhatsAppMessage(
                     fromNumber,
-                    `⚠️ আপনার কনট্যাক্ট লিস্টে "${cleanName}" নামে কোনো নম্বর খুঁজে পাওয়া যায়নি।\n\n💡 মেসেজটি পাঠাতে ${cleanName}-র ফোন নম্বর উল্লেখ করুন (যেমন: "017XXXXXXXX নম্বরে মেসেজ দাও...") অথবা আগে নম্বরটি সেভ করুন:\n"সেভ করো: ${cleanName} 017XXXXXXXX"`
+                    '⚠️ আপনার কনট্যাক্ট লিস্টে কোনো সংরক্ষিত নম্বর পাওয়া যায়নি। আগে কন্ট্যাক্ট সেভ করুন:\n"রনির নম্বর সেভ করো: 017XXXXXXXX"'
                   );
                   break;
                 }
+              } else {
+                // Collect explicit phones
+                const rawPhones: string[] = [];
+                if (aiResponse.data.recipientPhone) rawPhones.push(aiResponse.data.recipientPhone);
+                if (Array.isArray(aiResponse.data.recipientPhones)) {
+                  rawPhones.push(...aiResponse.data.recipientPhones);
+                }
+
+                for (const p of rawPhones) {
+                  const cleanP = p.replace(/[\s\-\(\)]/g, '');
+                  if (cleanP && !resolvedRecipients.some(r => r.phone === cleanP)) {
+                    resolvedRecipients.push({ name: cleanP, phone: cleanP });
+                  }
+                }
+
+                // Collect names from recipientNames array or single recipientName
+                const namesToLookup: string[] = [];
+                if (Array.isArray(aiResponse.data.recipientNames)) {
+                  namesToLookup.push(...aiResponse.data.recipientNames);
+                } else if (aiResponse.data.recipientName) {
+                  namesToLookup.push(...aiResponse.data.recipientName.split(/[,&]|\s+(?:and|ar|আর|ও|এবং)\s+/i));
+                } else if (aiResponse.data.title?.includes('মেসেজ পাঠানো (')) {
+                  const inTitle = aiResponse.data.title.match(/মেসেজ\s*পাঠানো\s*\(([^)]+)\)/)?.[1];
+                  if (inTitle) namesToLookup.push(...inTitle.split(/[,&]|\s+(?:and|ar|আর|ও|এবং)\s+/i));
+                }
+
+                for (const rawN of namesToLookup) {
+                  const cleanedName = cleanPersonName(rawN).name;
+                  if (!cleanedName || cleanedName.length < 2) continue;
+
+                  const matchedContact = await Contact.findOne({
+                    userId: user._id,
+                    $or: [
+                      { name: { $regex: new RegExp(`^${cleanedName}$`, 'i') } },
+                      { nickname: { $regex: new RegExp(`^${cleanedName}$`, 'i') } },
+                      { name: { $regex: new RegExp(cleanedName, 'i') } }
+                    ]
+                  });
+
+                  if (matchedContact && matchedContact.phone) {
+                    const cleanP = matchedContact.phone.replace(/[\s\-\(\)]/g, '');
+                    if (cleanP && !resolvedRecipients.some(r => r.phone === cleanP)) {
+                      resolvedRecipients.push({ name: matchedContact.name, phone: cleanP });
+                    }
+                  } else {
+                    if (!notFoundNames.includes(cleanedName)) {
+                      notFoundNames.push(cleanedName);
+                    }
+                  }
+                }
               }
 
-              const category = targetPhone ? 'message' : (aiResponse.data.category || 'General');
-              await Reminder.create({
-                userId: user._id,
-                title: cleanTitle,
-                description: aiResponse.data.customMessage || aiResponse.data.description,
-                recipientPhone: targetPhone,
-                date: new Date(aiResponse.data.date || new Date()),
-                time: aiResponse.data.time || '10:00',
-                priority: 'Medium',
-                category: category,
-                repeat: 'Once',
-                status: 'Pending'
-              });
-
-              if (targetPhone && contactFoundName) {
-                const formattedTime = formatTime12Hour(aiResponse.data.time || '10:00');
-                const customMsg = aiResponse.data.customMessage || '';
+              // 2. If recipients were expected but none could be resolved:
+              if (notFoundNames.length > 0 && resolvedRecipients.length === 0) {
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  `✅ আপনার কনট্যাক্ট লিস্ট থেকে *${contactFoundName}* (${targetPhone})-কে সময় ${formattedTime}-এ বার্তা পাঠানো হবে:\n\n💬 "${customMsg}"`
+                  `⚠️ আপনার কনট্যাক্ট লিস্টে "${notFoundNames.join(', ')}" নামে কোনো নম্বর খুঁজে পাওয়া যায়নি।\n\n💡 আগে নম্বরটি সেভ করুন:\n"রনির নম্বর সেভ করো: 017XXXXXXXX"\nঅথবা সরাসরি নম্বর দিয়ে মেসেজ পাঠান (যেমন: "017XXXXXXXX নম্বরে মেসেজ দাও...")`
                 );
+                break;
+              }
+
+              // 3. If there are resolved recipients (Multi or Single Contact Message):
+              if (resolvedRecipients.length > 0) {
+                const senderName = user.name || 'আপনার পরিচিত জন';
+                const senderNumber = user.whatsapp || user.mobile || '';
+
+                for (const target of resolvedRecipients) {
+                  // If sendNow is true, dispatch message immediately via WhatsApp
+                  if (sendNow && customMsg) {
+                    const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${customMsg}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)`;
+                    await sendMetaWhatsAppMessage(target.phone, thirdPartyAlert);
+                  }
+
+                  // Record in Reminder collection
+                  await Reminder.create({
+                    userId: user._id,
+                    title: `মেসেজ পাঠানো (${target.name})`,
+                    description: customMsg,
+                    recipientPhone: target.phone,
+                    date: reminderDate,
+                    time: reminderTime,
+                    priority: 'Medium',
+                    category: 'message',
+                    repeat: 'Once',
+                    status: sendNow ? 'Completed' : 'Pending'
+                  });
+                }
+
+                // Compose confirmation message to sender
+                const count = resolvedRecipients.length;
+                let replyMsg = '';
+                if (sendNow) {
+                  replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে এখনই বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n\n`;
+                } else {
+                  replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে সময় ${formattedTime}-এ বার্তা পাঠানোর শিডিউল সেট করা হয়েছে:\n\n`;
+                }
+
+                resolvedRecipients.forEach((r, idx) => {
+                  replyMsg += `${idx + 1}. 👤 *${r.name}* (${r.phone})\n`;
+                });
+
+                if (customMsg) {
+                  replyMsg += `\n💬 বার্তা: "${customMsg}"`;
+                }
+
+                if (notFoundNames.length > 0) {
+                  replyMsg += `\n\n⚠️ দ্রষ্টব্য: "${notFoundNames.join(', ')}" নামে কোনো নম্বর আপনার কন্ট্যাক্ট লিস্টে পাওয়া যায়নি।`;
+                }
+
+                await sendMetaWhatsAppMessage(fromNumber, replyMsg.trim());
               } else {
+                // 4. Regular self-reminder
+                await Reminder.create({
+                  userId: user._id,
+                  title: cleanTitle,
+                  description: customMsg,
+                  date: reminderDate,
+                  time: reminderTime,
+                  priority: 'Medium',
+                  category: aiResponse.data.category || 'General',
+                  repeat: 'Once',
+                  status: 'Pending'
+                });
+
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  aiResponse.replyText || `আপনার রিমাইন্ডার "${cleanTitle}" সেট করা হয়েছে!`
+                  aiResponse.replyText || `আপনার রিমাইন্ডার "${cleanTitle}" সময় ${formattedTime}-এ সেট করা হয়েছে!`
                 );
               }
             }
