@@ -713,11 +713,12 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // B. Get Note / Info Retrieval Intent (e.g. "বাসার ঠিকানা দাও", "অফিস এড্রেস কি", "সব নোট দেখাও")
+    // B. Get Note / Info Retrieval Intent (e.g. "বাসার ঠিকানা দাও", "অফিস এড্রেস কি", "amar basa koi", "basar address daw")
     const isGetNoteIntent =
       /(?:সব\s*নোট|সকল\s*নোট|আমার\s*নোট|নোট\s*লিস্ট|নোটগুলো|নোটগুলা|show\s*notes|my\s*notes)/i.test(text) ||
-      /(?:বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত|আমার)?\s*(?:ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:টা|টি|ta|ti)?\s*(?:দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto)/i.test(text) ||
-      /\b(?:basar|office(?:r)?|barir)\s*(?:address|thikana)\s*(?:ta\s*)?(?:daw|dao|ki|bolo)\b/i.test(text);
+      /(?:বাসার?|অফিসের?|বাড়ির?|ঘরের|ব্যক্তিগত|আমার|amr|amar)?\s*(?:ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:টা|টি|ta|ti)?\s*(?:দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto|koi|kothay|kothai)/i.test(text) ||
+      /\b(?:amr|amar|my)?\s*(?:basa|basar|basha|bashar|bari|barir|office|officer)\s*(?:address|thikana)?\s*(?:ta\s*)?(?:koi|kothay|kothai|daw|dao|ki|bolo|koto)\b/i.test(text) ||
+      /(?:আমার|amr|amar)?\s*(?:বাসা|বাড়ি|অফিস|basa|basha|bari|office)\s*(?:কই|কোথায়|কোথাই|koi|kothay|kothai)/i.test(text);
 
     if (isGetNoteIntent) {
       if (/(?:সব\s*নোট|সকল\s*নোট|আমার\s*নোট|নোট\s*লিস্ট|নোটগুলো|নোটগুলা|show\s*notes|my\s*notes)/i.test(text)) {
@@ -728,7 +729,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
 
       let queryTopic = 'বাসার ঠিকানা';
-      if (/বাসা|বাড়ি|bari|basha|home/i.test(text)) queryTopic = 'বাসার ঠিকানা';
+      if (/বাসা|বাড়ি|bari|basa|home/i.test(text)) queryTopic = 'বাসার ঠিকানা';
       else if (/অফিস|office/i.test(text)) queryTopic = 'অফিসের ঠিকানা';
       else if (/রক্ত|blood/i.test(text)) queryTopic = 'রক্তের গ্রুপ';
       else if (/ওয়াইফাই|wifi/i.test(text)) queryTopic = 'ওয়াইফাই পাসওয়ার্ড';
@@ -736,7 +737,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       else if (/পাসওয়ার্ড|password/i.test(text)) queryTopic = 'পাসওয়ার্ড';
       else {
         queryTopic = text
-          .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto)/gi, '')
+          .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto|koi|kothay|kothai)/gi, '')
           .trim();
       }
 

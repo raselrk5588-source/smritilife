@@ -1265,8 +1265,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             // Keyword fallbacks
             if (!matchedNote) {
-              if (/বাসা|বাড়ি|bari|basha|home/i.test(query)) {
-                matchedNote = await Note.findOne({ userId: user._id, title: /বাসা|বাড়ি|home/i });
+              if (/বাসা|বাড়ি|bari|basa|home|address|ঠিকানা/i.test(query)) {
+                matchedNote = await Note.findOne({
+                  userId: user._id,
+                  $or: [
+                    { title: /বাসা|বাড়ি|basa|home|ঠিকানা|address/i },
+                    { category: 'Address' }
+                  ]
+                });
               } else if (/অফিস|office/i.test(query)) {
                 matchedNote = await Note.findOne({ userId: user._id, title: /অফিস|office/i });
               } else if (/রক্ত|blood/i.test(query)) {
