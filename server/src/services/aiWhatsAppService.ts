@@ -729,8 +729,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
 
       let queryTopic = 'বাসার ঠিকানা';
-      if (/বাসা|বাড়ি|bari|basa|home/i.test(text)) queryTopic = 'বাসার ঠিকানা';
-      else if (/অফিস|office/i.test(text)) queryTopic = 'অফিসের ঠিকানা';
+      if (/অফিস|office|work|কর্মস্থল/i.test(text)) queryTopic = 'অফিসের ঠিকানা';
+      else if (/বাসা|বাড়ি|bari|basa|home/i.test(text)) queryTopic = 'বাসার ঠিকানা';
       else if (/রক্ত|blood/i.test(text)) queryTopic = 'রক্তের গ্রুপ';
       else if (/ওয়াইফাই|wifi/i.test(text)) queryTopic = 'ওয়াইফাই পাসওয়ার্ড';
       else if (/এনআইডি|nid/i.test(text)) queryTopic = 'এনআইডি নম্বর';

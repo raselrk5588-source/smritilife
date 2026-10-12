@@ -1265,16 +1265,40 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             // Keyword fallbacks
             if (!matchedNote) {
-              if (/বাসা|বাড়ি|bari|basa|home|address|ঠিকানা/i.test(query)) {
+              if (/অফিস|office|work|কর্মস্থল/i.test(query)) {
                 matchedNote = await Note.findOne({
                   userId: user._id,
                   $or: [
-                    { title: /বাসা|বাড়ি|basa|home|ঠিকানা|address/i },
+                    { title: /অফিস|office|work|কর্মস্থল/i },
+                    { content: /অফিস|office/i }
+                  ]
+                });
+              } else if (/বাসা|বাড়ি|bari|basa|basha|home|ঘরের/i.test(query)) {
+                matchedNote = await Note.findOne({
+                  userId: user._id,
+                  $or: [
+                    { title: /বাসা|বাড়ি|basa|basha|home/i },
+                    { content: /বাসা|বাড়ি|basa|home/i }
+                  ]
+                });
+              } else if (/address|ঠিকানা|অ্যাড্রেস|এড্রেস/i.test(query)) {
+                const addressNotes = await Note.find({
+                  userId: user._id,
+                  $or: [
+                    { title: /ঠিকানা|address|বাসা|অফিস/i },
                     { category: 'Address' }
                   ]
                 });
-              } else if (/অফিস|office/i.test(query)) {
-                matchedNote = await Note.findOne({ userId: user._id, title: /অফিস|office/i });
+                if (addressNotes.length === 1) {
+                  matchedNote = addressNotes[0];
+                } else if (addressNotes.length > 1) {
+                  let text = `📍 আপনার সংরক্ষিত ঠিকানাসমূহ:\n\n`;
+                  addressNotes.forEach((an, idx) => {
+                    text += `${idx + 1}. *${an.title}*:\n   ${an.content}\n\n`;
+                  });
+                  await sendMetaWhatsAppMessage(fromNumber, text.trim());
+                  break;
+                }
               } else if (/রক্ত|blood/i.test(query)) {
                 matchedNote = await Note.findOne({ userId: user._id, title: /রক্ত|blood/i });
               } else if (/ওয়াইফাই|wifi/i.test(query)) {
