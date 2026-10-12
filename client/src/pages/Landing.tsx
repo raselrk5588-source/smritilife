@@ -183,88 +183,9 @@ export default function Landing() {
               <span>এখনই শুরু করুন</span>
             </button>
 
-            {/* 3-line hamburger menu toggle button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-white active:bg-slate-100 rounded-xl transition cursor-pointer border border-slate-200/80 bg-white/80 backdrop-blur-md shadow-xs shrink-0"
-              aria-label="Toggle menu"
-              title="মেনু"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5 text-slate-800" /> : <Menu className="w-5 h-5 text-slate-800" />}
-            </button>
-          </div>
+            </div>
 
         </div>
-
-        {/* Dropdown Menu Modal (Frosted Glass Card) */}
-        {mobileMenuOpen && (
-          <div className="absolute top-full left-0 right-0 bg-[#F4F9F6]/95 backdrop-blur-2xl border-b border-slate-200/80 shadow-2xl py-6 px-4 animate-in slide-in-from-top-2 z-50">
-            <div className="max-w-md mx-auto space-y-4">
-              
-              {/* Menu items card */}
-              <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/80 p-3 shadow-lg space-y-1">
-                <button
-                  onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
-                  className="w-full text-left font-bold text-slate-800 hover:text-[#0A7756] hover:bg-emerald-50/60 px-4 py-3.5 rounded-2xl transition flex items-center justify-between cursor-pointer"
-                >
-                  <span className="flex items-center gap-2.5">
-                    <LogIn className="w-4 h-4 text-[#0A7756]" />
-                    লগইন করুন
-                  </span>
-                  <ArrowRight className="w-4 h-4 text-slate-400" />
-                </button>
-
-                <button
-                  onClick={() => scrollToSection('how-it-works')}
-                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/60 px-4 py-3.5 rounded-2xl transition cursor-pointer"
-                >
-                  কীভাবে কাজ করে
-                </button>
-
-                <button
-                  onClick={() => scrollToSection('features')}
-                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/60 px-4 py-3.5 rounded-2xl transition cursor-pointer"
-                >
-                  কী কাজে লাগে
-                </button>
-
-                <button
-                  onClick={() => scrollToSection('pricing')}
-                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/60 px-4 py-3.5 rounded-2xl transition cursor-pointer"
-                >
-                  প্রাইসিং
-                </button>
-
-                <button
-                  onClick={() => scrollToSection('faq')}
-                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/60 px-4 py-3.5 rounded-2xl transition cursor-pointer"
-                >
-                  সাধারণ প্রশ্ন
-                </button>
-              </div>
-
-              {/* Action buttons inside menu */}
-              <div className="space-y-2">
-                <button
-                  onClick={handleSubscribe}
-                  className="w-full bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold py-3.5 rounded-2xl text-center shadow-lg shadow-[#0A7756]/25 transition flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <span>এখনই শুরু করুন</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                
-                <button
-                  onClick={handleOpenWhatsApp}
-                  className="w-full bg-white hover:bg-emerald-50/50 text-[#0A7756] font-bold py-3 rounded-2xl text-center flex items-center justify-center gap-2 border border-slate-200/80 shadow-xs transition cursor-pointer"
-                >
-                  <MessageCircle className="w-4 h-4 text-[#25D366]" />
-                  <span>WhatsApp-এ কথা বলুন</span>
-                </button>
-              </div>
-
-            </div>
-          </div>
-        )}
       </header>
 
       {/* 2. HERO SECTION (AI AGENT & LIVE CHAT SIMULATION) */}
