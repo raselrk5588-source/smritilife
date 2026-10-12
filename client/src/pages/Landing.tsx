@@ -323,24 +323,7 @@ export default function Landing() {
                 </p>
               </div>
 
-              {/* CTA Buttons (Glossy Glass Style) */}
-              <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
-                <button
-                  onClick={handleSubscribe}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-base sm:text-lg px-8 py-3.5 rounded-full shadow-[0_10px_25px_-5px_rgba(10,119,86,0.4)] hover:shadow-[0_15px_30px_-5px_rgba(10,119,86,0.5)] hover:-translate-y-0.5 transition-all cursor-pointer"
-                >
-                  <Crown className="w-5 h-5 text-amber-300" />
-                  <span>এখনই শুরু করুন</span>
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={handleOpenWhatsApp}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-white/80 hover:bg-white active:scale-95 text-[#0A7756] font-bold text-base px-6 py-3.5 rounded-full border border-slate-200/80 hover:border-emerald-300 shadow-sm backdrop-blur-md transition-all cursor-pointer"
-                >
-                  <MessageCircle className="w-5 h-5 text-[#25D366]" />
-                  <span>WhatsApp-এ কথা বলুন</span>
-                </button>
-              </div>
+
 
             </div>
 
@@ -802,11 +785,21 @@ export default function Landing() {
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-white hover:bg-emerald-50/50 active:scale-95 text-[#0A7756] font-bold text-sm sm:text-base px-6 py-3 rounded-full border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all cursor-pointer"
           >
             <MessageCircle className="w-5 h-5 text-[#25D366]" />
-            <span>WhatsApp-এ কথা বলুন</span>
           </button>
 
         </div>
       </footer>
+
+      {/* Persistent Floating Action Button at Bottom Right Corner */}
+      <button
+        onClick={handleSubscribe}
+        className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-50 inline-flex items-center gap-2 sm:gap-2.5 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-black text-sm sm:text-base px-5 py-3 sm:px-6 sm:py-3.5 rounded-full shadow-[0_12px_28px_rgba(10,119,86,0.45)] hover:shadow-[0_18px_36px_rgba(10,119,86,0.6)] border border-emerald-300/40 backdrop-blur-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+        aria-label="শুরু করুন"
+      >
+        <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 group-hover:rotate-12 transition-transform" />
+        <span>শুরু করুন</span>
+        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+      </button>
 
     </div>
   );
