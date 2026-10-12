@@ -249,7 +249,7 @@ export default function Landing() {
       </header>
 
       {/* 2. HERO SECTION (AI AGENT & LIVE CHAT SIMULATION) */}
-      <section className="relative overflow-hidden pt-10 sm:pt-16 pb-16 sm:pb-24">
+      <section className="relative overflow-hidden pt-6 sm:pt-10 pb-8 sm:pb-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             
@@ -458,10 +458,10 @@ export default function Landing() {
       </section>
 
       {/* 3. 4-FEATURE BENTO CARDS (কী কাজে লাগে) - FROSTED GLASS CARDS */}
-      <section id="features" className="py-16 relative">
+      <section id="features" className="pt-2 pb-10 sm:pb-12 relative">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           
-          <div className="text-center mb-12">
+          <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-md text-[#0A7756] font-bold text-xs sm:text-sm px-3.5 py-1.5 rounded-full border border-emerald-500/20 shadow-xs mb-3">
               <Sparkles className="w-3.5 h-3.5 text-[#0A7756]" />
               <span>স্মার্ট AI সুবিধা</span>
@@ -537,11 +537,11 @@ export default function Landing() {
       </section>
 
       {/* 4. HOW TO USE? (3 STEPS) (কীভাবে কাজ করে) - CONNECTED GLASS STEPS */}
-      <section id="how-it-works" className="py-16 sm:py-20 relative">
+      <section id="how-it-works" className="py-8 sm:py-10 relative">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           
           {/* Section Heading */}
-          <div className="text-center mb-12 sm:mb-16">
+          <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-md text-[#0A7756] font-bold text-xs sm:text-sm px-3.5 py-1.5 rounded-full border border-emerald-500/20 shadow-xs mb-3">
               <Zap className="w-3.5 h-3.5 text-[#0A7756]" />
               <span>সহজ ৩ ধাপ</span>
@@ -611,7 +611,7 @@ export default function Landing() {
       </section>
 
       {/* 5. PRICING SECTION: ONE SIMPLE PLAN (প্রাইসিং) - MODERN AI GLASS PLAN */}
-      <section id="pricing" className="py-16 sm:py-24 relative">
+      <section id="pricing" className="py-8 sm:py-10 relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 items-center">
@@ -706,10 +706,10 @@ export default function Landing() {
       </section>
 
       {/* 5.5. FAQ SECTION: সাধারণ প্রশ্ন - FROSTED GLASS ACCORDION */}
-      <section id="faq" className="py-16 sm:py-24 relative">
+      <section id="faq" className="py-8 sm:py-10 relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           
-          <div className="text-center mb-12 sm:mb-14">
+          <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-md text-[#0A7756] font-bold text-xs sm:text-sm px-3.5 py-1.5 rounded-full border border-emerald-500/20 shadow-xs mb-3">
               <HelpCircle className="w-4 h-4 text-[#0A7756]" />
               <span>সাধারণ প্রশ্ন ও উত্তর</span>
