@@ -5,6 +5,7 @@ try {
 dns.setDefaultResultOrder('ipv4first');
 
 import express from 'express';
+import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -58,6 +59,15 @@ app.use('/api/whatsapp', whatsappRoutes);
 
 app.get('/', (req, res) => {
   res.send('Smriti API is running...');
+});
+
+app.get('/api/health', (req, res) => {
+  const isConnected = mongoose.connection.readyState === 1;
+  res.json({
+    status: isConnected ? 'healthy' : 'database_disconnected',
+    database: isConnected ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Global Error Handler

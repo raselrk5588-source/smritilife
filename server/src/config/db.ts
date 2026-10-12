@@ -6,25 +6,47 @@ try {
   dns.setServers(['8.8.8.8', '1.1.1.1']);
 } catch (e) {}
 
-let isConnected: mongoose.ConnectionStates;
+let isConnecting = false;
 
 const connectDB = async () => {
-  if (isConnected) {
-    console.log('Using existing MongoDB connection');
+  if (mongoose.connection.readyState === 1) {
     return;
   }
 
-  try {
-    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/smriti', {
-      serverSelectionTimeoutMS: 15000,
-      socketTimeoutMS: 45000,
-    });
-    isConnected = conn.connection.readyState;
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error: any) {
-    console.error(`Error connecting to MongoDB: ${error.message}`);
-    // Do not process.exit(1) in serverless environments like Vercel
-  }
+  if (isConnecting) return;
+  isConnecting = true;
+
+  const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/smriti';
+
+  const connectWithRetry = async (attempt = 1): Promise<void> => {
+    try {
+      console.log(`[MongoDB] Connecting to database (attempt ${attempt})...`);
+      const conn = await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+        retryWrites: true,
+        w: 'majority'
+      });
+      isConnecting = false;
+      console.log(`✅ [MongoDB] Connected successfully: ${conn.connection.host}`);
+    } catch (error: any) {
+      console.error(`❌ [MongoDB] Connection error (attempt ${attempt}): ${error.message}`);
+      isConnecting = false;
+      // Retry in background after 5 seconds
+      setTimeout(() => connectWithRetry(attempt + 1), 5000);
+    }
+  };
+
+  await connectWithRetry(1);
 };
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ [MongoDB] Disconnected. Attempting reconnection...');
+  setTimeout(() => connectDB(), 5000);
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ [MongoDB] Runtime connection error:', err);
+});
 
 export default connectDB;
