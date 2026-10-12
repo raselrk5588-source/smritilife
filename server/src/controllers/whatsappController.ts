@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
-import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 
 export interface ReminderActionState {
@@ -309,17 +309,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           const hasTimeMatch = cleanText.match(/(?:(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/i);
           if (hasTimeMatch && hasTimeMatch[1]) {
             const parsedTime = parseBengaliTime(cleanText);
-            let targetDate = new Date();
-            if (cleanText.includes('কাল') || cleanText.includes('আগামীকাল') || cleanText.toLowerCase().includes('tomorrow')) {
-              targetDate.setDate(targetDate.getDate() + 1);
-            }
+            const targetDate = parseRelativeDate(cleanText, parsedTime);
             await Reminder.findByIdAndUpdate(activeState.reminderId, {
               time: parsedTime,
               date: targetDate,
               status: 'Pending'
             });
             userReminderState.delete(user._id.toString());
-            const dStr = targetDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+            const dStr = targetDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' });
             await sendMetaWhatsAppMessage(
               fromNumber,
               `✅ ঠিক আছে! "${activeState.title}" রিমাইন্ডারটি পুনঃনির্ধারণ করা হলো:\n⏰ নতুন সময়: ${formatTime12Hour(parsedTime)} (${dStr})`

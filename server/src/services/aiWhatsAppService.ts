@@ -66,6 +66,62 @@ export const parseBengaliTime = (rawText: string): string => {
 };
 
 /**
+ * Intelligent relative date parser supporting Bengali ('কাল', 'আগামীকাল', 'পরশু', 'আজ'),
+ * Banglish ('kal', 'kaal', 'agamikal', 'porshu', 'aj', 'ajke'), and English ('tomorrow', 'today').
+ * If no explicit date keyword is found, but the parsed time has already passed today in Bangladesh,
+ * it rolls over to tomorrow to prevent triggering an instant overdue alert!
+ */
+export const parseRelativeDate = (rawText: string, parsedTime?: string): Date => {
+  const lower = (rawText || '').toLowerCase().trim();
+
+  // Current date & time in Bangladesh (Asia/Dhaka)
+  const now = new Date();
+  const dhakaStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }); // "YYYY-MM-DD"
+  const dhakaTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false }); // "HH:mm:ss"
+
+  const [year, month, day] = dhakaStr.split('-').map(Number);
+  // Construct date object representing midnight in UTC for Bangladesh
+  const targetDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+
+  // Match tomorrow keywords: Banglish ('kal', 'kaal', 'kalke', 'kaalke', 'agamikal', 'agamikaal', 'tomorrow')
+  // and Bengali ('কাল', 'কালে', 'কালকে', 'আগামীকাল') while ensuring Bengali 'সকাল' is NOT mistaken for 'কাল'
+  const isTomorrowBanglish = /\b(?:kal|kaal|kalke|kaalke|agamikal|agamikaal|tomorrow)\b/i.test(lower);
+  const isTomorrowBengali = /(?:^|[^\u0980-\u09FF]|[\s])(?:আগামীকাল|কালকে|কালে|কাল)(?:[^\u0980-\u09FF]|[\s]|$)/.test(rawText) ||
+    (/(?<![সsh])(?:কাল|আগামীকাল)/i.test(rawText) && !rawText.includes('আজ') && !rawText.includes('সকাল') && rawText.includes('কাল'));
+  const isTomorrow = isTomorrowBanglish || isTomorrowBengali;
+
+  // Day after tomorrow: Banglish ('porshu', 'porshudin') / Bengali ('পরশু', 'পরশুদিন')
+  const isDayAfterBanglish = /\b(?:porshu|porshudin|day after tomorrow)\b/i.test(lower);
+  const isDayAfterBengali = /(?:পরশু|পরশুদিন)/.test(rawText);
+  const isDayAfter = isDayAfterBanglish || isDayAfterBengali;
+
+  // Today keywords: Banglish ('aj', 'aaj', 'ajke', 'aajke', 'today') / Bengali ('আজ', 'আজকে')
+  const isTodayBanglish = /\b(?:aj|aaj|ajke|aajke|today)\b/i.test(lower);
+  const isTodayBengali = /(?:^|[^\u0980-\u09FF]|[\s])(?:আজ|আজকে)(?:[^\u0980-\u09FF]|[\s]|$)/.test(rawText) || rawText.includes('আজ');
+  const isToday = isTodayBanglish || isTodayBengali;
+
+  if (isDayAfter) {
+    targetDate.setUTCDate(targetDate.getUTCDate() + 2);
+  } else if (isTomorrow) {
+    targetDate.setUTCDate(targetDate.getUTCDate() + 1);
+  } else if (!isToday && parsedTime) {
+    // If user specified a time without explicitly saying "today" or "tomorrow":
+    // Check if the time has already passed today in Dhaka
+    const [currentHour, currentMin] = dhakaTimeStr.split(':').map(Number);
+    const [targetHour, targetMin] = parsedTime.split(':').map(Number);
+
+    const currentTotalMin = currentHour * 60 + currentMin;
+    const targetTotalMin = targetHour * 60 + targetMin;
+
+    if (targetTotalMin <= currentTotalMin) {
+      targetDate.setUTCDate(targetDate.getUTCDate() + 1);
+    }
+  }
+
+  return targetDate;
+};
+
+/**
  * Intelligent extractor for the actual message body intended for the recipient.
  * Handles quoted text, 'j' / 'je' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
  */
@@ -389,13 +445,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
 
       let date: string | undefined = undefined;
-      if (text.includes('কাল') || text.includes('আগামীকাল') || text.toLowerCase().includes('tomorrow')) {
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + 1);
-        date = targetDate.toISOString().split('T')[0];
-      } else if (text.includes('আজ') || text.toLowerCase().includes('today')) {
-        date = new Date().toISOString().split('T')[0];
-      }
+      const targetDate = parseRelativeDate(text, time);
+      date = targetDate.toISOString().split('T')[0];
 
       const query = text
         .replace(/(\d{1,2}(?::\d{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?|[০-৯]{1,2}(?::[০-৯]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
@@ -470,13 +521,11 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       // Time & Date
       let time = parseBengaliTime(textWithoutPhone);
 
-      const targetDate = new Date();
-      if (text.includes('কাল') || text.includes('আগামীকাল') || text.toLowerCase().includes('tomorrow')) {
-        targetDate.setDate(targetDate.getDate() + 1);
-      }
+      const targetDate = parseRelativeDate(text, time);
       const dateStr = targetDate.toISOString().split('T')[0];
 
-      const sendNow = text.includes('এখন') || text.includes('এখনই') || (!text.includes('কাল') && !text.includes('আগামীকাল') && !textWithoutPhone.match(/(\d{1,2}|[০-৯]{1,2})\s*(টা|টায়|টায়|am|pm)/i));
+      const hasRelativeTime = /\b(?:kal|kaal|kalke|agamikal|aj|ajke|tomorrow|today)\b/i.test(text) || text.includes('কাল') || text.includes('আজ');
+      const sendNow = text.includes('এখন') || text.includes('এখনই') || (!hasRelativeTime && !textWithoutPhone.match(/(\d{1,2}|[০-৯]{1,2})\s*(টা|টায়|টায়|am|pm)/i));
 
       const defaultWishMessage = occasion === 'birthday'
         ? `শুভ জন্মদিন ${recipientName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
@@ -506,7 +555,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 3. Reminder Creation or Scheduled Message Detection
-    if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText)) {
+    const hasBanglishDate = /\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu)\b/i.test(text);
+    if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || hasBanglishDate || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText)) {
       const phoneMatch = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
       const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
       const textWithoutPhone = recipientPhone ? enText.replace(recipientPhone, '') : enText;
@@ -514,16 +564,13 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       // Extract time
       let time = parseBengaliTime(textWithoutPhone);
 
-      // Extract date (কাল = tomorrow, আজ = today)
-      const targetDate = new Date();
-      if (text.includes('কাল') || text.includes('আগামীকাল') || text.toLowerCase().includes('tomorrow')) {
-        targetDate.setDate(targetDate.getDate() + 1);
-      }
+      // Extract date using parseRelativeDate (Banglish & Bengali aware)
+      const targetDate = parseRelativeDate(text, time);
       const dateStr = targetDate.toISOString().split('T')[0];
 
       let customMessage: string | undefined = undefined;
       let title = text
-        .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
+        .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu|sokal|shokal|dupur|bikal|rat)\b|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
         .replace(/(রিমাইন্ডার\s*(সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*করিয়ে\s*দিও|reminder)/gi, '')
         .trim();
 
