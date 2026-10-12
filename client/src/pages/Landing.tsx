@@ -561,7 +561,7 @@ export default function Landing() {
             <div className="bg-white/80 backdrop-blur-xl border border-white/80 rounded-2xl md:rounded-3xl p-3.5 sm:p-4 md:p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-row md:flex-col items-center md:items-center text-left md:text-center gap-3.5 md:gap-0 relative group">
               <div className="relative shrink-0 md:mb-4">
                 <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-emerald-50/80 text-[#0A7756] flex items-center justify-center border border-emerald-100/60 group-hover:scale-105 transition-transform">
-                  <CreditCard className="w-6 h-6 md:w-7 md:h-7" />
+                  <MessageCircle className="w-6 h-6 md:w-7 md:h-7" />
                 </div>
                 <span className="absolute -top-1.5 -left-1.5 md:-top-2 md:-right-2 md:left-auto w-5 h-5 md:w-6 md:h-6 rounded-full bg-gradient-to-tr from-[#0A7756] to-[#12A57A] text-white text-[11px] md:text-xs font-black flex items-center justify-center shadow-xs">
                   1
@@ -569,10 +569,10 @@ export default function Landing() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-black text-slate-900 text-sm sm:text-base md:text-lg mb-0.5 md:mb-2">
-                  ৳ ১৯০ দিয়ে শুরু করুন
+                  বাংলায় মেসেজ বা ভয়েস দিন
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed">
-                  bKash দিয়ে খুব সহজে নিরাপদ পেমেন্ট করে তাৎক্ষণিক সেবা চালু করুন।
+                  WhatsApp বা ওয়েবসাইটে আপনার কাজ, মিটিং বা প্রয়োজনীয় নোট সাধারণ কথায় লিখে বা মুখে বলুন।
                 </p>
               </div>
             </div>
@@ -581,7 +581,7 @@ export default function Landing() {
             <div className="bg-white/80 backdrop-blur-xl border border-white/80 rounded-2xl md:rounded-3xl p-3.5 sm:p-4 md:p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-row md:flex-col items-center md:items-center text-left md:text-center gap-3.5 md:gap-0 relative group">
               <div className="relative shrink-0 md:mb-4">
                 <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-amber-50/80 text-amber-600 flex items-center justify-center border border-amber-100/60 group-hover:scale-105 transition-transform">
-                  <Monitor className="w-6 h-6 md:w-7 md:h-7" />
+                  <Bot className="w-6 h-6 md:w-7 md:h-7" />
                 </div>
                 <span className="absolute -top-1.5 -left-1.5 md:-top-2 md:-right-2 md:left-auto w-5 h-5 md:w-6 md:h-6 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-white text-[11px] md:text-xs font-black flex items-center justify-center shadow-xs">
                   2
@@ -589,10 +589,10 @@ export default function Landing() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-black text-slate-900 text-sm sm:text-base md:text-lg mb-0.5 md:mb-2">
-                  ওয়েবসাইট থেকে তৈরি করুন
+                  AI নিজে থেকে সেট করবে
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed">
-                  লগইন করে সুন্দর ড্যাশবোর্ড থেকে রিমাইন্ডার, শুভেচ্ছা বা নোট সেভ করুন।
+                  আমাদের স্মার্ট AI স্বয়ংক্রিয়ভাবে তারিখ ও সময় বুঝে নিয়ে আপনার জন্য নিখুঁত রিমাইন্ডার সাজিয়ে নেবে।
                 </p>
               </div>
             </div>
@@ -600,8 +600,8 @@ export default function Landing() {
             {/* Step 3 */}
             <div className="bg-white/80 backdrop-blur-xl border border-white/80 rounded-2xl md:rounded-3xl p-3.5 sm:p-4 md:p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-row md:flex-col items-center md:items-center text-left md:text-center gap-3.5 md:gap-0 relative group">
               <div className="relative shrink-0 md:mb-4">
-                <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-emerald-50/80 text-[#25D366] flex items-center justify-center border border-emerald-100/60 group-hover:scale-105 transition-transform">
-                  <MessageCircle className="w-6 h-6 md:w-7 md:h-7" />
+                <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-teal-50/80 text-teal-600 flex items-center justify-center border border-teal-100/60 group-hover:scale-105 transition-transform">
+                  <Bell className="w-6 h-6 md:w-7 md:h-7" />
                 </div>
                 <span className="absolute -top-1.5 -left-1.5 md:-top-2 md:-right-2 md:left-auto w-5 h-5 md:w-6 md:h-6 rounded-full bg-gradient-to-tr from-[#25D366] to-teal-500 text-white text-[11px] md:text-xs font-black flex items-center justify-center shadow-xs">
                   3
@@ -609,10 +609,10 @@ export default function Landing() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-black text-slate-900 text-sm sm:text-base md:text-lg mb-0.5 md:mb-2">
-                  অথবা WhatsApp-এ মেসেজ দিন
+                  সময়মতো WhatsApp অ্যালার্ট পান
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed">
-                  আমাদের নম্বরে সাধারণ বাংলায় টেক্সট করলেই AI নিজে থেকে সব সেট করে দেবে।
+                  নির্ধারিত মুহূর্তে সরাসরি আপনার বা প্রিয়জনের WhatsApp নম্বরে স্বয়ংক্রিয় মেসেজ পৌঁছে যাবে।
                 </p>
               </div>
             </div>
