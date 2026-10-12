@@ -1,5 +1,5 @@
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { ChevronRight, Camera, Settings, Cloud, Crown, Palette, Globe, Shield, User, LogOut, Mail, Phone, MessageSquare } from 'lucide-react';
+import { ChevronRight, Camera, Settings, Cloud, Crown, Palette, Globe, Shield, User, LogOut, Mail, Phone, MessageSquare, FileText, Bell, Gift, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchWithAuth } from '../utils/api';
@@ -111,26 +111,26 @@ export default function Profile() {
   // Stats state is defined above
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-24">
-      {/* Top Header */}
-      <header className="bg-gradient-to-b from-primary/10 to-transparent pt-8 pb-4 relative overflow-hidden">
-        
-        {/* Notebook Theme Background */}
-        <div className="absolute inset-0 z-0 bg-cover bg-center opacity-15" style={{ backgroundImage: "url('/theme-bg.png')" }}></div>
-        
-        <div className="flex justify-between items-center px-6 mb-4 relative z-10">
-          <h1 className="text-xl font-bold text-slate-800"></h1>
-        </div>
-        
-        {/* Profile Info */}
-        <div className="flex flex-col items-center mt-2 relative z-10">
-          <div className="relative">
-            <div className="w-24 h-24 rounded-full bg-slate-200 border-4 border-white shadow-md overflow-hidden relative">
-              {profilePic ? (
-                <img src={profilePic} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-primary/20 flex items-center justify-center text-primary font-bold text-3xl">{name ? name.charAt(0) : 'U'}</div>
-              )}
+    <div className="bg-[#f8fafc] min-h-screen pb-24">
+      {/* Modern Hero Profile Banner */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-[#064e3b] to-emerald-950 pt-10 pb-20 px-6 sm:px-8 text-white rounded-b-[2.5rem] shadow-lg">
+        {/* Ambient Decorative Lighting */}
+        <div className="absolute top-0 right-1/4 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -bottom-10 left-10 w-64 h-64 bg-teal-400/15 rounded-full blur-2xl pointer-events-none"></div>
+
+        {/* Center Profile Avatar & Information */}
+        <div className="max-w-xl mx-auto flex flex-col items-center text-center relative z-10">
+          <div className="relative group">
+            <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-emerald-400 via-teal-300 to-emerald-500 p-1 shadow-2xl ring-4 ring-white/20 backdrop-blur-md">
+              <div className="w-full h-full rounded-full overflow-hidden bg-slate-800 flex items-center justify-center">
+                {profilePic ? (
+                  <img src={profilePic} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-tr from-emerald-800 to-teal-700 flex items-center justify-center text-white font-black text-4xl shadow-inner">
+                    {name ? name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                )}
+              </div>
             </div>
             <input 
               type="file" 
@@ -139,94 +139,161 @@ export default function Profile() {
               ref={fileInputRef} 
               onChange={handleImageUpload} 
             />
-            <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 bg-primary text-white p-1.5 rounded-full border-2 border-white shadow-sm hover:bg-emerald-600 transition">
-              <Camera className="w-4 h-4" />
+            <button 
+              type="button"
+              onClick={() => fileInputRef.current?.click()} 
+              className="absolute bottom-0 right-0 bg-emerald-500 hover:bg-emerald-400 text-white p-2.5 rounded-full border-2 border-slate-900 shadow-lg transition-transform hover:scale-110 active:scale-95 cursor-pointer border-none"
+              title={t('ছবি পরিবর্তন করুন', 'Change Photo')}
+            >
+              <Camera className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
-          <h2 className="text-xl font-bold text-slate-800 mt-3">{name}</h2>
-          <p className="text-sm text-slate-500 font-medium">{email}</p>
-          {whatsapp && (
-            <div className="flex items-center text-sm text-emerald-600 font-medium mt-1 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-              <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> 
-              {whatsapp}
+
+          {/* User Name & Status Badge */}
+          <div className="mt-4 flex flex-col items-center">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black text-white tracking-tight">{name}</h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-sm">
+                <Sparkles className="w-3 h-3 text-emerald-300" />
+                সদস্য
+              </span>
             </div>
-          )}
+            
+            <p className="text-sm text-emerald-100/75 mt-1 font-medium flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 opacity-70" />
+              {email}
+            </p>
+
+            {/* WhatsApp Contact Badge */}
+            {whatsapp && (
+              <div className="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs font-semibold text-emerald-200 transition shadow-xs">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                </span>
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-300" />
+                <span className="font-mono tracking-wide">{whatsapp}</span>
+              </div>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Main Content Area Overlapping Banner */}
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 -mt-10 relative z-20 space-y-4">
         
-        {/* Background Decorative element */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-r from-emerald-50 to-green-50 rounded-b-[3rem] -z-10"></div>
-      </header>
+        {/* Stats Grid: Modern Bento Cards */}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          {/* Notes Stat */}
+          <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5 border border-emerald-100/50">
+              <FileText className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <span className="text-2xl font-black text-slate-800">{stats.notes}</span>
+            <span className="text-xs font-semibold text-slate-500">{t('নোট', 'Notes')}</span>
+          </div>
 
-      <div className="px-5 mt-2 space-y-4">
-        
-        {/* Stats Row */}
-        <div className="flex justify-center space-x-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <div className="text-center flex-1 border-r border-slate-100">
-            <div className="text-xl font-bold text-primary">{stats.notes}</div>
-            <div className="text-[10px] font-medium text-slate-500 mt-1">{t('নোট', 'Notes')}</div>
+          {/* Reminders Stat */}
+          <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1.5 border border-amber-100/50">
+              <Bell className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <span className="text-2xl font-black text-slate-800">{stats.reminders}</span>
+            <span className="text-xs font-semibold text-slate-500">{t('রিমাইন্ডার', 'Reminders')}</span>
           </div>
-          <div className="text-center flex-1 border-r border-slate-100">
-            <div className="text-xl font-bold text-orange-500">{stats.reminders}</div>
-            <div className="text-[10px] font-medium text-slate-500 mt-1">{t('রিমাইন্ডার', 'Reminders')}</div>
-          </div>
-          <div className="text-center flex-1">
-            <div className="text-xl font-bold text-pink-500">{stats.specialDates}</div>
-            <div className="text-[10px] font-medium text-slate-500 mt-1">{t('স্পেশাল ডেট', 'Special Dates')}</div>
+
+          {/* Special Dates Stat */}
+          <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center mb-1.5 border border-rose-100/50">
+              <Gift className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <span className="text-2xl font-black text-slate-800">{stats.specialDates}</span>
+            <span className="text-xs font-semibold text-slate-500">{t('বিশেষ দিন', 'Special Dates')}</span>
           </div>
         </div>
 
-
-
-        {/* Menu Items */}
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-          <div onClick={() => setIsEditProfile(true)} className="px-5 py-4 flex items-center justify-between border-b border-slate-50 hover:bg-slate-50 transition cursor-pointer">
-            <div className="flex items-center">
-              <User className="w-5 h-5 text-slate-600 mr-3" />
-              <span className="text-sm font-medium text-slate-700">{t('আমার প্রোফাইল সম্পাদনা', 'Edit My Profile')}</span>
+        {/* Account Details & Edit Section */}
+        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/70 overflow-hidden divide-y divide-slate-100">
+          <div 
+            onClick={() => setIsEditProfile(true)} 
+            className="p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform border border-emerald-100/60">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+                  {t('আমার প্রোফাইল সম্পাদনা', 'Edit My Profile')}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">নাম, ইমেইল এবং মোবাইল নম্বর পরিবর্তন করুন</p>
+              </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
-
-
-        </div>
-
-        {/* App Preferences */}
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-          <div onClick={() => setIsThemeOpen(true)} className="px-5 py-4 flex items-center justify-between border-b border-slate-50 hover:bg-slate-50 transition cursor-pointer">
-            <div className="flex items-center">
-              <Palette className="w-5 h-5 text-slate-600 mr-3" />
-              <span className="text-sm font-medium text-slate-700">{t('অ্যাপ থিম', 'App Theme')}</span>
-            </div>
-            <div className="flex items-center">
-              <span className="text-xs text-slate-400 mr-2">{t(theme, theme === 'সবুজ (ডিফল্ট)' ? 'Green (Default)' : theme === 'ডার্ক মোড' ? 'Dark Mode' : theme === 'লাইট মোড' ? 'Light Mode' : 'System Default')}</span>
-              <ChevronRight className="w-4 h-4 text-slate-400" />
-            </div>
-          </div>
-          <div onClick={() => setIsLanguageOpen(true)} className="px-5 py-4 flex items-center justify-between border-b border-slate-50 hover:bg-slate-50 transition cursor-pointer">
-            <div className="flex items-center">
-              <Globe className="w-5 h-5 text-slate-600 mr-3" />
-              <span className="text-sm font-medium text-slate-700">{t('ভাষা পরিবর্তন', 'Change Language')}</span>
-            </div>
-            <div className="flex items-center">
-              <span className="text-xs text-slate-400 mr-2">{language}</span>
-              <ChevronRight className="w-4 h-4 text-slate-400" />
-            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-sm border border-red-100 overflow-hidden mt-6">
-          <div onClick={() => setShowLogoutConfirm(true)} className="px-5 py-4 flex items-center justify-center hover:bg-red-50 transition cursor-pointer">
-            <div className="flex items-center">
-              <LogOut className="w-5 h-5 text-red-500 mr-2.5" />
-              <span className="text-sm font-bold text-red-500">{t('লগআউট', 'Logout')}</span>
+        {/* App Preferences (Theme & Language) */}
+        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/70 overflow-hidden divide-y divide-slate-100">
+          <div 
+            onClick={() => setIsThemeOpen(true)} 
+            className="p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform border border-indigo-100/60">
+                <Palette className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">{t('অ্যাপ থিম', 'App Theme')}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">লাইট অথবা ডার্ক মোড নির্ধারণ করুন</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg">
+                {t(theme, theme === 'সবুজ (ডিফল্ট)' ? 'Green (Default)' : theme === 'ডার্ক মোড' ? 'Dark Mode' : theme === 'লাইট মোড' ? 'Light Mode' : 'System Default')}
+              </span>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </div>
+
+          <div 
+            onClick={() => setIsLanguageOpen(true)} 
+            className="p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:scale-105 transition-transform border border-teal-100/60">
+                <Globe className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">{t('ভাষা পরিবর্তন', 'Change Language')}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">অ্যাপের ডিসপ্লে ভাষা নির্বাচন করুন</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg">{language}</span>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mt-3">
-          <div onClick={() => setShowUnsubscribeConfirm(true)} className="px-5 py-4 flex items-center justify-center hover:bg-slate-50 transition cursor-pointer">
-            <span className="text-sm font-bold text-slate-500">{t('আনসাবস্ক্রাইব করুন', 'Unsubscribe')}</span>
-          </div>
+        {/* Danger & Logout Actions */}
+        <div className="pt-2 flex flex-col gap-2.5">
+          <button 
+            type="button"
+            onClick={() => setShowLogoutConfirm(true)} 
+            className="w-full p-3.5 rounded-2xl bg-white hover:bg-rose-50 border border-rose-200/80 text-rose-600 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-xs hover:border-rose-300 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>{t('লগআউট', 'Logout')}</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setShowUnsubscribeConfirm(true)} 
+            className="w-full text-center text-xs text-slate-400 hover:text-slate-600 py-1.5 transition-colors cursor-pointer"
+          >
+            {t('আনসাবস্ক্রাইব করুন', 'Unsubscribe')}
+          </button>
         </div>
       </div>
       
