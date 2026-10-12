@@ -1186,12 +1186,6 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const itemIndex = typeof data.index === 'number' ? data.index : undefined;
             const query = (data.searchQuery || '').trim();
 
-            // Auto-clean any accidental reminders like "number ta delete kore daw"
-            await Reminder.deleteMany({
-              userId: user._id,
-              title: /delete kore daw|number ta delete/i
-            });
-
             let reminderToDelete = null;
 
             if (itemIndex !== undefined) {
