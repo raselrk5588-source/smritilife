@@ -12,8 +12,20 @@ export interface ReminderActionState {
   expiresAt: number;
 }
 
-// In-memory state tracking for active reminder prompts
+export interface WishPendingState {
+  recipientPhone?: string;
+  occasion: string;
+  message?: string;
+  date?: string;
+  time?: string;
+  sendNow?: boolean;
+  waitingForName: boolean;
+  expiresAt: number;
+}
+
+// In-memory state tracking for active reminder prompts and wish prompts
 export const userReminderState = new Map<string, ReminderActionState>();
+export const userWishState = new Map<string, WishPendingState>();
 
 // Function to send interactive buttons via Meta API
 export const sendMetaWhatsAppButtons = async (
@@ -334,6 +346,95 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        // --- STEP 2.5: Handle Pending Wish Name Response ---
+        const activeWishState = userWishState.get(user._id.toString());
+        if (activeWishState && activeWishState.expiresAt > Date.now() && activeWishState.waitingForName) {
+          const isCancel = /^(?:cancel|বাতিল|না|থাক|দরকার\s*নাই|লাগবে\s*না)\b/i.test(cleanText.trim());
+          if (isCancel) {
+            userWishState.delete(user._id.toString());
+            await sendMetaWhatsAppMessage(fromNumber, 'উইশ পাঠানোর অনুরোধ বাতিল করা হয়েছে।');
+            return;
+          }
+
+          let extractedName = cleanText
+            .replace(/(?:নাম|name|তার\s*নাম|হলো|হল|হচ্ছে|is|for|recipient|amar|আমার|বন্ধু|ভাই|দাদা|নামে|বলো|লিখো)\s*[:=]?/gi, ' ')
+            .replace(/[।\.,!?]/g, '')
+            .trim();
+
+          if (/^(?:skip|no|নাই)\b/i.test(extractedName) || !extractedName || extractedName.length < 2) {
+            extractedName = 'প্রিয়জন';
+          } else {
+            // Capitalize first letter if English
+            if (/^[a-z]/i.test(extractedName)) {
+              extractedName = extractedName.charAt(0).toUpperCase() + extractedName.slice(1);
+            }
+          }
+
+          userWishState.delete(user._id.toString());
+
+          const occasion = activeWishState.occasion || 'birthday';
+          const occasionTitle = getOccasionTitle(occasion);
+          const recipientPhone = activeWishState.recipientPhone;
+          const sendNow = activeWishState.sendNow !== false;
+
+          let message = activeWishState.message;
+          if (!message || message.includes('প্রিয়জন')) {
+            message = occasion === 'birthday'
+              ? `শুভ জন্মদিন ${extractedName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
+              : occasion === 'anniversary'
+              ? `শুভ বিবাহবার্ষিকী ${extractedName}! আপনাদের দুজনের পথচলা আজীবন অটুট ও আনন্দময় থাকুক।`
+              : occasion === 'eid'
+              ? `ঈদ মোবারক ${extractedName}! আপনার ও আপনার পরিবারের জন্য রইল পবিত্র ঈদের অফুরন্ত শুভেচ্ছা।`
+              : `অনেক অনেক আন্তরিক শুভেচ্ছা ও শুভকামনা, ${extractedName}! আপনার জীবন সুন্দর ও সাফল্যমণ্ডিত হোক।`;
+          } else {
+            message = message.replace(/প্রিয়জন/g, extractedName);
+          }
+
+          const smartCardId = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+          const imageUrl = getOccasionImageUrl(occasion);
+
+          let scheduledAt = new Date();
+          if (!sendNow && activeWishState.date) {
+            const timeStr = activeWishState.time || '10:00';
+            const bdIso = `${activeWishState.date}T${timeStr}:00+06:00`;
+            const parsedDate = new Date(bdIso);
+            if (!isNaN(parsedDate.getTime())) scheduledAt = parsedDate;
+          }
+
+          const newWish = await Wish.create({
+            userId: user._id,
+            recipientName: extractedName,
+            recipientContact: recipientPhone,
+            occasion,
+            message,
+            isSmartCard: true,
+            smartCardId,
+            cardData: {
+              image: imageUrl,
+              title: occasionTitle,
+              senderName: user.name || 'আপনার শুভাকাঙ্ক্ষী',
+              animation: 'envelope'
+            },
+            scheduledAt,
+            deliveryMethod: ['WhatsApp'],
+            status: sendNow ? 'Sent' : 'Scheduled'
+          });
+
+          if (sendNow && recipientPhone) {
+            await deliverWishCard(newWish, user.name || 'আপনার শুভাকাঙ্ক্ষী');
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🎉 ঠিক আছে! ${recipientPhone} নম্বরে ${extractedName}-র জন্য ${occasionTitle} কার্ড এবং শুভেচ্ছা বার্তা সফলভাবে পাঠিয়ে দেওয়া হয়েছে!`
+            );
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🎉 ঠিক আছে! ${extractedName}-র জন্য ${occasionTitle} কার্ডটি নির্ধারিত সময়ে ${recipientPhone || ''} নম্বরে স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
+            );
+          }
+          return;
+        }
+
         // --- STEP 3: Regular AI Message & Audio Analysis ---
         let aiResponse: any;
 
@@ -356,12 +457,41 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             if (aiResponse.data) {
               const wishData = aiResponse.data;
               const recipientPhone = wishData.recipientPhone;
-              const recipientName = wishData.recipientName || 'প্রিয়জন';
               const occasion = wishData.occasion || 'birthday';
               const occasionTitle = getOccasionTitle(occasion);
+              const sendNow = wishData.sendNow !== false;
+
+              if (!recipientPhone) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `দয়া করে যার জন্য ${occasionTitle} কার্ড পাঠাতে চান তার WhatsApp নম্বরটি উল্লেখ করুন (যেমন: "017XXXXXXXX নম্বরে জন্মদিনের শুভেচ্ছা পাঠাও")।`
+                );
+                break;
+              }
+
+              // If recipient name is missing or not provided, ask the user for recipient's name first!
+              if (!wishData.recipientName || wishData.needsRecipientName || wishData.recipientName === 'প্রিয়জন') {
+                userWishState.set(user._id.toString(), {
+                  recipientPhone,
+                  occasion,
+                  message: wishData.message,
+                  date: wishData.date,
+                  time: wishData.time,
+                  sendNow,
+                  waitingForName: true,
+                  expiresAt: Date.now() + 30 * 60 * 1000
+                });
+
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `🎉 আপনি কার জন্য ${occasionTitle} কার্ড পাঠাতে চান? কার্ডে নাম দেখানোর জন্য তার নামটি লিখুন (যেমন: "সুমন" বা "রাহুল")।`
+                );
+                break;
+              }
+
+              const recipientName = wishData.recipientName;
               const message = wishData.message || `শুভ ${occasionTitle}! আপনার জীবন সুন্দর ও আনন্দময় হোক।`;
               const imageUrl = wishData.imageUrl || getOccasionImageUrl(occasion);
-              const sendNow = wishData.sendNow !== false;
 
               // Generate smart card ID for shareable animation link
               const smartCardId = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);

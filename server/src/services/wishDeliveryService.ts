@@ -218,7 +218,10 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
   const wishPhrase = getOccasionWishPhrase(wish.occasion);
 
   // Short, clean wish notification with the interactive card link
-  const conciseMessage = `🎉 ${sender} আপনাকে ${wishPhrase} জানিয়েছেন!\n\n👉 ${smartCardUrl}`;
+  const recipientGreeting = (wish.recipientName && wish.recipientName !== 'প্রিয়জন')
+    ? `প্রিয় ${wish.recipientName},\n`
+    : '';
+  const conciseMessage = `${recipientGreeting}🎉 ${sender} আপনাকে ${wishPhrase} জানিয়েছেন!\n\n👉 ${smartCardUrl}`;
 
   // 1. Deliver the wish: Try template first to bypass Meta 24-hour customer window
   const templateName = process.env.WHATSAPP_WISH_TEMPLATE_NAME || 'wish_card_notification';

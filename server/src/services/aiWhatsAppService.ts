@@ -121,6 +121,70 @@ export const parseRelativeDate = (rawText: string, parsedTime?: string): Date =>
   return targetDate;
 };
 
+const WISH_STOP_WORDS = new Set([
+  'ay', 'ai', 'oi', 'ei', 'number', 'numbere', 'no', 'a', 'e', 'te', 'er', 'k', 'ke', 're',
+  'birthday', 'bday', 'birth', 'day', 'wish', 'wishes', 'card', 'cards',
+  'pathao', 'patha', 'pathaw', 'pathu', 'send', 'dao', 'dio', 'dite', 'koro', 'korba',
+  'akhon', 'ekhon', 'akhoni', 'ekhoni', 'now', 'aj', 'ajke', 'today', 'kal', 'kaal', 'kalke', 'tomorrow',
+  'sokal', 'shokal', 'dupur', 'bikal', 'bikale', 'rat', 'raat', 'am', 'pm',
+  'anniversary', 'eid', 'mubarak', 'newyear', 'congratulations', 'congrats', 'message', 'msg',
+  'akta', 'ekta', 'tar', 'tate', 'jonno', 'for', 'to', 'in', 'on', 'with',
+  'এই', 'ঐ', 'ওই', 'নম্বর', 'নম্বরে', 'জন্মদিন', 'জন্মদিনের', 'উইশ', 'কার্ড', 'পাঠাও', 'দাও', 'দিও', 'করো',
+  'এখন', 'এখনই', 'আজ', 'আজকে', 'কাল', 'কালকে', 'আগামীকাল', 'সকাল', 'দুপুর', 'বিকাল', 'রাত',
+  'বিবাহবার্ষিকী', 'বার্ষিকী', 'ঈদ', 'মোবারক', 'নতুন', 'বছর', 'নববর্ষ', 'অভিনন্দন', 'বার্তা', 'মেসেজ',
+  'একটি', 'একটা', 'তার', 'জন্য', 'কে', 'এর', 'তে', 'এ'
+]);
+
+/**
+ * Intelligently extracts the recipient's name from a wish request.
+ * Returns null if no specific name was mentioned (e.g. "01307... a birthday wish pathao akhon e")
+ */
+export const extractWishRecipientName = (rawText: string): string | null => {
+  const clean = rawText
+    .replace(/(?:\+?8801\d{9}|01\d{9})/g, ' ')
+    .replace(/[^\w\s\u0980-\u09FF]/g, ' ')
+    .trim();
+
+  // 1. Explicit pattern: e.g. "for Rahul", "Rahul er jonno", "কার্ডে নাম দাও সুমন"
+  const explicitMatch = clean.match(/(?:for|jonno|জন্য|name|নাম)\s+([a-zA-Z\u0980-\u09FF]+)/i);
+  if (explicitMatch && explicitMatch[1] && !WISH_STOP_WORDS.has(explicitMatch[1].toLowerCase())) {
+    const n = explicitMatch[1].trim();
+    return /^[a-z]/i.test(n) ? n.charAt(0).toUpperCase() + n.slice(1) : n;
+  }
+
+  // 2. Name followed by k/ke/er: e.g. "sumon k", "rahul ke", "তোপন দাদাকে"
+  const suffixMatch = clean.match(/\b([a-zA-Z\u0980-\u09FF]{2,15}(?:\s+[a-zA-Z\u0980-\u09FF]{2,15})?)\s*(?:-?কে|-?k|-?ke|-?er|-?এর|-?re|-?রে)\b/i);
+  if (suffixMatch && suffixMatch[1]) {
+    const candidate = suffixMatch[1].trim().toLowerCase();
+    if (!WISH_STOP_WORDS.has(candidate)) {
+      const parts = suffixMatch[1].trim().split(/\s+/).map(p =>
+        /^[a-z]/i.test(p) ? p.charAt(0).toUpperCase() + p.slice(1) : p
+      );
+      return parts.join(' ');
+    }
+  }
+
+  // 3. Known names or titles:
+  const knownMatch = clean.match(/\b(?:রাহুল|রনি|আরিফ|সাকিব|সুমন|তানভীর|রিয়াদ|তোপন|আম্মু|আব্বু|স্ত্রী|ভাই|বোন|বন্ধু)\b/);
+  if (knownMatch) return knownMatch[0];
+
+  // 4. Token filtering: words remaining after removing stop words
+  const words = clean.split(/\s+/).filter(w => {
+    const low = w.toLowerCase().trim();
+    return low.length >= 2 && !WISH_STOP_WORDS.has(low);
+  });
+
+  if (words.length > 0 && words.length <= 3) {
+    // Looks like a name (1 to 3 words)
+    const formatted = words.map(p =>
+      /^[a-z]/i.test(p) ? p.charAt(0).toUpperCase() + p.slice(1) : p
+    ).join(' ');
+    return formatted;
+  }
+
+  return null;
+};
+
 /**
  * Intelligent extractor for the actual message body intended for the recipient.
  * Handles quoted text, 'j' / 'je' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
@@ -513,10 +577,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         occasionBangla = 'অভিনন্দনের';
       }
 
-      // Check recipient name
-      let recipientName = 'প্রিয়জন';
-      const nameMatch = text.match(/(?:রাহুল|রনি|আরিফ|সাকিব|বন্ধু|ভাই|বোন|স্ত্রী|আম্মু|আব্বু|[A-Z][a-z]+)/);
-      if (nameMatch) recipientName = nameMatch[0];
+      // Check recipient name intelligently
+      const extractedName = extractWishRecipientName(textWithoutPhone);
+      const recipientName = extractedName || undefined;
+      const needsRecipientName = !extractedName;
 
       // Time & Date
       let time = parseBengaliTime(textWithoutPhone);
@@ -527,12 +591,13 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       const hasRelativeTime = /\b(?:kal|kaal|kalke|agamikal|aj|ajke|tomorrow|today)\b/i.test(text) || text.includes('কাল') || text.includes('আজ');
       const sendNow = text.includes('এখন') || text.includes('এখনই') || (!hasRelativeTime && !textWithoutPhone.match(/(\d{1,2}|[০-৯]{1,2})\s*(টা|টায়|টায়|am|pm)/i));
 
+      const displayName = recipientName || 'প্রিয়জন';
       const defaultWishMessage = occasion === 'birthday'
-        ? `শুভ জন্মদিন ${recipientName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
+        ? `শুভ জন্মদিন ${displayName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
         : occasion === 'anniversary'
-        ? `শুভ বিবাহবার্ষিকী! আপনাদের দুজনের পথচলা আজীবন অটুট ও আনন্দময় থাকুক।`
+        ? `শুভ বিবাহবার্ষিকী ${displayName}! আপনাদের দুজনের পথচলা আজীবন অটুট ও আনন্দময় থাকুক।`
         : occasion === 'eid'
-        ? `ঈদ মোবারক! আপনার ও আপনার পরিবারের জন্য রইল পবিত্র ঈদের অফুরন্ত শুভেচ্ছা।`
+        ? `ঈদ মোবারক ${displayName}! আপনার ও আপনার পরিবারের জন্য রইল পবিত্র ঈদের অফুরন্ত শুভেচ্ছা।`
         : `অনেক অনেক আন্তরিক শুভেচ্ছা ও শুভকামনা! আপনার জীবন সুন্দর ও সাফল্যমণ্ডিত হোক।`;
 
       const formattedDisplayTime = formatTime12Hour(time);
@@ -542,15 +607,16 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         data: {
           occasion,
           recipientName,
-          recipientPhone: recipientPhone || '01700000000',
+          needsRecipientName,
+          recipientPhone: recipientPhone || undefined,
           message: defaultWishMessage,
           date: dateStr,
           time,
           sendNow
         },
         replyText: sendNow
-          ? `🎉 ${recipientPhone || ''} নম্বরে ${recipientName}-র জন্য ${occasionBangla} উইশ কার্ড সফলভাবে পাঠিয়ে দেওয়া হচ্ছে!`
-          : `🎉 ঠিক আছে! ${dateStr} সময় ${formattedDisplayTime}-এ ${recipientPhone || ''} নম্বরে ${recipientName}-র জন্য ${occasionBangla} উইশ কার্ড স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
+          ? `🎉 ${recipientPhone || ''} নম্বরে ${displayName}-র জন্য ${occasionBangla} উইশ কার্ড সফলভাবে পাঠিয়ে দেওয়া হচ্ছে!`
+          : `🎉 ঠিক আছে! ${dateStr} সময় ${formattedDisplayTime}-এ ${recipientPhone || ''} নম্বরে ${displayName}-র জন্য ${occasionBangla} উইশ কার্ড স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
       };
     }
 
