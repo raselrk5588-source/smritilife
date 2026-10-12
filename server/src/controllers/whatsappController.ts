@@ -95,6 +95,85 @@ export const sendMetaWhatsAppButtons = async (
   return false;
 };
 
+// Function to send an interactive CTA URL button via Meta API (opens website link in browser)
+export const sendMetaWhatsAppCtaUrl = async (
+  to: string,
+  bodyText: string,
+  displayText: string,
+  url: string,
+  headerText?: string,
+  footerText?: string
+): Promise<boolean> => {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneNumberId) return false;
+
+  let formattedTo = to.trim();
+  if (formattedTo.startsWith('+')) formattedTo = formattedTo.substring(1);
+  else if (formattedTo.startsWith('01')) formattedTo = `88${formattedTo}`;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const interactivePayload: any = {
+        type: 'cta_url',
+        body: { text: bodyText },
+        action: {
+          name: 'cta_url',
+          parameters: {
+            display_text: displayText.substring(0, 20),
+            url: url
+          }
+        }
+      };
+
+      if (headerText) {
+        interactivePayload.header = {
+          type: 'text',
+          text: headerText.substring(0, 60)
+        };
+      }
+      if (footerText) {
+        interactivePayload.footer = {
+          text: footerText.substring(0, 60)
+        };
+      }
+
+      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: formattedTo,
+          type: 'interactive',
+          interactive: interactivePayload
+        }),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn(`[WhatsAppCtaUrl] Attempt ${attempt} error:`, data);
+        if (attempt === 2) return false;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        console.log(`✅ [WhatsAppCtaUrl] CTA URL button sent successfully to ${formattedTo}`);
+        return true;
+      }
+    } catch (err) {
+      console.error(`[WhatsAppCtaUrl] Network exception attempt ${attempt}:`, err);
+      if (attempt === 2) return false;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  return false;
+};
+
 // Function to send interactive list menu via Meta API (Bottom-sheet native selector)
 export const sendMetaWhatsAppListMenu = async (
   to: string,
@@ -318,8 +397,27 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           ]
         });
 
-        if (!user) {
-          await sendMetaWhatsAppMessage(fromNumber, 'দুঃখিত, এই নম্বরটি Smriti Life অ্যাপে নিবন্ধিত নয়। দয়া করে আপনার প্রোফাইলে গিয়ে WhatsApp নম্বর আপডেট করুন।');
+        if (!user || user.isSubscribed === false) {
+          const bodyMsg = user && !user.isSubscribed
+            ? 'দুঃখিত, আপনার Smriti Life সাবস্ক্রিপশনটি বর্তমানে সক্রিয় নয়। AI রিমাইন্ডার ও অ্যাসিস্ট্যান্টের সকল সুবিধা উপভোগ করতে SmritiLife-এ সাবস্ক্রিপশন করুন।'
+            : 'দুঃখিত, এই নম্বরটি Smriti Life অ্যাপে নিবন্ধিত নয়। আমাদের AI রিমাইন্ডার ও অ্যাসিস্ট্যান্ট সেবা ব্যবহার করতে SmritiLife-এ সাবস্ক্রিপশন করুন।';
+
+          const sent = await sendMetaWhatsAppCtaUrl(
+            fromNumber,
+            bodyMsg,
+            'SmritiLife',
+            'https://smritilife.com',
+            'স্মৃতি লাইফ (SmritiLife)',
+            'ব্রাউজারে ওপেন করতে বাটনে ক্লিক করুন'
+          );
+
+          if (!sent) {
+            // Fallback standard text message with direct clickable URL
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `${bodyMsg}\n\n👉 https://smritilife.com\n(লিঙ্কে ক্লিক করে ব্রাউজারে ওপেন করুন)`
+            );
+          }
           return;
         }
 
