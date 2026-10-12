@@ -113,20 +113,20 @@ export default function Profile() {
   return (
     <div className="bg-[#f8fafc] min-h-screen pb-24">
       {/* Modern Hero Profile Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-[#064e3b] to-emerald-950 pt-10 pb-20 px-6 sm:px-8 text-white rounded-b-[2.5rem] shadow-lg">
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-[#064e3b] to-emerald-950 pt-6 sm:pt-8 pb-12 sm:pb-14 px-6 sm:px-8 text-white rounded-b-[2rem] shadow-lg">
         {/* Ambient Decorative Lighting */}
-        <div className="absolute top-0 right-1/4 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -bottom-10 left-10 w-64 h-64 bg-teal-400/15 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="absolute top-0 right-1/4 w-72 h-72 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -bottom-10 left-10 w-56 h-56 bg-teal-400/15 rounded-full blur-2xl pointer-events-none"></div>
 
         {/* Center Profile Avatar & Information */}
         <div className="max-w-xl mx-auto flex flex-col items-center text-center relative z-10">
           <div className="relative group">
-            <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-emerald-400 via-teal-300 to-emerald-500 p-1 shadow-2xl ring-4 ring-white/20 backdrop-blur-md">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-tr from-emerald-400 via-teal-300 to-emerald-500 p-0.5 shadow-xl ring-4 ring-white/20 backdrop-blur-md">
               <div className="w-full h-full rounded-full overflow-hidden bg-slate-800 flex items-center justify-center">
                 {profilePic ? (
                   <img src={profilePic} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-tr from-emerald-800 to-teal-700 flex items-center justify-center text-white font-black text-4xl shadow-inner">
+                  <div className="w-full h-full bg-gradient-to-tr from-emerald-800 to-teal-700 flex items-center justify-center text-white font-black text-3xl shadow-inner">
                     {name ? name.charAt(0).toUpperCase() : 'U'}
                   </div>
                 )}
@@ -142,36 +142,36 @@ export default function Profile() {
             <button 
               type="button"
               onClick={() => fileInputRef.current?.click()} 
-              className="absolute bottom-0 right-0 bg-emerald-500 hover:bg-emerald-400 text-white p-2.5 rounded-full border-2 border-slate-900 shadow-lg transition-transform hover:scale-110 active:scale-95 cursor-pointer border-none"
+              className="absolute bottom-0 right-0 bg-emerald-500 hover:bg-emerald-400 text-white p-2 rounded-full border-2 border-slate-900 shadow-md transition-transform hover:scale-110 active:scale-95 cursor-pointer border-none"
               title={t('ছবি পরিবর্তন করুন', 'Change Photo')}
             >
-              <Camera className="w-4 h-4 stroke-[2.5]" />
+              <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
             </button>
           </div>
 
           {/* User Name & Status Badge */}
-          <div className="mt-4 flex flex-col items-center">
+          <div className="mt-3 flex flex-col items-center">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-white tracking-tight">{name}</h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-sm">
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">{name}</h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-sm">
                 <Sparkles className="w-3 h-3 text-emerald-300" />
                 সদস্য
               </span>
             </div>
             
-            <p className="text-sm text-emerald-100/75 mt-1 font-medium flex items-center gap-1.5">
+            <p className="text-xs sm:text-sm text-emerald-100/75 mt-0.5 font-medium flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 opacity-70" />
               {email}
             </p>
 
             {/* WhatsApp Contact Badge */}
             {whatsapp && (
-              <div className="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs font-semibold text-emerald-200 transition shadow-xs">
-                <span className="relative flex h-2 w-2">
+              <div className="inline-flex items-center gap-1.5 mt-2 px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-[11px] font-semibold text-emerald-200 transition shadow-xs">
+                <span className="relative flex h-1.5 w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
                 </span>
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-300" />
+                <MessageSquare className="w-3 h-3 text-emerald-300" />
                 <span className="font-mono tracking-wide">{whatsapp}</span>
               </div>
             )}
@@ -180,35 +180,35 @@ export default function Profile() {
       </div>
 
       {/* Main Content Area Overlapping Banner */}
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 -mt-10 relative z-20 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 -mt-8 relative z-20 space-y-3 sm:space-y-4">
         
-        {/* Stats Grid: Modern Bento Cards */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        {/* Stats Grid: Modern Bento Cards (Compact, well-proportioned) */}
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5">
           {/* Notes Stat */}
-          <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5 border border-emerald-100/50">
-              <FileText className="w-5 h-5 stroke-[2.2]" />
+          <div className="bg-white/95 backdrop-blur-sm py-2.5 px-2 sm:py-3.5 sm:px-3 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 border border-emerald-100/50">
+              <FileText className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-2xl font-black text-slate-800">{stats.notes}</span>
-            <span className="text-xs font-semibold text-slate-500">{t('নোট', 'Notes')}</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-800 leading-tight">{stats.notes}</span>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-0.5">{t('নোট', 'Notes')}</span>
           </div>
 
           {/* Reminders Stat */}
-          <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1.5 border border-amber-100/50">
-              <Bell className="w-5 h-5 stroke-[2.2]" />
+          <div className="bg-white/95 backdrop-blur-sm py-2.5 px-2 sm:py-3.5 sm:px-3 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center mb-1 border border-amber-100/50">
+              <Bell className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-2xl font-black text-slate-800">{stats.reminders}</span>
-            <span className="text-xs font-semibold text-slate-500">{t('রিমাইন্ডার', 'Reminders')}</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-800 leading-tight">{stats.reminders}</span>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-0.5">{t('রিমাইন্ডার', 'Reminders')}</span>
           </div>
 
           {/* Special Dates Stat */}
-          <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
-            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center mb-1.5 border border-rose-100/50">
-              <Gift className="w-5 h-5 stroke-[2.2]" />
+          <div className="bg-white/95 backdrop-blur-sm py-2.5 px-2 sm:py-3.5 sm:px-3 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all text-center flex flex-col items-center">
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center mb-1 border border-rose-100/50">
+              <Gift className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-2xl font-black text-slate-800">{stats.specialDates}</span>
-            <span className="text-xs font-semibold text-slate-500">{t('বিশেষ দিন', 'Special Dates')}</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-800 leading-tight">{stats.specialDates}</span>
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-0.5">{t('বিশেষ দিন', 'Special Dates')}</span>
           </div>
         </div>
 
