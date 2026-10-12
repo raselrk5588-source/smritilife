@@ -140,52 +140,53 @@ export default function Landing() {
 
       {/* 1. TOP NAVBAR (GLASSMORPHISM) */}
       <header className="sticky top-0 z-50 bg-white/75 backdrop-blur-2xl border-b border-white/60 shadow-[0_4px_30px_rgba(10,119,86,0.03)] transition-all">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           
           {/* Logo with Heart Leaf icon & AI Badge */}
           <div 
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="flex items-center gap-2.5 cursor-pointer select-none group shrink-0"
+            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none group shrink-0"
           >
-            <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#0A7756] to-[#12A57A] flex items-center justify-center shadow-md shadow-[#0A7756]/25 group-hover:scale-105 group-hover:shadow-lg transition-all duration-300">
-              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-[#0A7756] to-[#12A57A] flex items-center justify-center shadow-md shadow-[#0A7756]/25 group-hover:scale-105 group-hover:shadow-lg transition-all duration-300">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                 <path d="M12 5v14" />
               </svg>
-              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-2xl sm:text-[26px] font-black tracking-tight text-slate-900">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-xl sm:text-[26px] font-black tracking-tight text-slate-900">
                 Smriti<span className="text-[#0A7756]">Life</span>
               </span>
-              <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-[#0A7756] border border-emerald-500/20 shadow-xs">
+              <span className="hidden sm:inline-flex text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-[#0A7756] border border-emerald-500/20 shadow-xs">
                 AI Agent
               </span>
             </div>
           </div>
 
           {/* Right Controls (Desktop & Mobile) */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <button
               onClick={() => navigate('/auth')}
-              className="inline-flex items-center gap-1.5 text-slate-700 hover:text-[#0A7756] font-bold px-3.5 sm:px-4 py-2 text-xs sm:text-sm rounded-full bg-white/60 hover:bg-white border border-slate-200/60 shadow-xs backdrop-blur-md transition-all cursor-pointer"
+              className="inline-flex items-center gap-1 text-slate-700 hover:text-[#0A7756] font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-full bg-white/60 hover:bg-white border border-slate-200/60 shadow-xs backdrop-blur-md transition-all cursor-pointer whitespace-nowrap"
             >
-              <LogIn className="w-4 h-4 text-[#0A7756]" />
-              লগইন
+              <LogIn className="w-3.5 h-3.5 text-[#0A7756]" />
+              <span>লগইন</span>
             </button>
 
             <button
               onClick={handleSubscribe}
-              className="bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-xs sm:text-sm md:text-base px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/30 hover:shadow-lg hover:shadow-[#0A7756]/40 transition-all flex items-center gap-2 cursor-pointer"
+              className="bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-xs sm:text-base px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/30 hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
-              এখনই শুরু করুন
+              <span className="hidden sm:inline">এখনই </span>
+              <span>শুরু করুন</span>
             </button>
 
             {/* 3-line hamburger menu toggle button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-white active:bg-slate-100 rounded-xl transition cursor-pointer border border-slate-200/80 bg-white/80 backdrop-blur-md shadow-xs"
+              className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-white active:bg-slate-100 rounded-xl transition cursor-pointer border border-slate-200/80 bg-white/80 backdrop-blur-md shadow-xs shrink-0"
               aria-label="Toggle menu"
               title="মেনু"
             >
