@@ -74,7 +74,7 @@ export default function Landing() {
               onClick={handleSubscribe}
               className="bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-sm sm:text-base px-6 py-2.5 rounded-full shadow-md shadow-[#0A7756]/25 hover:shadow-lg transition flex items-center gap-2 cursor-pointer"
             >
-              Subscribe করুন
+              এখনই শুরু করুন
             </button>
           </div>
 
@@ -84,7 +84,7 @@ export default function Landing() {
               onClick={handleSubscribe}
               className="bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-xs px-3.5 py-2 rounded-full shadow-sm"
             >
-              Subscribe করুন
+              এখনই শুরু করুন
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -110,7 +110,7 @@ export default function Landing() {
               onClick={() => { setMobileMenuOpen(false); handleSubscribe(); }}
               className="w-full bg-[#0A7756] text-white font-bold py-2.5 rounded-xl text-center shadow-sm"
             >
-              Subscribe করুন (৳ ১৯০ / মাস)
+              এখনই শুরু করুন (৳ ১৯০ / মাস)
             </button>
             <button
               onClick={() => { setMobileMenuOpen(false); handleOpenWhatsApp(); }}
@@ -159,7 +159,7 @@ export default function Landing() {
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-base sm:text-lg px-8 py-3.5 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer"
                 >
                   <Crown className="w-5 h-5 text-amber-300" />
-                  <span>Subscribe করুন ৳ ১৯০ / মাস</span>
+                  <span>এখনই শুরু করুন ৳ ১৯০ / মাস</span>
                   <ArrowRight className="w-5 h-5" />
                 </button>
               </div>
@@ -371,7 +371,7 @@ export default function Landing() {
                 <CreditCard className="w-8 h-8" />
               </div>
               <h3 className="font-bold text-slate-900 text-base mb-1.5">
-                ৳ ১৯০ দিয়ে Subscribe করুন
+                ৳ ১৯০ দিয়ে শুরু করুন
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed max-w-xs">
                 bKash দিয়ে সহজে পেমেন্ট করে সাবস্ক্রিপশন চালু করুন।
@@ -484,7 +484,7 @@ export default function Landing() {
                     onClick={handleSubscribe}
                     className="w-full bg-[#0A7756] hover:bg-[#086347] active:scale-98 text-white font-bold text-base py-3.5 rounded-full shadow-md shadow-[#0A7756]/20 transition flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span>Subscribe করুন</span>
+                    <span>এখনই শুরু করুন</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
