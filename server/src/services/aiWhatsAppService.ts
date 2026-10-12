@@ -23,6 +23,34 @@ export const formatTime12Hour = (time24?: string): string => {
 };
 
 /**
+ * Helper to detect relative durations (e.g. "20 mnt por", "20 min por", "20 মিনিট পর", "1 ghonta por", "আধা ঘণ্টা পর")
+ */
+export const matchRelativeDuration = (rawText: string): number | null => {
+  const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+  const text = (rawText || '').replace(/[০-৯]/g, (m) => bnToEn[m] || m).toLowerCase();
+
+  // Pattern for minutes: "20 mnt", "20 min", "20 mint", "20 minute", "20 minutes", "২০ মিনিট"
+  const minMatch = text.match(/(?:in\s+)?(\d+)\s*(?:minute|minutes|min|mins|mnt|mnts|mint|mints|m|মিনিট(?:ের)?|মি\.)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i);
+  
+  // Pattern for hours: "1 ghonta", "1 hr", "1 hour", "১ ঘণ্টা"
+  const hourMatch = text.match(/(?:in\s+)?(\d+)\s*(?:ghont[ao]|ghant[ao]|hour|hours|hr|hrs|h|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i);
+
+  // Half hour / 1.5 hours
+  const halfHour = /(?:adha|adho|আধা|অর্ধেক)\s*(?:ghont[ao]|ghant[ao]|hour|hours|hr|hrs|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i.test(text);
+  const oneAndHalfHour = /(?:der|দেড়|দেড়)\s*(?:ghont[ao]|ghant[ao]|hour|hours|hr|hrs|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i.test(text);
+
+  if (minMatch || hourMatch || halfHour || oneAndHalfHour) {
+    let addMinutes = 0;
+    if (minMatch) addMinutes += parseInt(minMatch[1], 10);
+    if (hourMatch) addMinutes += parseInt(hourMatch[1], 10) * 60;
+    if (halfHour) addMinutes += 30;
+    if (oneAndHalfHour) addMinutes += 90;
+    return addMinutes;
+  }
+  return null;
+};
+
+/**
  * Intelligent Bengali/Banglish time parser for phrases like "sokal 9ta", "bikal 4ta", "rat 8ta", "dupur 2ta", "sondha 7ta", "1pm", "4:30 pm"
  */
 export const parseBengaliTime = (rawText: string): string => {
@@ -30,23 +58,13 @@ export const parseBengaliTime = (rawText: string): string => {
   const text = rawText.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
   const lower = text.toLowerCase();
 
-  // 1. Check relative minutes / hours (e.g. "20 minutes por", "২০ মিনিট পর", "1 ghonta por", "আধা ঘণ্টা পর")
-  const relMinMatch = text.match(/(\d+)\s*(?:minute|minutes|min|m|মিনিট|মি\.)\s*(?:por|pore|পরে|পর|বাদ)/i);
-  const relHourMatch = text.match(/(\d+)\s*(?:ghonta|ghanta|hour|hours|hr|hrs|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i);
-  const halfHourMatch = /(?:adha|adho|আধা|অর্ধেক)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
-  const oneAndHalfHourMatch = /(?:der|দেড়|দেড়)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
-
-  if (relMinMatch || relHourMatch || halfHourMatch || oneAndHalfHourMatch) {
-    let addMinutes = 0;
-    if (relMinMatch) addMinutes += parseInt(relMinMatch[1], 10);
-    if (relHourMatch) addMinutes += parseInt(relHourMatch[1], 10) * 60;
-    if (halfHourMatch) addMinutes += 30;
-    if (oneAndHalfHourMatch) addMinutes += 90;
-
+  // 1. Check relative duration
+  const relativeMins = matchRelativeDuration(text);
+  if (relativeMins !== null) {
     const now = new Date();
     const dhakaTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false, hour: '2-digit', minute: '2-digit' });
     const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
-    const totalMinutes = cHour * 60 + cMin + addMinutes;
+    const totalMinutes = cHour * 60 + cMin + relativeMins;
     const finalHour = Math.floor(totalMinutes / 60) % 24;
     const finalMin = totalMinutes % 60;
     return `${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
@@ -103,20 +121,10 @@ export const parseRelativeDate = (rawText: string, parsedTime?: string): Date =>
   const targetDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
 
   // Check if this was a relative duration request (minutes/hours later)
-  const relMinMatch = text.match(/(\d+)\s*(?:minute|minutes|min|m|মিনিট|মি\.)\s*(?:por|pore|পরে|পর|বাদ)/i);
-  const relHourMatch = text.match(/(\d+)\s*(?:ghonta|ghanta|hour|hours|hr|hrs|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i);
-  const halfHourMatch = /(?:adha|adho|আধা|অর্ধেক)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
-  const oneAndHalfHourMatch = /(?:der|দেড়|দেড়)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
-
-  if (relMinMatch || relHourMatch || halfHourMatch || oneAndHalfHourMatch) {
-    let addMinutes = 0;
-    if (relMinMatch) addMinutes += parseInt(relMinMatch[1], 10);
-    if (relHourMatch) addMinutes += parseInt(relHourMatch[1], 10) * 60;
-    if (halfHourMatch) addMinutes += 30;
-    if (oneAndHalfHourMatch) addMinutes += 90;
-
+  const relativeMins = matchRelativeDuration(text);
+  if (relativeMins !== null) {
     const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
-    const totalMinutes = cHour * 60 + cMin + addMinutes;
+    const totalMinutes = cHour * 60 + cMin + relativeMins;
     const daysToAdd = Math.floor(totalMinutes / (24 * 60));
     if (daysToAdd > 0) {
       targetDate.setUTCDate(targetDate.getUTCDate() + daysToAdd);
@@ -709,7 +717,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     // 3. Reminder Creation or Scheduled Message Detection
     const hasBanglishDate = /\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu)\b/i.test(text);
-    if (text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || hasBanglishDate || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText)) {
+    const hasRelativeDuration = matchRelativeDuration(text) !== null;
+    const hasReminderIntent = text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || hasBanglishDate || hasRelativeDuration || text.includes('মেসেজ') || /(?:01\d{9}|\+?8801\d{9})/.test(enText) || /\b(?:mone|korai|koriye|diow|diyo|dio|diba|bazar|osud|kaje|hobe)\b/i.test(text);
+
+    if (hasReminderIntent) {
       const phoneMatch = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
       const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
       const textWithoutPhone = recipientPhone ? enText.replace(recipientPhone, '') : enText;
@@ -723,11 +734,12 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
       let customMessage: string | undefined = undefined;
       let title = text
-        .replace(/\b(?:\d+|[০-৯]+)\s*(?:minute|minutes|min|m|মিনিট|ghonta|ghanta|hour|hours|hr|hrs|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)\b/gi, ' ')
-        .replace(/(?:adha|adho|আধা|অর্ধেক|der|দেড়|দেড়)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/gi, ' ')
+        .replace(/(?:in\s+)?(?:[০-৯\d]+)\s*(?:minutes?|mins?|mnts?|mints?|m|মিনিট(?:ের)?|মি\.)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
+        .replace(/(?:in\s+)?(?:[০-৯\d]+)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
+        .replace(/(?:adha|adho|আধা|অর্ধেক|der|দেড়|দেড়)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
         .replace(/\b(?:current\s*time\s*theke|akhon\s*theke|এখন\s*থেকে)\b/gi, ' ')
         .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu|sokal|shokal|dupur|bikal|rat)\b|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, ' ')
-        .replace(/(রিমাইন্ডার\s*(সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*করিয়ে\s*দিও|reminder|\b(?:akta|ekta|একটি|একটা|diow|diyo|dio|diba|dao)\b)/gi, ' ')
+        .replace(/(রিমাইন্ডার\s*(?:সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*(?:করিয়ে|করাই|করে)?\s*(?:দিও|দাও|দিন|করো)?|reminder|\b(?:mone\s*(?:korai|koriye|kore)?\s*(?:diow|diyo|dio|diba|dao|koro)?|akta|ekta|একটি|একটা|diow|diyo|dio|diba|dao)\b)/gi, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
