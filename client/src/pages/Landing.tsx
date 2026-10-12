@@ -167,21 +167,12 @@ export default function Landing() {
           </div>
 
           {/* Right Controls (Desktop & Mobile) */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            <button
-              onClick={() => navigate('/auth')}
-              className="inline-flex items-center gap-1 text-slate-700 hover:text-[#0A7756] font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-full bg-white/60 hover:bg-white border border-slate-200/60 shadow-xs backdrop-blur-md transition-all cursor-pointer whitespace-nowrap"
-            >
-              <LogIn className="w-3.5 h-3.5 text-[#0A7756]" />
-              <span>লগইন</span>
-            </button>
-
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={handleSubscribe}
-              className="bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-xs sm:text-base px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/30 hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-xs sm:text-base px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/30 hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
-              <span className="hidden sm:inline">এখনই </span>
-              <span>শুরু করুন</span>
+              <span>এখনই শুরু করুন</span>
             </button>
 
             {/* 3-line hamburger menu toggle button */}
@@ -320,7 +311,7 @@ export default function Landing() {
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-base sm:text-lg px-8 py-3.5 rounded-full shadow-[0_10px_25px_-5px_rgba(10,119,86,0.4)] hover:shadow-[0_15px_30px_-5px_rgba(10,119,86,0.5)] hover:-translate-y-0.5 transition-all cursor-pointer"
                 >
                   <Crown className="w-5 h-5 text-amber-300" />
-                  <span>এখনই শুরু করুন ৳ ১৯০ / মাস</span>
+                  <span>এখনই শুরু করুন</span>
                   <ArrowRight className="w-5 h-5" />
                 </button>
                 <button
