@@ -167,10 +167,18 @@ export default function Landing() {
           </div>
 
           {/* Right Controls (Desktop & Mobile) */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            <button
+              onClick={() => navigate('/auth')}
+              className="inline-flex items-center gap-1 text-slate-700 hover:text-[#0A7756] font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-full bg-white/60 hover:bg-white border border-slate-200/60 shadow-xs backdrop-blur-md transition-all cursor-pointer whitespace-nowrap"
+            >
+              <LogIn className="w-3.5 h-3.5 text-[#0A7756]" />
+              <span>লগইন</span>
+            </button>
+
             <button
               onClick={handleSubscribe}
-              className="bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-xs sm:text-base px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/30 hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-xs sm:text-base px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/30 hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <span>এখনই শুরু করুন</span>
             </button>
@@ -195,6 +203,17 @@ export default function Landing() {
               
               {/* Menu items card */}
               <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/80 p-3 shadow-lg space-y-1">
+                <button
+                  onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
+                  className="w-full text-left font-bold text-slate-800 hover:text-[#0A7756] hover:bg-emerald-50/60 px-4 py-3.5 rounded-2xl transition flex items-center justify-between cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <LogIn className="w-4 h-4 text-[#0A7756]" />
+                    লগইন করুন
+                  </span>
+                  <ArrowRight className="w-4 h-4 text-slate-400" />
+                </button>
+
                 <button
                   onClick={() => scrollToSection('how-it-works')}
                   className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/60 px-4 py-3.5 rounded-2xl transition cursor-pointer"
