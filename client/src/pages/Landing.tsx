@@ -12,12 +12,87 @@ import {
   Menu, 
   X,
   Crown,
-  PhoneCall
+  PhoneCall,
+  ChevronDown,
+  Sparkles,
+  HelpCircle,
+  LogIn
 } from 'lucide-react';
+
+const heroFeatures = [
+  {
+    badge: 'জরুরি কাজের রিমাইন্ডার',
+    title: 'জরুরি কাজ ভুলে গেছেন?',
+    highlight: 'SmritiLife সাথে থাকলে কাজ আর কখনো ভুলবেন না!',
+    subtitle: 'অফিসের কাজ, মিটিং বা দৈনন্দিন জরুরি দায়িত্ব—নির্ধারিত সময়ের ঠিক আগেই আপনার WhatsApp-এ পৌঁছে যাবে স্বয়ংক্রিয় রিমাইন্ডার।'
+  },
+  {
+    badge: 'বিশেষ দিনের শুভেচ্ছা',
+    title: 'ওয়াইফ বা প্রিয়জনের জন্মদিন ভুলে গেছেন?',
+    highlight: 'সঠিক সময়ে আন্তরিক শুভেচ্ছা পাঠিয়ে সম্পর্ক রাখুন সতেজ!',
+    subtitle: 'স্ত্রী, বন্ধুবান্ধব বা পরিবারের প্রিয় মানুষের বিশেষ দিনটিতে আপনার পক্ষ থেকে সঠিক সময়ে শুভেচ্ছা বার্তা পৌঁছে দেবে SmritiLife।'
+  },
+  {
+    badge: 'স্বাস্থ্য ও ওষুধ রিমাইন্ডার',
+    title: 'নিয়মিত ওষুধ খেতে বা ডাক্তারের ভিজিট ভুলে যাচ্ছেন?',
+    highlight: 'স্বাস্থ্য সচেতনতায় সঠিক সময়ে ওষুধের অ্যালার্ট!',
+    subtitle: 'সকাল, দুপুর কিংবা রাতে ওষুধের সঠিক সময় মিস হওয়ার সুযোগ নেই—WhatsApp মেসেজ দিয়ে আপনাকে সতর্ক রাখবে SmritiLife।'
+  },
+  {
+    badge: 'নোট ও কাজের তালিকা',
+    title: 'বাজারের তালিকা বা দরকারি নোট মনে নেই?',
+    highlight: 'এক নিমেষে গুছিয়ে রাখুন সবকিছু আপনার হাতের মুঠোয়!',
+    subtitle: 'কেনাকাটার ফর্দ, আইডিয়া কিংবা জরুরি নোট—ওয়েবসাইট বা চ্যাটের মাধ্যমে সহজে সেভ করে রাখুন এবং প্রয়োজনমতো পান।'
+  },
+  {
+    badge: 'বিল ও ডেডলাইন রিমাইন্ডার',
+    title: 'বিদ্যুৎ বিল বা জরুরি ডেডলাইনের কথা মনে পড়ছে না?',
+    highlight: 'বিল বা ডেডলাইন পার হওয়ার আগেই সতর্ক থাকুন!',
+    subtitle: 'অফিসের গুরুত্বপূর্ণ ডেডলাইন, বাসা ভাড়া কিংবা ইউটিলিটি বিলের সঠিক রিমাইন্ডার নিশ্চিত করে টেনশনমুক্ত থাকুন প্রতিদিন।'
+  }
+];
+
+const faqs = [
+  {
+    question: 'SmritiLife কীভাবে কাজ করে?',
+    answer: 'SmritiLife হলো আপনার ব্যক্তিগত WhatsApp Agent। ওয়েবসাইট বা সরাসরি WhatsApp-এ বার্তা দিয়ে আপনি যেকোনো রিমাইন্ডার, নোট বা শুভেচ্ছা সেট করতে পারেন। নির্ধারিত সময়ে এটি স্বয়ংক্রিয়ভাবে আপনাকে WhatsApp মেসেজে জানিয়ে দেবে।'
+  },
+  {
+    question: 'আমাকে কি আলাদা কোনো মোবাইল অ্যাপ ইনস্টল করতে হবে?',
+    answer: 'একদমই না! আপনাকে কোনো বাড়তি অ্যাপ ডাউনলোড করতে হবে না। আপনার ফোনে আগে থেকেই থাকা সাধারণ WhatsApp-এর মাধ্যমেই সব সেবা পেয়ে যাবেন।'
+  },
+  {
+    question: 'কী কাজে লাগে SmritiLife?',
+    answer: 'দৈনন্দিন গুরুত্বপূর্ণ কাজের রিমাইন্ডার, সঠিক সময়ে ওষুধ খাওয়া, প্রিয়জনের জন্মদিন বা বিবাহবার্ষিকীর শুভেচ্ছা, বিদ্যুৎ বিলের অ্যালার্ট এবং বাজার বা জরুরি নোট সংরক্ষণে এটি প্রতিদিন কাজে লাগে।'
+  },
+  {
+    question: 'আমি কি নিজের পাশাপাশি অন্যদের নম্বরেও মেসেজ পাঠাতে পারব?',
+    answer: 'হ্যাঁ, অবশ্যই! আপনি নিজের জন্য রিমাইন্ডার নেওয়ার পাশাপাশি মা, বাবা, স্ত্রী বা প্রিয় বন্ধুর নম্বরেও নির্দিষ্ট সময়ে স্বয়ংক্রিয় শুভেচ্ছা বা রিমাইন্ডার পাঠাতে পারবেন।'
+  },
+  {
+    question: 'সাবস্ক্রিপশন ফি কত এবং কীভাবে পেমেন্ট করব?',
+    answer: 'SmritiLife-এর সব আনলিমিটেড প্রিমিয়াম সুবিধা উপভোগ করতে মাসিক চার্জ মাত্র ১৯০ টাকা। bKash-এর মাধ্যমে খুব সহজে ও নিরাপদে পেমেন্ট করে তাৎক্ষণিক সার্ভিস চালু করতে পারবেন।'
+  }
+];
 
 export default function Landing() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
+  const [fade, setFade] = useState(true);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+
+  // Auto rotate hero titles every 4 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setCurrentFeatureIndex((prev) => (prev + 1) % heroFeatures.length);
+        setFade(true);
+      }, 250);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Force normal font size on landing page
   useEffect(() => {
@@ -29,14 +104,25 @@ export default function Landing() {
   }, []);
 
   const handleSubscribe = () => {
+    setMobileMenuOpen(false);
     navigate('/paywall');
   };
 
   const handleOpenWhatsApp = () => {
-    // Direct WhatsApp bot link (Bangladesh number format)
+    setMobileMenuOpen(false);
     const whatsappUrl = 'https://wa.me/8801862636137?text=' + encodeURIComponent('হ্যালো স্মৃতি লাইফ, আমি জানতে চাই...');
     window.open(whatsappUrl, '_blank');
   };
+
+  const scrollToSection = (id: string) => {
+    setMobileMenuOpen(false);
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const currentHero = heroFeatures[currentFeatureIndex];
 
   return (
     <div className="min-h-screen bg-[#FAFCFB] text-slate-800 font-sans selection:bg-[#0A7756]/20 selection:text-[#0A7756] flex flex-col antialiased">
@@ -48,10 +134,9 @@ export default function Landing() {
           {/* Logo with Heart Leaf icon */}
           <div 
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="flex items-center gap-2.5 cursor-pointer select-none group"
+            className="flex items-center gap-2.5 cursor-pointer select-none group shrink-0"
           >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#0A7756] to-[#12A57A] flex items-center justify-center shadow-sm shadow-[#0A7756]/20 group-hover:scale-105 transition-transform">
-              {/* Custom Heart Leaf SVG icon */}
               <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                 <path d="M12 5v14" />
@@ -62,12 +147,41 @@ export default function Landing() {
             </span>
           </div>
 
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600">
+            <button 
+              onClick={() => scrollToSection('how-it-works')} 
+              className="hover:text-[#0A7756] transition cursor-pointer"
+            >
+              কীভাবে কাজ করে
+            </button>
+            <button 
+              onClick={() => scrollToSection('features')} 
+              className="hover:text-[#0A7756] transition cursor-pointer"
+            >
+              কী কাজে লাগে
+            </button>
+            <button 
+              onClick={() => scrollToSection('pricing')} 
+              className="hover:text-[#0A7756] transition cursor-pointer"
+            >
+              প্রাইসিং
+            </button>
+            <button 
+              onClick={() => scrollToSection('faq')} 
+              className="hover:text-[#0A7756] transition cursor-pointer"
+            >
+              সাধারণ প্রশ্ন
+            </button>
+          </nav>
+
           {/* Desktop Right CTA */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3">
             <button
               onClick={() => navigate('/auth')}
-              className="text-slate-600 hover:text-slate-900 font-bold px-4 py-2 text-sm rounded-full transition"
+              className="text-slate-700 hover:text-[#0A7756] font-bold px-4 py-2 text-sm rounded-full transition cursor-pointer flex items-center gap-1.5"
             >
+              <LogIn className="w-4 h-4 text-[#0A7756]" />
               লগইন
             </button>
             <button
@@ -79,46 +193,100 @@ export default function Landing() {
           </div>
 
           {/* Mobile Right Controls */}
-          <div className="flex md:hidden items-center gap-2">
+          <div className="flex sm:hidden items-center gap-2">
             <button
               onClick={handleSubscribe}
-              className="bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-xs px-3.5 py-2 rounded-full shadow-sm"
+              className="bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-xs px-3.5 py-2 rounded-full shadow-sm cursor-pointer"
             >
               এখনই শুরু করুন
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 active:bg-slate-100 rounded-lg transition"
+              className="w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 active:bg-slate-100 rounded-xl transition cursor-pointer"
               aria-label="Toggle menu"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {mobileMenuOpen ? <X className="w-6 h-6 text-slate-800" /> : <Menu className="w-6 h-6 text-slate-800" />}
+            </button>
+          </div>
+
+          {/* Mobile Toggle on medium screens (between sm and lg) */}
+          <div className="hidden sm:flex lg:hidden items-center">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 active:bg-slate-100 rounded-xl transition cursor-pointer"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6 text-slate-800" /> : <Menu className="w-6 h-6 text-slate-800" />}
             </button>
           </div>
 
         </div>
 
-        {/* Mobile Dropdown Menu */}
+        {/* Mobile Dropdown Menu Card (Refined to match screenshot design) */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-b border-slate-100 px-5 py-4 space-y-3 animate-in slide-in-from-top-2">
-            <button
-              onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
-              className="w-full text-left font-bold text-slate-700 py-2 border-b border-slate-50"
-            >
-              লগইন করুন
-            </button>
-            <button
-              onClick={() => { setMobileMenuOpen(false); handleSubscribe(); }}
-              className="w-full bg-[#0A7756] text-white font-bold py-2.5 rounded-xl text-center shadow-sm"
-            >
-              এখনই শুরু করুন (৳ ১৯০ / মাস)
-            </button>
-            <button
-              onClick={() => { setMobileMenuOpen(false); handleOpenWhatsApp(); }}
-              className="w-full bg-[#EBF7F2] text-[#0A7756] font-bold py-2.5 rounded-xl text-center flex items-center justify-center gap-2"
-            >
-              <MessageCircle className="w-4 h-4 text-[#25D366]" />
-              WhatsApp-এ কথা বলুন
-            </button>
+          <div className="lg:hidden border-b border-slate-100 bg-[#FAFCFB]/98 backdrop-blur-xl px-5 py-5 space-y-4 shadow-xl animate-in slide-in-from-top-3">
+            
+            {/* Navigation links styled as cards / clean list */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-2 shadow-sm space-y-1">
+              <button
+                onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
+                className="w-full text-left font-bold text-slate-800 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2.5">
+                  <LogIn className="w-4 h-4 text-[#0A7756]" />
+                  লগইন
+                </span>
+                <ArrowRight className="w-4 h-4 text-slate-400" />
+              </button>
+
+              <button
+                onClick={() => scrollToSection('how-it-works')}
+                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
+              >
+                কীভাবে কাজ করে
+              </button>
+
+              <button
+                onClick={() => scrollToSection('features')}
+                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
+              >
+                কী কাজে লাগে
+              </button>
+
+              <button
+                onClick={() => scrollToSection('pricing')}
+                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
+              >
+                প্রাইসিং
+              </button>
+
+              <button
+                onClick={() => scrollToSection('faq')}
+                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
+              >
+                সাধারণ প্রশ্ন
+              </button>
+            </div>
+
+            {/* Mobile Actions */}
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={handleSubscribe}
+                className="w-full bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold py-3.5 rounded-2xl text-center shadow-md shadow-[#0A7756]/20 transition flex items-center justify-center gap-2"
+              >
+                <span>এখনই শুরু করুন</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              
+              <button
+                onClick={handleOpenWhatsApp}
+                className="w-full bg-[#EBF7F2] hover:bg-[#d8f1e7] text-[#0A7756] font-bold py-3 rounded-2xl text-center flex items-center justify-center gap-2 transition"
+              >
+                <MessageCircle className="w-4 h-4 text-[#25D366]" />
+                WhatsApp-এ কথা বলুন
+              </button>
+            </div>
+
           </div>
         )}
       </header>
@@ -132,28 +300,55 @@ export default function Landing() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
             
             {/* Left Hero Content (7 Cols) */}
-            <div className="lg:col-span-7 space-y-5 text-left">
+            <div className="lg:col-span-7 space-y-6 text-left">
               
-              {/* Badge */}
-              <div className="inline-block">
-                <span className="text-sm sm:text-base font-bold text-[#0A7756] tracking-wide">
-                  জীবনের গুরুত্বপূর্ণ মুহূর্ত আর ভুলে নয়
-                </span>
+              {/* Dynamic Badge & Scenario Rotator Dots */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="inline-flex items-center gap-2 bg-[#0A7756]/10 text-[#0A7756] font-bold text-xs sm:text-sm px-3.5 py-1.5 rounded-full border border-[#0A7756]/20">
+                  <Sparkles className="w-3.5 h-3.5 text-[#0A7756]" />
+                  <span>{currentHero.badge}</span>
+                </div>
+
+                {/* Progress Indicators / Clickable Pills */}
+                <div className="flex items-center gap-1.5">
+                  {heroFeatures.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setFade(false);
+                        setTimeout(() => {
+                          setCurrentFeatureIndex(idx);
+                          setFade(true);
+                        }, 150);
+                      }}
+                      className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                        currentFeatureIndex === idx
+                          ? 'w-6 bg-[#0A7756]'
+                          : 'w-2 bg-slate-200 hover:bg-slate-300'
+                      }`}
+                      aria-label={`Go to scenario ${idx + 1}`}
+                    />
+                  ))}
+                </div>
               </div>
 
-              {/* Main Headline */}
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[54px] font-black text-slate-900 leading-[1.18] tracking-tight">
-                আপনার স্মৃতি, <br className="hidden sm:block" />
-                আপনার সময়ে
-              </h1>
+              {/* Dynamic Rotating Headline with Smooth Fade */}
+              <div className={`transition-all duration-300 min-h-[145px] sm:min-h-[160px] flex flex-col justify-center ${
+                fade ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+              }`}>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 leading-[1.2] tracking-tight">
+                  {currentHero.title}
+                </h1>
+                <p className="text-xl sm:text-2xl font-bold text-[#0A7756] mt-2">
+                  {currentHero.highlight}
+                </p>
+                <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-normal mt-3 max-w-xl">
+                  {currentHero.subtitle}
+                </p>
+              </div>
 
-              {/* Subtitle / Paragraph */}
-              <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-normal max-w-xl">
-                SmritiLife হলো আপনার ব্যক্তিগত WhatsApp Agent, যা নির্ধারিত সময়ে রিমাইন্ডার, শুভেচ্ছা বার্তা ও গুরুত্বপূর্ণ নোট আপনাকে মনে করিয়ে দেবে।
-              </p>
-
-              {/* CTA Button */}
-              <div className="pt-2">
+              {/* CTA Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <button
                   onClick={handleSubscribe}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-base sm:text-lg px-8 py-3.5 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer"
@@ -161,6 +356,13 @@ export default function Landing() {
                   <Crown className="w-5 h-5 text-amber-300" />
                   <span>এখনই শুরু করুন ৳ ১৯০ / মাস</span>
                   <ArrowRight className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleOpenWhatsApp}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 active:scale-95 text-[#0A7756] font-bold text-base px-6 py-3.5 rounded-full border border-slate-200 shadow-sm transition cursor-pointer"
+                >
+                  <MessageCircle className="w-5 h-5 text-[#25D366]" />
+                  <span>WhatsApp-এ কথা বলুন</span>
                 </button>
               </div>
 
@@ -290,8 +492,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* 3. 4-FEATURE PILL CARDS */}
-      <section className="py-8 bg-white border-y border-slate-100">
+      {/* 3. 4-FEATURE PILL CARDS (কী কাজে লাগে) */}
+      <section id="features" className="py-12 bg-white border-y border-slate-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
             
@@ -343,8 +545,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* 4. HOW TO USE? (3 STEPS) */}
-      <section className="py-16 sm:py-20 bg-[#F7FAF8]">
+      {/* 4. HOW TO USE? (3 STEPS) (কীভাবে কাজ করে) */}
+      <section id="how-it-works" className="py-16 sm:py-20 bg-[#F7FAF8]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           
           {/* Section Heading */}
@@ -419,8 +621,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* 5. PRICING SECTION: ONE SIMPLE PLAN */}
-      <section className="py-16 sm:py-20 bg-white">
+      {/* 5. PRICING SECTION: ONE SIMPLE PLAN (প্রাইসিং) */}
+      <section id="pricing" className="py-16 sm:py-20 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
@@ -493,6 +695,51 @@ export default function Landing() {
               </div>
             </div>
 
+          </div>
+
+        </div>
+      </section>
+
+      {/* 5.5. FAQ SECTION: সাধারণ প্রশ্ন */}
+      <section id="faq" className="py-16 sm:py-20 bg-[#F7FAF8] border-t border-slate-200/60">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          
+          <div className="text-center mb-10 sm:mb-12">
+            <div className="inline-flex items-center gap-2 bg-[#0A7756]/10 text-[#0A7756] font-bold text-xs sm:text-sm px-3.5 py-1.5 rounded-full mb-3">
+              <HelpCircle className="w-4 h-4" />
+              <span>সাধারণ প্রশ্ন ও উত্তর</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+              সচরাচর জিজ্ঞাসিত প্রশ্ন
+            </h2>
+            <p className="text-sm sm:text-base text-slate-600 font-medium mt-2">
+              SmritiLife সম্পর্কে আপনার যা কিছু জানা দরকার
+            </p>
+          </div>
+
+          <div className="space-y-3.5">
+            {faqs.map((faq, index) => {
+              const isOpen = openFaqIndex === index;
+              return (
+                <div 
+                  key={index} 
+                  className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden transition-all duration-200"
+                >
+                  <button
+                    onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                    className="w-full text-left px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-4 font-bold text-base sm:text-lg text-slate-900 hover:text-[#0A7756] transition cursor-pointer"
+                  >
+                    <span>{faq.question}</span>
+                    <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#0A7756]' : ''}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="px-5 sm:px-6 pb-5 pt-1 text-sm sm:text-base text-slate-600 leading-relaxed border-t border-slate-100">
+                      {faq.answer}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
         </div>
