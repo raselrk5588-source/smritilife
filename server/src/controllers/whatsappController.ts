@@ -1095,13 +1095,43 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             }
             break;
 
-          case 'cancel_reminder':
-            if (aiResponse.data && aiResponse.data.searchQuery) {
-              const query = aiResponse.data.searchQuery.trim();
-              const reminderToCancel = await Reminder.findOneAndUpdate(
+          case 'cancel_reminder': {
+            const data = aiResponse.data || {};
+            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
+            const query = (data.searchQuery || '').trim();
+
+            let reminderToCancel = null;
+
+            if (itemIndex !== undefined) {
+              const pendingReminders = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
+              if (itemIndex === -1 && pendingReminders.length > 0) {
+                reminderToCancel = pendingReminders[pendingReminders.length - 1];
+              } else if (itemIndex >= 1 && itemIndex <= pendingReminders.length) {
+                reminderToCancel = pendingReminders[itemIndex - 1];
+              }
+
+              if (reminderToCancel) {
+                reminderToCancel.status = 'Cancelled';
+                await reminderToCancel.save();
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `⚠️ আপনার ${itemIndex === -1 ? 'সর্বশেষ' : itemIndex + ' নম্বর'} রিমাইন্ডার "${reminderToCancel.title}" সফলভাবে বাতিল (Cancel) করা হয়েছে।`
+                );
+                break;
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `দুঃখিত, ${itemIndex} নম্বরে কোনো পেন্ডিং রিমাইন্ডার খুঁজে পাওয়া যায়নি।`
+                );
+                break;
+              }
+            }
+
+            if (query) {
+              reminderToCancel = await Reminder.findOneAndUpdate(
                 { 
                   userId: user._id, 
-                  title: { $regex: new RegExp(query, 'i') },
+                  title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
                   status: { $ne: 'Cancelled' }
                 },
                 { status: 'Cancelled' },
@@ -1110,29 +1140,66 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               if (reminderToCancel) {
                 await sendMetaWhatsAppMessage(fromNumber, `⚠️ "${reminderToCancel.title}" রিমাইন্ডারটি সফলভাবে বাতিল (Cancel) করা হয়েছে।`);
               } else {
-                await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো সক্রিয় রিমাইন্ডার খুঁজে পাওয়া যায়নি। আপনার রিমাইন্ডার দেখতে "সব রিমাইন্ডার দেখাও" লিখুন।`);
+                await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো সক্রিয় রিমাইন্ডার খুঁজে পাওয়া যায়নি।`);
               }
             } else {
-              await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি বাতিল করতে চান তার নাম লিখুন (যেমন: "মিটিং রিমাইন্ডার ক্যান্সেল করো")।');
+              await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি বাতিল করতে চান তার নম্বর বা নাম উল্লেখ করুন (যেমন: "১ নম্বরটা ক্যান্সেল করো")।');
             }
             break;
+          }
 
-          case 'delete_reminder':
-            if (aiResponse.data && aiResponse.data.searchQuery) {
-              const query = aiResponse.data.searchQuery.trim();
-              const reminderToDelete = await Reminder.findOneAndDelete({
+          case 'delete_reminder': {
+            const data = aiResponse.data || {};
+            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
+            const query = (data.searchQuery || '').trim();
+
+            // Auto-clean any accidental reminders like "number ta delete kore daw"
+            await Reminder.deleteMany({
+              userId: user._id,
+              title: /delete kore daw|number ta delete/i
+            });
+
+            let reminderToDelete = null;
+
+            if (itemIndex !== undefined) {
+              const pendingReminders = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
+              if (itemIndex === -1 && pendingReminders.length > 0) {
+                reminderToDelete = pendingReminders[pendingReminders.length - 1];
+              } else if (itemIndex >= 1 && itemIndex <= pendingReminders.length) {
+                reminderToDelete = pendingReminders[itemIndex - 1];
+              }
+
+              if (reminderToDelete) {
+                await Reminder.findByIdAndDelete(reminderToDelete._id);
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `🗑️ আপনার ${itemIndex === -1 ? 'সর্বশেষ' : itemIndex + ' নম্বর'} রিমাইন্ডার "${reminderToDelete.title}" সফলভাবে ডিলিট করা হয়েছে!`
+                );
+                break;
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `দুঃখিত, ${itemIndex} নম্বরে কোনো পেন্ডিং রিমাইন্ডার পাওয়া যায়নি।`
+                );
+                break;
+              }
+            }
+
+            if (query) {
+              reminderToDelete = await Reminder.findOneAndDelete({
                 userId: user._id,
-                title: { $regex: new RegExp(query, 'i') }
+                title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
               });
               if (reminderToDelete) {
                 await sendMetaWhatsAppMessage(fromNumber, `🗑️ "${reminderToDelete.title}" রিমাইন্ডারটি সফলভাবে ডিলিট করা হয়েছে।`);
               } else {
-                await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো রিমাইন্ডার খুঁজে পাওয়া যায়নি। আপনার সব রিমাইন্ডার দেখতে "সব রিমাইন্ডার দেখাও" লিখুন।`);
+                await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো রিমাইন্ডার খুঁজে পাওয়া যায়নি।`);
               }
             } else {
-              await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি ডিলিট করতে চান তার নাম লিখুন (যেমন: "মিটিং ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও")।');
+              await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি ডিলিট করতে চান তার নম্বর বা নাম উল্লেখ করুন (যেমন: "১ নম্বরটা ডিলিট করো")।');
             }
             break;
+          }
 
           case 'manage_todolist': {
             const data = aiResponse.data || {};

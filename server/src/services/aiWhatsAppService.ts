@@ -442,12 +442,21 @@ Possible actions:
    - "newTitle"?: string (Optional, if user also wants to rename the reminder)
 
 4. cancel_reminder:
-   When user wants to cancel or stop a specific reminder.
-   Data: { "searchQuery": string } (The title or keyword of the reminder to cancel).
+   When user wants to cancel or stop a specific reminder by title or serial number.
+   Examples: "1 number ta cancel koro", "মিটিং ক্যান্সেল করো".
+   Data: { "index"?: number, "searchQuery"?: string }
 
 5. delete_reminder:
-   When user wants to delete a specific reminder permanently.
-   Data: { "searchQuery": string } (The title or keyword of the reminder to delete).
+   When user wants to delete a specific reminder permanently by title, keyword, or serial number from list.
+   Examples:
+   - "1 number ta delete kore daw" -> action: "delete_reminder", data: { "index": 1 }
+   - "2 no ta delete koro" -> action: "delete_reminder", data: { "index": 2 }
+   - "১ নম্বরটা মুছে দাও" -> action: "delete_reminder", data: { "index": 1 }
+   - "প্রথমটা ডিলিট করো" -> action: "delete_reminder", data: { "index": 1 }
+   - "মিটিং ডিলিট করো" -> action: "delete_reminder", data: { "searchQuery": "মিটিং" }
+   Fields in "data":
+   - "index"?: number (1-based index if user refers to list item number, e.g. 1 for "1 number ta", "১ নম্বর")
+   - "searchQuery"?: string (reminder title or keyword)
 
 5. create_wish:
    When user asks to send a birthday wish (জন্মদিনের শুভেচ্ছা), anniversary (বিবাহবার্ষিকী), Eid (ঈদ), New Year (নতুন বছর), Congratulations (অভিনন্দন), or any celebration wish/card to a phone number.
@@ -1016,22 +1025,44 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 5. Cancel / Delete Specific Reminder Detection
-    const isCancelOrDelete =
-      /(?:ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove)/i.test(text) &&
-      (text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder'));
+    const hasDeleteVerb = /(?:ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|বাদ|ফেলে)/i.test(text);
 
-    if (isCancelOrDelete) {
-      const isDelete = /(?:ডিলিট|মুছে|delete|remove)/i.test(text);
+    if (hasDeleteVerb) {
+      const isDelete = /(?:ডিলিট|মুছে|delete|remove|ফেলে)/i.test(text);
+
+      // Check if user specified a list index: e.g. "1 number ta", "১ নম্বরটা", "2 no", "প্রথমটা", "লাস্টেরটা"
+      let targetIndex: number | undefined = undefined;
+      const indexMatch = enText.match(/(\d+)\s*(?:number|nmbr|numbr|mnbr|nbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি)?/i);
+      if (indexMatch) {
+        targetIndex = parseInt(indexMatch[1], 10);
+      } else if (/(?:protom|first|প্রথম)(?:\s*(?:ta|ti|টা|টি))?/i.test(text)) {
+        targetIndex = 1;
+      } else if (/(?:last|shesh|শেষ|লাস্ট)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি))?/i.test(text)) {
+        targetIndex = -1;
+      }
+
+      if (targetIndex !== undefined) {
+        return {
+          action: isDelete ? 'delete_reminder' : 'cancel_reminder',
+          data: {
+            index: targetIndex,
+            searchQuery: `${targetIndex}`
+          }
+        };
+      }
+
       const query = text
         .replace(/(?:রিমাইন্ডার|reminder|টা|টি|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
         .trim();
 
-      return {
-        action: isDelete ? 'delete_reminder' : 'cancel_reminder',
-        data: {
-          searchQuery: query || 'জরুরি'
-        }
-      };
+      if (query.length >= 2 || text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder')) {
+        return {
+          action: isDelete ? 'delete_reminder' : 'cancel_reminder',
+          data: {
+            searchQuery: query || 'জরুরি'
+          }
+        };
+      }
     }
 
     // 5. Wish Card Creation Detection (Birthday, Anniversary, Eid, etc.)
