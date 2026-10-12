@@ -268,16 +268,16 @@ export default function Landing() {
       </header>
 
       {/* 2. HERO SECTION (AI AGENT & LIVE CHAT SIMULATION) */}
-      <section className="relative overflow-hidden pt-6 sm:pt-10 pb-8 sm:pb-10">
+      <section className="relative overflow-hidden pt-4 sm:pt-8 pb-6 sm:pb-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 lg:gap-8 items-center">
             
             {/* Left Hero Content (7 Cols) */}
-            <div className="lg:col-span-7 space-y-6 text-left">
+            <div className="lg:col-span-7 space-y-3 sm:space-y-5 text-left">
               
               {/* Dynamic AI Badge & Live Indicator */}
               <div className="flex flex-wrap items-center gap-3">
-                <div className="inline-flex items-center gap-2.5 bg-white/80 backdrop-blur-xl text-[#0A7756] font-bold text-xs sm:text-sm px-4 py-2 rounded-full border border-emerald-500/20 shadow-sm shadow-emerald-500/5">
+                <div className="inline-flex items-center gap-2.5 bg-white/80 backdrop-blur-xl text-[#0A7756] font-bold text-xs sm:text-sm px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-emerald-500/20 shadow-xs">
                   <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -308,22 +308,20 @@ export default function Landing() {
                 </div>
               </div>
 
-              {/* Dynamic Rotating Headline with Smooth Fade (Fixed height to prevent layout shift / jitter) */}
-              <div className={`transition-opacity duration-300 min-h-[220px] sm:min-h-[210px] md:min-h-[220px] lg:min-h-[230px] flex flex-col justify-start ${
+              {/* Dynamic Rotating Headline with Smooth Fade (Compact & Stable) */}
+              <div className={`transition-opacity duration-300 min-h-[140px] sm:min-h-[160px] md:min-h-[180px] lg:min-h-[200px] flex flex-col justify-start ${
                 fade ? 'opacity-100' : 'opacity-0'
               }`}>
                 <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-[50px] font-black text-slate-900 leading-[1.2] tracking-tight">
                   {currentHero.title}
                 </h1>
-                <p className="text-lg sm:text-2xl font-black bg-gradient-to-r from-[#0A7756] via-teal-600 to-[#12A57A] bg-clip-text text-transparent mt-2 sm:mt-2.5 leading-snug">
+                <p className="text-lg sm:text-2xl font-black bg-gradient-to-r from-[#0A7756] via-teal-600 to-[#12A57A] bg-clip-text text-transparent mt-1.5 sm:mt-2.5 leading-snug">
                   {currentHero.highlight}
                 </p>
-                <p className="text-sm sm:text-base md:text-lg text-slate-600 leading-relaxed font-normal mt-2.5 sm:mt-3 max-w-xl">
+                <p className="text-sm sm:text-base md:text-lg text-slate-600 leading-relaxed font-normal mt-2 sm:mt-3 max-w-xl">
                   {currentHero.subtitle}
                 </p>
               </div>
-
-
 
             </div>
 
