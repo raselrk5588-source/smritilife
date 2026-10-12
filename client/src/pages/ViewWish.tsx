@@ -259,7 +259,7 @@ export default function ViewWish() {
         <p className="text-white/80 text-xs font-medium tracking-wide">
           Made with ❤️ using{' '}
           <Link to="/paywall" className="font-bold underline text-amber-300 hover:text-amber-200 transition-colors">
-            Smriti (স্মৃতি) - সাবস্ক্রিপশন নিন
+            Smriti Life (স্মৃতি) - সাবস্ক্রিপশন নিন
           </Link>
         </p>
       </div>

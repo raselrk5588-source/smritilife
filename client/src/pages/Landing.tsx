@@ -53,7 +53,7 @@ export default function Landing() {
                     <Leaf className="w-10 h-10 text-[#12A57A] absolute transform rotate-45 opacity-80" />
                   </div>
                   <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 tracking-tight flex items-baseline gap-2">
-                    Smriti <span className="text-2xl md:text-3xl font-bold text-slate-700">(স্মৃতি)</span>
+                    Smriti <span className="text-[#0A7756]">Life</span> <span className="text-2xl md:text-3xl font-bold text-slate-700">(স্মৃতি)</span>
                   </h1>
                 </div>
                 
@@ -65,7 +65,7 @@ export default function Landing() {
               {/* Intro Text (Image removed) */}
               <div className="bg-white/80 p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm backdrop-blur-sm">
                 <p className="text-slate-700 text-lg md:text-xl font-medium leading-relaxed">
-                  Smriti (স্মৃতি) অ্যাপের মাধ্যমে আপনার দৈনন্দিন জীবনের সবকিছু নিরাপদভাবে ডিজিটাল ডায়েরিতে সেভ করে রাখুন। একটি মাত্র অ্যাপে পাচ্ছেন চমৎকার সব সুবিধা।
+                  Smriti Life (স্মৃতি) অ্যাপের মাধ্যমে আপনার দৈনন্দিন জীবনের সবকিছু নিরাপদভাবে ডিজিটাল ডায়েরিতে সেভ করে রাখুন। একটি মাত্র অ্যাপে পাচ্ছেন চমৎকার সব সুবিধা।
                 </p>
               </div>
             </div>
@@ -107,7 +107,7 @@ export default function Landing() {
                     <BellRing className="w-6 h-6 md:w-7 md:h-7 text-[#E67E22]" /> স্পেশাল ডেট রিমাইন্ডার
                   </h3>
                   <p className="text-base md:text-lg text-slate-600 leading-relaxed font-medium">
-                    প্রিয়জনের জন্মদিন, বিবাহ বার্ষিকী, গুরুত্বপূর্ণ মিটিং বা যেকোনো স্পেশাল ইভেন্ট— এখন আর ভুলে যাওয়ার ভয় নেই। সঠিক সময়ে অটোমেটিক নোটিফিকেশন পাঠাবে Smriti (স্মৃতি) অ্যাপ।
+                    প্রিয়জনের জন্মদিন, বিবাহ বার্ষিকী, গুরুত্বপূর্ণ মিটিং বা যেকোনো স্পেশাল ইভেন্ট— এখন আর ভুলে যাওয়ার ভয় নেই। সঠিক সময়ে অটোমেটিক নোটিফিকেশন পাঠাবে Smriti Life (স্মৃতি) অ্যাপ।
                   </p>
                 </div>
               </div>
@@ -176,7 +176,7 @@ export default function Landing() {
             <div className="bg-white/30 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] p-8 md:p-10 border border-white/40 relative">
               
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#0A7756] to-[#12A57A] text-white text-[13px] md:text-sm font-bold px-6 py-2 rounded-full shadow-lg flex items-center tracking-wide">
-                <Sparkles className="w-4 h-4 mr-2" /> Smriti (স্মৃতি) Premium
+                <Sparkles className="w-4 h-4 mr-2" /> Smriti Life (স্মৃতি) Premium
               </div>
 
               <div className="text-center mb-8 mt-4">
@@ -246,7 +246,7 @@ export default function Landing() {
       <footer className="w-full bg-white/40 backdrop-blur-md border-t border-slate-200/50 py-6 relative z-10">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-slate-600 text-sm font-bold">
-            © {new Date().getFullYear()} Smriti (স্মৃতি). All rights reserved.
+            © {new Date().getFullYear()} Smriti Life (স্মৃতি). All rights reserved.
           </p>
         </div>
       </footer>

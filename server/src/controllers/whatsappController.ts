@@ -243,7 +243,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         });
 
         if (!user) {
-          await sendMetaWhatsAppMessage(fromNumber, 'দুঃখিত, এই নম্বরটি Smriti অ্যাপে নিবন্ধিত নয়। দয়া করে আপনার প্রোফাইলে গিয়ে WhatsApp নম্বর আপডেট করুন।');
+          await sendMetaWhatsAppMessage(fromNumber, 'দুঃখিত, এই নম্বরটি Smriti Life অ্যাপে নিবন্ধিত নয়। দয়া করে আপনার প্রোফাইলে গিয়ে WhatsApp নম্বর আপডেট করুন।');
           return;
         }
 

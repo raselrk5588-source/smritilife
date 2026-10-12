@@ -34,7 +34,7 @@ export default function AdminLogin() {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
-          Smriti <span className="text-slate-500">Admin</span>
+          Smriti Life <span className="text-slate-500">Admin</span>
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
           সুপার অ্যাডমিন প্যানেলে লগইন করুন

@@ -235,7 +235,7 @@ export const extractScheduledMessage = (rawText: string, recipientPhone?: string
 };
 
 const SYSTEM_INSTRUCTION = `
-You are an AI assistant for a WhatsApp bot called "Smriti" (স্মৃতি).
+You are an AI assistant for a WhatsApp bot called "Smriti Life" (স্মৃতি লাইফ).
 Your job is to analyze the user's message and return a JSON object with the action to perform.
 The user speaks Bengali, Banglish, or English. Always be warm, friendly, polite, and helpful.
 
@@ -244,13 +244,13 @@ When the user sends greetings (hi, hello, hlw, salam), asks who you are, asks yo
 - Data: {}
 - "replyText": A sweet, polite, and natural response in clear Bengali.
   * For greeting ("hi", "hello", "hlw", "assalamu alaikum", etc.):
-    "আসসালামু আলাইকুম! আমি স্মৃতি (Smriti), আপনার এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
+    "আসসালামু আলাইকুম! আমি স্মৃতি লাইফ (Smriti Life), আপনার এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
   * For name question ("তোমার নাম কি?", "tumar nam ki", "who are you"):
-    "আসসালামু আলাইকুম! আমার নাম স্মৃতি (Smriti), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
+    "আসসালামু আলাইকুম! আমার নাম স্মৃতি লাইফ (Smriti Life), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
   * For how are you ("কেমন আছো?", "kemon acho"):
     "আলহামদুলিল্লাহ, আমি বেশ ভালো আছি! আশা করি আপনিও ভালো আছেন। 😊 আজ আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
   * For what you do or help ("কী করতে পারো?", "help"):
-    "আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট স্মৃতি (Smriti)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে সুন্দর উইশ কার্ড পাঠিয়ে দেওয়া\n\nআপনি কী করতে চান বলুন?"
+    "আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট স্মৃতি লাইফ (Smriti Life)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে সুন্দর উইশ কার্ড পাঠিয়ে দেওয়া\n\nআপনি কী করতে চান বলুন?"
 
 Your capabilities include:
 1. Listing/viewing existing reminders ("list_reminders").
@@ -459,7 +459,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     if (isNameQuestion) {
       return {
         action: 'general_reply',
-        replyText: 'আসসালামু আলাইকুম! আমার নাম স্মৃতি (Smriti), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?'
+        replyText: 'আসসালামু আলাইকুম! আমার নাম স্মৃতি লাইফ (Smriti Life), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?'
       };
     }
 
@@ -473,14 +473,14 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     if (isWhatCanYouDo) {
       return {
         action: 'general_reply',
-        replyText: 'আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট "স্মৃতি" (Smriti)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে আকর্ষণীয় অ্যানিমেটেড উইশ কার্ড পাঠিয়ে দেওয়া\n\nআপনি কী করতে চান বলুন?'
+        replyText: 'আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট "স্মৃতি লাইফ" (Smriti Life)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে আকর্ষণীয় অ্যানিমেটেড উইশ কার্ড পাঠিয়ে দেওয়া\n\nআপনি কী করতে চান বলুন?'
       };
     }
 
     if (isGreeting) {
       return {
         action: 'general_reply',
-        replyText: 'আসসালামু আলাইকুম! আমি স্মৃতি (Smriti), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?'
+        replyText: 'আসসালামু আলাইকুম! আমি স্মৃতি লাইফ (Smriti Life), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?'
       };
     }
 

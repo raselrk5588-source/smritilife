@@ -105,7 +105,7 @@ export default function Paywall() {
           <div className="w-16 h-16 bg-white rounded-2xl shadow-xl mx-auto flex items-center justify-center mb-4 transform rotate-3">
             <span className="text-3xl">🌸</span>
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight drop-shadow-sm">Smriti (স্মৃতি) Premium</h1>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight drop-shadow-sm">Smriti Life (স্মৃতি) Premium</h1>
           <p className="text-white/90 text-sm font-medium mt-1">আপনার সব সুন্দর স্মৃতিগুলো সুরক্ষিত রাখুন</p>
         </div>
 
@@ -205,7 +205,7 @@ export default function Paywall() {
                     <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">🌸</div>
                     <div className="text-left">
                       <div className="text-xs text-gray-500">Merchant</div>
-                      <div className="font-bold text-sm text-gray-800">Smriti (স্মৃতি)</div>
+                      <div className="font-bold text-sm text-gray-800">Smriti Life (স্মৃতি)</div>
                     </div>
                   </div>
                 </div>

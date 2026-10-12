@@ -47,8 +47,8 @@ export default function MainLayout() {
           </div>
           <div className="flex flex-col">
             <div className="flex items-center space-x-1.5">
-              <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Smriti</span>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">স্মৃতি</span>
+              <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Smriti <span className="text-[#0A7756]">Life</span></span>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">স্মৃতি লাইফ</span>
             </div>
             <span className="text-[10px] text-slate-400 font-medium tracking-wide">স্মার্ট ব্যক্তিগত সহকারী</span>
           </div>
@@ -188,7 +188,7 @@ export default function MainLayout() {
       {/* Web View Footer */}
       <footer className="hidden md:block bg-white border-t border-slate-100 py-4 mt-auto shadow-sm relative z-50">
         <div className="max-w-5xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center text-slate-500 text-xs font-medium">
-          <p>© {new Date().getFullYear()} Smriti (স্মৃতি). {t('সর্বস্বত্ব সংরক্ষিত।', 'All rights reserved.')}</p>
+          <p>© {new Date().getFullYear()} Smriti Life (স্মৃতি). {t('সর্বস্বত্ব সংরক্ষিত।', 'All rights reserved.')}</p>
           <div className="flex space-x-6 mt-2 md:mt-0">
             <Link to="#" className="hover:text-[#0A7756] transition-colors">{t('শর্তাবলী', 'Terms')}</Link>
             <Link to="#" className="hover:text-[#0A7756] transition-colors">{t('গোপনীয়তা নীতি', 'Privacy Policy')}</Link>

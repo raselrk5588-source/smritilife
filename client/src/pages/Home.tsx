@@ -156,7 +156,7 @@ export default function Home() {
           {/* Header (Hidden on Web because MainLayout has a Top Nav) */}
           <header className="flex md:hidden justify-between items-center mb-6">
             <div className="flex items-center bg-white/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-sm border border-white/50">
-              <h1 className="text-xl font-extrabold tracking-wide text-primary">Smriti <span className="font-bold text-slate-600 text-[13px]">(স্মৃতি)</span></h1>
+              <h1 className="text-xl font-extrabold tracking-wide text-primary">Smriti Life <span className="font-bold text-slate-600 text-[13px]">(স্মৃতি)</span></h1>
             </div>
             <div className="flex items-center space-x-3">
               <button onClick={() => navigate('/app/notifications')} className="w-8 h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm text-slate-600 relative active:scale-95 transition">
@@ -576,7 +576,7 @@ export default function Home() {
                 <Users className="w-8 h-8 text-white" />
               </div>
               <h2 className="text-xl font-bold text-white mb-1">{t('প্রোফাইল সেটআপ করুন!', 'Setup Profile!')}</h2>
-              <p className="text-white/80 text-sm font-medium">{t('Smriti (স্মৃতি) অ্যাপে আপনাকে স্বাগতম', 'Welcome to Smriti App')}</p>
+              <p className="text-white/80 text-sm font-medium">{t('Smriti Life (স্মৃতি) অ্যাপে আপনাকে স্বাগতম', 'Welcome to Smriti Life App')}</p>
             </div>
             
             <div className="p-6 space-y-4">
