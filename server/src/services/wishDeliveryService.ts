@@ -134,59 +134,38 @@ export const sendMetaWhatsAppText = async (to: string, text: string): Promise<bo
   }
 };
 
+export const getOccasionWishPhrase = (occasion: string): string => {
+  const occ = (occasion || '').toLowerCase().trim();
+  if (occ.includes('birth') || occ.includes('জন্মদিন')) return 'জন্মদিনের শুভেচ্ছা';
+  if (occ.includes('anniversary') || occ.includes('বিবাহ') || occ.includes('বার্ষিকী')) return 'বিবাহবার্ষিকীর শুভেচ্ছা';
+  if (occ.includes('eid') || occ.includes('ঈদ')) return 'ঈদের শুভেচ্ছা';
+  if (occ.includes('new') || occ.includes('বছর') || occ.includes('নববর্ষ') || occ.includes('year')) return 'নতুন বছরের শুভেচ্ছা';
+  if (occ.includes('congrat') || occ.includes('অভিনন্দন') || occ.includes('সাফল্য')) return 'অভিনন্দন';
+  if (occ.includes('love') || occ.includes('valentine') || occ.includes('ভালোবাসা')) return 'ভালোবাসার শুভেচ্ছা';
+  return 'শুভেচ্ছা';
+};
+
 export const deliverWishCard = async (wish: IWish, senderName: string, senderWhatsApp?: string): Promise<boolean> => {
   if (!wish.recipientContact) {
     console.warn(`[WishDelivery] Wish ${wish._id} has no recipientContact`);
     return false;
   }
 
-  const imageUrl = (wish.cardData?.image && wish.cardData.image.startsWith('http'))
-    ? wish.cardData.image
-    : getOccasionImageUrl(wish.occasion);
-
   const smartCardId = wish.smartCardId || wish._id.toString();
   const smartCardUrl = `https://smritilife.com/w/${smartCardId}`;
-  const occasionTitle = getOccasionTitle(wish.occasion);
+  const sender = (wish.cardData?.senderName || senderName || 'আপনার শুভাকাঙ্ক্ষী').trim();
+  const wishPhrase = getOccasionWishPhrase(wish.occasion);
 
-  let recipientSalutation = (wish.recipientName && wish.recipientName !== 'Unknown') ? `প্রিয় ${wish.recipientName},\n\n` : '';
-  
-  let linkSection = '';
-  if (!wish.message.includes('http://') && !wish.message.includes('https://')) {
-    linkSection = `\n\n💌 আপনার জন্য একটি বিশেষ অ্যানিমেটেড উইশ কার্ড পাঠানো হয়েছে:\n👉 ${smartCardUrl}`;
-  }
+  // Short, clean wish notification with the interactive card link
+  const conciseMessage = `🎉 ${sender} আপনাকে ${wishPhrase} জানিয়েছেন!\n\n👉 ${smartCardUrl}`;
 
-  // Check if recipient is already registered in Smriti
-  const cleanRecipientContact = (wish.recipientContact || '').replace(/\D/g, '');
-  const shortRecipientContact = cleanRecipientContact.length > 10 ? cleanRecipientContact.slice(-10) : cleanRecipientContact;
-  const recipientUser = await User.findOne({
-    $or: [
-      { whatsapp: { $regex: new RegExp(shortRecipientContact + '$') } },
-      { mobile: { $regex: new RegExp(shortRecipientContact + '$') } }
-    ]
-  });
+  // 1. Deliver the concise wish text with card link
+  const textDelivered = await sendMetaWhatsAppText(wish.recipientContact, conciseMessage);
+  console.log(`[WishDelivery] Concise wish sent to ${wish.recipientContact}: status=${textDelivered}`);
 
-  let promoSection = '';
-  if (!recipientUser) {
-    promoSection = `\n\n✨ আপনিও কি প্রিয়জনকে এভাবে স্বয়ংক্রিয় উইশ কার্ড ও প্রয়োজনীয় রিমাইন্ডার পাঠাতে চান?\nএখনই রেজিস্ট্রেশন করুন: https://smritilife.com/auth`;
-  } else if (!recipientUser.isSubscribed) {
-    promoSection = `\n\n✨ আপনিও কি প্রিয়জনকে এভাবে স্বয়ংক্রিয় উইশ কার্ড ও প্রয়োজনীয় রিমাইন্ডার পাঠাতে চান?\nএখনই সাবস্ক্রাইব করুন: https://smritilife.com/paywall`;
-  }
-
-  const fullCaption = `🎉 ${occasionTitle}!\n\n${recipientSalutation}${wish.message}${linkSection}\n\n- ভালোবাসা সহ, ${senderName}${promoSection}`;
-
-  // 1. Guaranteed Text Wish Delivery (Contains the full wish & interactive card link)
-  const textDelivered = await sendMetaWhatsAppText(wish.recipientContact, fullCaption);
-  console.log(`[WishDelivery] Text wish sent to ${wish.recipientContact}: status=${textDelivered}`);
-
-  // 2. Also send the visual Image Card
-  if (imageUrl) {
-    sendMetaWhatsAppImage(wish.recipientContact, imageUrl, `🎉 ${occasionTitle}!`).catch(err => {
-      console.warn(`[WishDelivery] Image dispatch failed for ${wish.recipientContact}:`, err);
-    });
-  }
-
-  // 3. Confirm to sender
+  // 2. Confirm to sender
   if (textDelivered && senderWhatsApp) {
+    const occasionTitle = getOccasionTitle(wish.occasion);
     await sendMetaWhatsAppText(
       senderWhatsApp,
       `✅ আসসালামু আলাইকুম! ${wish.recipientContact} নম্বরে আপনার নির্ধারিত ${occasionTitle} কার্ডটি সফলভাবে পৌঁছে দেওয়া হয়েছে।`

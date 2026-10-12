@@ -400,36 +400,65 @@ export default function Wishes() {
 
       <div className="px-4 -mt-5">
         {/* Main Tabs */}
-        <div className="bg-white rounded-2xl shadow-sm p-1.5 flex gap-1 border border-slate-100 mb-6 relative z-20 mx-2">
-          <button 
-            onClick={() => setActiveTab('text')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center ${activeTab === 'text' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> {t('টেক্সট', 'Text')}
-          </button>
-          <button 
-            onClick={() => setActiveTab('image')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center ${activeTab === 'image' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <ImageIcon className="w-3.5 h-3.5 mr-1.5" /> {t('গ্রিটিং কার্ড', 'Greeting Card')}
-          </button>
-          <button 
-            onClick={() => setActiveTab('voice')}
-            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center shrink-0 ${activeTab === 'voice' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <Mic className="w-3.5 h-3.5 mr-1.5" /> {t('ভয়েস', 'Voice')}
-          </button>
-          <button 
-            onClick={() => { setActiveTab('list'); fetchWishes(); }}
-            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center shrink-0 ${activeTab === 'list' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <Calendar className="w-3.5 h-3.5 mr-1.5" /> {t('শিডিউলড তালিকা', 'Scheduled')}
-            {scheduledWishes.length > 0 && (
-              <span className="ml-1 bg-[#0A7756] text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
-                {scheduledWishes.length}
-              </span>
-            )}
-          </button>
+        <div className="bg-white rounded-2xl shadow-sm p-1.5 border border-slate-100 mb-6 relative z-20">
+          <div className="grid grid-cols-4 gap-1">
+            <button 
+              onClick={() => setActiveTab('text')}
+              className={`py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+                activeTab === 'text' 
+                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
+                  : 'text-slate-500 hover:bg-slate-50 border border-transparent'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('টেক্সট', 'Text')}</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('image')}
+              className={`py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+                activeTab === 'image' 
+                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
+                  : 'text-slate-500 hover:bg-slate-50 border border-transparent'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4 shrink-0" />
+              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('গ্রিটিং কার্ড', 'Greeting Card')}</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('voice')}
+              className={`py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+                activeTab === 'voice' 
+                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
+                  : 'text-slate-500 hover:bg-slate-50 border border-transparent'
+              }`}
+            >
+              <Mic className="w-4 h-4 shrink-0" />
+              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('ভয়েস', 'Voice')}</span>
+            </button>
+            <button 
+              onClick={() => { setActiveTab('list'); fetchWishes(); }}
+              className={`relative py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+                activeTab === 'list' 
+                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
+                  : 'text-slate-500 hover:bg-slate-50 border border-transparent'
+              }`}
+            >
+              <div className="relative flex items-center justify-center">
+                <Calendar className="w-4 h-4 shrink-0" />
+                {scheduledWishes.length > 0 && (
+                  <span className="sm:hidden absolute -top-1.5 -right-2.5 bg-[#0A7756] text-white text-[9px] px-1 py-0.2 rounded-full font-bold leading-none shadow-xs">
+                    {scheduledWishes.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('শিডিউলড', 'Scheduled')}</span>
+              {scheduledWishes.length > 0 && (
+                <span className="hidden sm:inline-flex bg-[#0A7756] text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none shrink-0">
+                  {scheduledWishes.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Tab Content */}
