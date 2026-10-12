@@ -38,47 +38,80 @@ export default function MainLayout() {
   return (
     <div className="flex flex-col min-h-screen bg-[#f6f8f9] font-sans">
       
-      {/* Web View Top Navigation (Consumer Style) */}
-      <header className="hidden md:flex bg-white text-slate-800 sticky top-0 z-50 shadow-sm h-16 items-center px-8 lg:px-16 border-b border-slate-100">
-        <Link to="/app" className="flex items-center space-x-2 mr-10">
-          <h1 className="text-xl font-bold tracking-wide text-slate-800">Smriti <span className="font-medium text-slate-500">(স্মৃতি)</span></h1>
+      {/* Web View Top Navigation (Premium Consumer Glassmorphism Style) */}
+      <header className="hidden md:flex bg-white/90 backdrop-blur-md text-slate-800 sticky top-0 z-50 h-[70px] items-center px-6 lg:px-12 border-b border-slate-200/70 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)] justify-between transition-all">
+        {/* Brand Logo & Name */}
+        <Link to="/app" className="flex items-center space-x-3 group mr-4">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#0A7756] to-emerald-400 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 group-hover:scale-105 transition-transform duration-300">
+            <span className="text-xl font-black tracking-tight font-serif">S</span>
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Smriti</span>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">স্মৃতি</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium tracking-wide">স্মার্ট ব্যক্তিগত সহকারী</span>
+          </div>
         </Link>
         
-        <nav className="flex-1 flex items-center justify-center space-x-2 lg:space-x-8">
+        {/* Center Navigation Tabs (Pill Container) */}
+        <nav className="flex items-center bg-slate-100/80 p-1.5 rounded-full border border-slate-200/60 shadow-inner">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || (item.path === '/app' && location.pathname === '/app/');
             return (
               <Link 
                 key={item.path}
                 to={item.path} 
-                className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-300 ${isActive ? 'bg-[#0A7756]/10 text-[#0A7756] font-bold' : 'hover:bg-slate-50 font-medium text-slate-600'}`}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 border-none ${
+                  isActive 
+                    ? 'bg-white text-[#0A7756] shadow-sm shadow-slate-200' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                }`}
               >
-                <item.icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : 'stroke-[2]'}`} />
-                <span className="text-sm">{item.label}</span>
+                <item.icon className={`w-4 h-4 ${isActive ? 'text-[#0A7756] stroke-[2.5]' : 'text-slate-500 stroke-[2]'}`} />
+                <span>{item.label}</span>
               </Link>
             );
           })}
-          
-          {/* AI Voice Assistant Button on Web */}
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2 px-4 py-2 rounded-full bg-emerald-50 text-emerald-600 font-bold hover:bg-emerald-100 transition-all duration-300"
-          >
-            <Mic className="w-4 h-4 stroke-[2.5]" />
-            <span className="text-sm">{t('ভয়েস অ্যাসিস্ট্যান্ট', 'Voice Assistant')}</span>
-          </button>
         </nav>
 
-        <div className="flex items-center space-x-4">
+        {/* Right Action Controls: Voice Assistant, Notifications, Profile */}
+        <div className="flex items-center space-x-3.5">
+          {/* AI Voice Assistant Button */}
+          <button 
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center space-x-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-[#0A7756] via-emerald-600 to-teal-600 text-white font-semibold shadow-md shadow-emerald-700/20 hover:shadow-lg hover:shadow-emerald-700/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 border-none cursor-pointer"
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-80"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+            </span>
+            <Mic className="w-4 h-4 stroke-[2.5]" />
+            <span className="text-sm font-bold tracking-tight">{t('ভয়েস সহকারী', 'AI Voice')}</span>
+          </button>
+
           {/* Web View Notification Button */}
-          <Link to="/app/notifications" className="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 transition border border-slate-200">
-            <Bell className="w-5 h-5" />
+          <Link 
+            to="/app/notifications" 
+            title={t('বিজ্ঞপ্তি', 'Notifications')}
+            className="relative w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 hover:text-[#0A7756] transition-colors border border-slate-200/80 shadow-xs"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white"></span>
           </Link>
           
-          <Link to="/app/profile" className="flex items-center space-x-3 bg-slate-50 hover:bg-slate-100 transition px-4 py-1.5 rounded-full border border-slate-200">
-            <div className="w-8 h-8 bg-[#0A7756] text-white rounded-full flex items-center justify-center font-bold text-sm">
-              {(localStorage.getItem('userName') || 'Riyad').charAt(0).toUpperCase()}
+          {/* User Profile Pill */}
+          <Link 
+            to="/app/profile" 
+            className="flex items-center space-x-2.5 pl-1.5 pr-3 py-1 bg-slate-50 hover:bg-slate-100/90 transition-all rounded-full border border-slate-200/80 shadow-xs group"
+          >
+            <div className="w-8 h-8 bg-gradient-to-tr from-[#0A7756] to-emerald-500 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-xs ring-2 ring-white">
+              {(localStorage.getItem('userName') || 'User').charAt(0).toUpperCase()}
             </div>
+            <span className="text-xs font-bold text-slate-700 group-hover:text-[#0A7756] max-w-[80px] truncate hidden lg:inline-block">
+              {localStorage.getItem('userName') || 'প্রোফাইল'}
+            </span>
           </Link>
         </div>
       </header>
