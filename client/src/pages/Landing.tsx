@@ -27,31 +27,31 @@ const heroFeatures = [
     badge: 'জরুরি কাজের রিমাইন্ডার',
     title: 'জরুরি কাজ ভুলে গেছেন?',
     highlight: 'SmritiLife সাথে থাকলে কাজ আর কখনো ভুলবেন না!',
-    subtitle: 'অফিসের কাজ, মিটিং বা দৈনন্দিন জরুরি দায়িত্ব—নির্ধারিত সময়ের ঠিক আগেই আপনার WhatsApp-এ পৌঁছে যাবে স্বয়ংক্রিয় রিমাইন্ডার।'
+    subtitle: 'অফিসের কাজ, মিটিং বা দৈনন্দিন জরুরি দায়িত্ব—সময়ের ঠিক আগেই আপনার WhatsApp-এ পৌঁছে যাবে স্বয়ংক্রিয় রিমাইন্ডার।'
   },
   {
     badge: 'বিশেষ দিনের শুভেচ্ছা',
-    title: 'ওয়াইফ বা প্রিয়জনের জন্মদিন ভুলে গেছেন?',
+    title: 'প্রিয়জনের জন্মদিন ভুলে গেছেন?',
     highlight: 'সঠিক সময়ে আন্তরিক শুভেচ্ছা পাঠিয়ে সম্পর্ক রাখুন সতেজ!',
-    subtitle: 'স্ত্রী, বন্ধুবান্ধব বা পরিবারের প্রিয় মানুষের বিশেষ দিনটিতে আপনার পক্ষ থেকে সঠিক সময়ে শুভেচ্ছা বার্তা পৌঁছে দেবে SmritiLife।'
+    subtitle: 'পরিবার বা প্রিয় মানুষের বিশেষ দিনটিতে আপনার পক্ষ থেকে সঠিক সময়ে মিষ্টি শুভেচ্ছা বার্তা পৌঁছে দেবে SmritiLife।'
   },
   {
     badge: 'স্বাস্থ্য ও ওষুধ রিমাইন্ডার',
-    title: 'নিয়মিত ওষুধ খেতে বা ডাক্তারের ভিজিট ভুলে যাচ্ছেন?',
+    title: 'নিয়মিত ওষুধ খেতে ভুলে যাচ্ছেন?',
     highlight: 'স্বাস্থ্য সচেতনতায় সঠিক সময়ে ওষুধের অ্যালার্ট!',
-    subtitle: 'সকাল, দুপুর কিংবা রাতে ওষুধের সঠিক সময় মিস হওয়ার সুযোগ নেই—WhatsApp মেসেজ দিয়ে আপনাকে সতর্ক রাখবে SmritiLife।'
+    subtitle: 'সকাল, দুপুর কিংবা রাতে ওষুধের সঠিক সময় মিস হওয়ার সুযোগ নেই—সঠিক মুহূর্তে WhatsApp মেসেজে সতর্ক থাকুন।'
   },
   {
     badge: 'নোট ও কাজের তালিকা',
-    title: 'বাজারের তালিকা বা দরকারি নোট মনে নেই?',
+    title: 'বাজারের তালিকা বা নোট মনে নেই?',
     highlight: 'এক নিমেষে গুছিয়ে রাখুন সবকিছু আপনার হাতের মুঠোয়!',
-    subtitle: 'কেনাকাটার ফর্দ, আইডিয়া কিংবা জরুরি নোট—ওয়েবসাইট বা চ্যাটের মাধ্যমে সহজে সেভ করে রাখুন এবং প্রয়োজনমতো পান।'
+    subtitle: 'কেনাকাটার ফর্দ, জরুরি আইডিয়া বা নোট—সহজে সেভ করে রাখুন এবং যেকোনো সময় প্রয়োজনমতো হাতের কাছে পান।'
   },
   {
     badge: 'বিল ও ডেডলাইন রিমাইন্ডার',
-    title: 'বিদ্যুৎ বিল বা জরুরি ডেডলাইনের কথা মনে পড়ছে না?',
+    title: 'বিদ্যুৎ বিলের ডেডলাইন মনে নেই?',
     highlight: 'বিল বা ডেডলাইন পার হওয়ার আগেই সতর্ক থাকুন!',
-    subtitle: 'অফিসের গুরুত্বপূর্ণ ডেডলাইন, বাসা ভাড়া কিংবা ইউটিলিটি বিলের সঠিক রিমাইন্ডার নিশ্চিত করে টেনশনমুক্ত থাকুন প্রতিদিন।'
+    subtitle: 'অফিসের গুরুত্বপূর্ণ ডেডলাইন, বাসা ভাড়া কিংবা ইউটিলিটি বিলের সঠিক রিমাইন্ডার নিশ্চিত করে টেনশনমুক্ত থাকুন।'
   }
 ];
 
@@ -308,17 +308,17 @@ export default function Landing() {
                 </div>
               </div>
 
-              {/* Dynamic Rotating Headline with Smooth Fade & Glow */}
-              <div className={`transition-all duration-300 min-h-[160px] sm:min-h-[180px] flex flex-col justify-center ${
-                fade ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+              {/* Dynamic Rotating Headline with Smooth Fade (Fixed height to prevent layout shift / jitter) */}
+              <div className={`transition-opacity duration-300 min-h-[220px] sm:min-h-[210px] md:min-h-[220px] lg:min-h-[230px] flex flex-col justify-start ${
+                fade ? 'opacity-100' : 'opacity-0'
               }`}>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[52px] font-black text-slate-900 leading-[1.18] tracking-tight">
+                <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-[50px] font-black text-slate-900 leading-[1.2] tracking-tight">
                   {currentHero.title}
                 </h1>
-                <p className="text-xl sm:text-2xl font-black bg-gradient-to-r from-[#0A7756] via-teal-600 to-[#12A57A] bg-clip-text text-transparent mt-2.5">
+                <p className="text-lg sm:text-2xl font-black bg-gradient-to-r from-[#0A7756] via-teal-600 to-[#12A57A] bg-clip-text text-transparent mt-2 sm:mt-2.5 leading-snug">
                   {currentHero.highlight}
                 </p>
-                <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-normal mt-3 max-w-xl">
+                <p className="text-sm sm:text-base md:text-lg text-slate-600 leading-relaxed font-normal mt-2.5 sm:mt-3 max-w-xl">
                   {currentHero.subtitle}
                 </p>
               </div>
