@@ -407,7 +407,26 @@ Possible actions:
    Fields in "data":
    - "searchQuery": string
 
-11. general_reply (for greetings, conversational questions, or help)
+11. save_contact:
+   When user asks to save a person's contact number (or relation).
+   Examples in Bengali/Banglish:
+   - "রনির ফোন নম্বর সেভ করো: 01712345678" -> action: "save_contact", data: { name: "রনি", phone: "01712345678", relationship: "Friend" }
+   - "আম্মুর নাম্বার সেভ করো 01811223344" -> action: "save_contact", data: { name: "আম্মু", phone: "01811223344", relationship: "Family" }
+   - "save contact: Shanto 01911223344" -> action: "save_contact", data: { name: "Shanto", phone: "01911223344" }
+   Fields in "data":
+   - "name": string
+   - "phone": string
+   - "relationship"?: string
+
+12. get_contact:
+   When user asks for someone's phone number or asks to see their contact list.
+   Examples in Bengali/Banglish:
+   - "রনির নাম্বার কত?" বা "রনির নম্বরটা দাও" বা "roni r number ki" -> action: "get_contact", data: { searchQuery: "রনি" }
+   - "সব কন্ট্যাক্ট দেখাও" বা "আমার কন্ট্যাক্ট লিস্ট দেখাও" -> action: "get_contact", data: { searchQuery: "সব" }
+   Fields in "data":
+   - "searchQuery": string
+
+13. general_reply (for greetings, conversational questions, or help)
 
 Example Response for Wish:
 {
@@ -801,6 +820,60 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
     }
 
+    // 4.7 Contact Storage & Retrieval Detection (Fallback)
+    // A. Save Contact: e.g. "রনির ফোন নম্বর সেভ করো: 01712345678", "আম্মুর নাম্বার সেভ করো 018..."
+    const hasPhoneInText = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
+    const isSaveContactIntent =
+      hasPhoneInText &&
+      /(?:নাম্বার|নম্বর|number|phone|ফোন|contact|কন্ট্যাক্ট)\s*.*(?:সেভ|রাখো|রেখো|তুল|তুলে|add|save)/i.test(text) ||
+      /^(?:save\s*contact|কন্ট্যাক্ট\s*সেভ)\s*[:：\-]?\s*(.+)/i.test(text);
+
+    if (isSaveContactIntent && hasPhoneInText) {
+      const phone = hasPhoneInText[0];
+      const textNoPhone = enText.replace(phone, ' ').trim();
+      const extractedContactName = textNoPhone
+        .replace(/^(?:save\s*contact|কন্ট্যাক্ট\s*সেভ|সেভ\s*করো|save|add)\s*[:：\-]?\s*/gi, '')
+        .replace(/(?:এর|র|er|r)?\s*(?:ফোন\s*নম্বর|নাম্বার|নম্বর|number|phone|ফোন|মোবাইল|mobile|contact|কন্ট্যাক্ট)\s*(?:হলো|হচ্ছে|is|সেভ\s*করো|সেভ\s*করে\s*রাখো|রাখো|রেখো|[:：=])\s*$/gi, '')
+        .replace(/[^\w\s\u0980-\u09FF]/g, ' ')
+        .trim();
+
+      const contactName = extractedContactName && extractedContactName.length >= 2 ? extractedContactName : 'পরিচিত ব্যক্তি';
+      return {
+        action: 'save_contact',
+        data: {
+          name: contactName,
+          phone: phone
+        }
+      };
+    }
+
+    // B. Get Contact: e.g. "রনির নাম্বার কত?", "রনির ফোন নম্বরটা দাও", "সব কন্ট্যাক্ট দেখাও"
+    const isGetContactIntent =
+      /(?:সব\s*কন্ট্যাক্ট|আমার\s*কন্ট্যাক্ট|কন্ট্যাক্ট\s*লিস্ট|contact\s*list|show\s*contacts)/i.test(text) ||
+      /(?:নাম্বার|নম্বর|number|phone|ফোন|মোবাইল|mobile)\s*(?:টা|টি)?\s*(?:দাও|বলো|কি|কী|কত|কতো|daw|dao|ki|koto|bolo)/i.test(text);
+
+    if (isGetContactIntent && !text.includes(':') && !hasPhoneInText) {
+      if (/(?:সব|সকল|আমার)\s*কন্ট্যাক্ট|কন্ট্যাক্ট\s*লিস্ট|contact\s*list/i.test(text)) {
+        return {
+          action: 'get_contact',
+          data: { searchQuery: 'সব' }
+        };
+      }
+
+      const contactQuery = text
+        .replace(/(?:এর|র|er|r)?\s*(?:ফোন\s*নম্বর|ফোন|নাম্বার|নম্বর|number|phone|মোবাইল|mobile)\s*(?:টা|টি|ta|ti)?\s*(?:দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|daw|dao|bolo|ki|koto)/gi, '')
+        .replace(/(?:আমার|amr|amar)/gi, '')
+        .replace(/[^\w\s\u0980-\u09FF]/g, ' ')
+        .trim();
+
+      if (contactQuery && contactQuery.length >= 2 && !/^(?:বাসা|অফিস|ঠিকানা|address|wifi|রক্ত|পাসওয়ার্ড)$/i.test(contactQuery)) {
+        return {
+          action: 'get_contact',
+          data: { searchQuery: contactQuery }
+        };
+      }
+    }
+
     // 4. Modify / Reschedule / Edit Reminder Detection
     const isModifyIntent =
       /(?:পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে)/i.test(text) &&
@@ -952,9 +1025,21 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         .replace(/\s+/g, ' ')
         .trim();
 
+      let recipientName: string | undefined = undefined;
       if (recipientPhone) {
         title = `মেসেজ পাঠানো (${recipientPhone})`;
         customMessage = extractScheduledMessage(text, recipientPhone);
+      } else {
+        // Check if user is asking to send a message to a person: e.g. "রনিকে একটা মেসেজ দাও যে...", "roni k akta message daw j..."
+        const toPersonMatch = text.match(/(?:^|\s)([a-zA-Z\u0980-\u09FF]{2,15})\s*(?:-?কে|-?k|-?ke|-?er|-?এর|-?re|-?রে)?\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও)/i);
+        if (toPersonMatch && toPersonMatch[1]) {
+          const candidate = toPersonMatch[1].trim();
+          if (!/^(?:আমাকে|তাকে|তারে|একজনকে|আমারে|me|him|her)$/i.test(candidate)) {
+            recipientName = candidate;
+            title = `মেসেজ পাঠানো (${recipientName})`;
+            customMessage = extractScheduledMessage(text);
+          }
+        }
       }
 
       if (!title || title.length < 2) title = 'জরুরি কাজ';
@@ -966,6 +1051,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         data: {
           title,
           recipientPhone,
+          recipientName,
           customMessage,
           date: dateStr,
           time

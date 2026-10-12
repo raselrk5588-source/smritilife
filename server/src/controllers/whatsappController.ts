@@ -4,6 +4,7 @@ import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
 import TodoList from '../models/TodoList';
 import Note from '../models/Note';
+import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
@@ -305,7 +306,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           audioMimeType = message.audio?.mime_type || message.voice?.mime_type || 'audio/ogg';
         }
 
-        if (!fromNumber || (!userMessage && !isAudio && !buttonId)) return;
+        if (!fromNumber || (!userMessage && !isAudio && !buttonId && message.type !== 'contacts')) return;
 
         // WhatsApp cloud API sends number with country code without +
         // Using a regex to match the end of the number is safer to find the user
@@ -326,6 +327,51 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         if (!user.whatsapp) {
           user.whatsapp = fromNumber;
           await user.save();
+        }
+
+        // --- STEP 0A: Handle WhatsApp Shared Contact Card (vCard) ---
+        if (message.type === 'contacts' && message.contacts && message.contacts.length > 0) {
+          const c = message.contacts[0];
+          const contactName = c.name?.formatted_name || c.name?.first_name || 'পরিচিত ব্যক্তি';
+          const rawPhone = c.phones?.[0]?.phone || c.phones?.[0]?.wa_id || '';
+          const contactPhone = rawPhone.replace(/[^\d+]/g, '');
+          const contactEmail = c.emails?.[0]?.email || '';
+
+          let savedContact = null;
+          if (contactPhone) {
+            const shortContactPhone = contactPhone.length > 10 ? contactPhone.slice(-10) : contactPhone;
+            savedContact = await Contact.findOne({
+              userId: user._id,
+              phone: { $regex: new RegExp(shortContactPhone + '$') }
+            });
+          }
+          if (!savedContact) {
+            savedContact = await Contact.findOne({
+              userId: user._id,
+              name: { $regex: new RegExp('^' + contactName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }
+            });
+          }
+
+          if (savedContact) {
+            savedContact.name = contactName;
+            if (contactPhone) savedContact.phone = contactPhone;
+            if (contactEmail) savedContact.email = contactEmail;
+            await savedContact.save();
+          } else {
+            savedContact = await Contact.create({
+              userId: user._id,
+              name: contactName,
+              phone: contactPhone,
+              email: contactEmail,
+              relationship: 'Other'
+            });
+          }
+
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `📇 আপনার শেয়ার করা কন্ট্যাক্ট কার্ড থেকে *${contactName}* এর তথ্য সেভ করা হয়েছে!\n\n📞 ফোন: ${contactPhone || 'দেওয়া নেই'}${contactEmail ? `\n✉️ ইমেইল: ${contactEmail}` : ''}\n\n💡 এখন থেকে আপনি সরাসরি বলতে পারেন:\n_"${contactName}কে মেসেজ দাও যে কালকের মিটিং বাতিল"_\nস্মৃতি স্বয়ংক্রিয়ভাবে তার এই নম্বরে মেসেজ পাঠাবে!`
+          );
+          return;
         }
 
         const cleanText = (userMessage || '').trim();
@@ -888,12 +934,41 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           case 'create_reminder':
             if (aiResponse.data) {
               const cleanTitle = (aiResponse.data.title || 'নতুন রিমাইন্ডার').trim();
-              const category = aiResponse.data.recipientPhone ? 'message' : (aiResponse.data.category || 'General');
+              let targetPhone = aiResponse.data.recipientPhone || undefined;
+              let contactFoundName: string | undefined = undefined;
+
+              // If recipientPhone was not explicitly in the message, check if user mentioned a contact name!
+              const targetName = aiResponse.data.recipientName || (aiResponse.data.title?.match(/মেসেজ\s*পাঠানো\s*\(([^)]+)\)/)?.[1]);
+              if (!targetPhone && targetName) {
+                const cleanName = targetName.trim();
+                const matchedContact = await Contact.findOne({
+                  userId: user._id,
+                  $or: [
+                    { name: { $regex: new RegExp(`^${cleanName}$`, 'i') } },
+                    { nickname: { $regex: new RegExp(`^${cleanName}$`, 'i') } },
+                    { name: { $regex: new RegExp(cleanName, 'i') } }
+                  ]
+                });
+
+                if (matchedContact && matchedContact.phone) {
+                  targetPhone = matchedContact.phone.replace(/[\s\-\(\)]/g, '');
+                  contactFoundName = matchedContact.name;
+                } else {
+                  // Prompt user that this contact was not found
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `⚠️ আপনার কনট্যাক্ট লিস্টে "${cleanName}" নামে কোনো নম্বর খুঁজে পাওয়া যায়নি।\n\n💡 মেসেজটি পাঠাতে ${cleanName}-র ফোন নম্বর উল্লেখ করুন (যেমন: "017XXXXXXXX নম্বরে মেসেজ দাও...") অথবা আগে নম্বরটি সেভ করুন:\n"সেভ করো: ${cleanName} 017XXXXXXXX"`
+                  );
+                  break;
+                }
+              }
+
+              const category = targetPhone ? 'message' : (aiResponse.data.category || 'General');
               await Reminder.create({
                 userId: user._id,
                 title: cleanTitle,
                 description: aiResponse.data.customMessage || aiResponse.data.description,
-                recipientPhone: aiResponse.data.recipientPhone || undefined,
+                recipientPhone: targetPhone,
                 date: new Date(aiResponse.data.date || new Date()),
                 time: aiResponse.data.time || '10:00',
                 priority: 'Medium',
@@ -901,10 +976,20 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 repeat: 'Once',
                 status: 'Pending'
               });
-              await sendMetaWhatsAppMessage(
-                fromNumber,
-                aiResponse.replyText || `আপনার রিমাইন্ডার "${cleanTitle}" সেট করা হয়েছে!`
-              );
+
+              if (targetPhone && contactFoundName) {
+                const formattedTime = formatTime12Hour(aiResponse.data.time || '10:00');
+                const customMsg = aiResponse.data.customMessage || '';
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `✅ আপনার কনট্যাক্ট লিস্ট থেকে *${contactFoundName}* (${targetPhone})-কে সময় ${formattedTime}-এ বার্তা পাঠানো হবে:\n\n💬 "${customMsg}"`
+                );
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  aiResponse.replyText || `আপনার রিমাইন্ডার "${cleanTitle}" সেট করা হয়েছে!`
+                );
+              }
             }
             break;
 
@@ -1353,6 +1438,97 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার "${deletedNote.title}" সফলভাবে মুছে ফেলা হয়েছে।`);
             } else {
               await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো নোট বা তথ্য খুঁজে পাওয়া যায়নি।`);
+            }
+            break;
+          }
+
+          case 'save_contact': {
+            const data = aiResponse.data || {};
+            const contactName = (data.name || '').trim();
+            const contactPhone = (data.phone || '').replace(/[\s\-\(\)]/g, '').trim();
+
+            if (!contactName || !contactPhone) {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                'অনুগ্রহ করে নাম ও নম্বর স্পষ্টভাবে লিখুন। যেমন:\n"রনির নম্বর সেভ করো: 017XXXXXXXX"'
+              );
+              break;
+            }
+
+            const cleanPhone = contactPhone.startsWith('01') ? contactPhone : contactPhone.replace(/^\+?88/, '');
+            let existingContact = await Contact.findOne({
+              userId: user._id,
+              $or: [
+                { name: { $regex: new RegExp(`^${contactName}$`, 'i') } },
+                { phone: cleanPhone },
+                { phone: `88${cleanPhone}` }
+              ]
+            });
+
+            if (existingContact) {
+              existingContact.name = contactName;
+              existingContact.phone = cleanPhone;
+              if (data.relationship) existingContact.relationship = data.relationship;
+              await existingContact.save();
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✏️ আপনার কনট্যাক্ট *${contactName}*-র নম্বর সফলভাবে আপডেট করা হয়েছে:\n\n📞 ${cleanPhone}`
+              );
+            } else {
+              await Contact.create({
+                userId: user._id,
+                name: contactName,
+                phone: cleanPhone,
+                relationship: data.relationship || 'Friend'
+              });
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `💾 আপনার কনট্যাক্ট লিস্টে *${contactName}* সফলভাবে সেভ করা হয়েছে!\n\n📞 ${cleanPhone}\n\n💡 এখন থেকে "${contactName}-কে মেসেজ দাও..." বললে স্মৃতি স্বয়ংক্রিয়ভাবে এই নম্বরে বার্তা পাঠাবে।`
+              );
+            }
+            break;
+          }
+
+          case 'get_contact': {
+            const data = aiResponse.data || {};
+            const query = (data.searchQuery || '').trim();
+
+            if (!query || query === 'সব' || /সব|সকল|all|লিস্ট|list/i.test(query)) {
+              const contacts = await Contact.find({ userId: user._id }).sort({ name: 1 });
+              if (contacts.length === 0) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  '📋 আপনার কনট্যাক্ট লিস্টে কোনো নম্বর সেভ করা নেই।\nনতুন নম্বর সেভ করতে লিখুন:\n"রনির নম্বর সেভ করো: 017XXXXXXXX"'
+                );
+              } else {
+                let msg = `👥 আপনার সংরক্ষিত কন্ট্যাক্টসমূহ (${contacts.length}টি):\n\n`;
+                contacts.forEach((c, idx) => {
+                  msg += `${idx + 1}. 👤 *${c.name}*\n   📞 ${c.phone} (${c.relationship || 'Friend'})\n\n`;
+                });
+                msg += `💡 মেসেজ পাঠাতে লিখুন: "[নাম]-কে মেসেজ দাও যে [বার্তা]"`;
+                await sendMetaWhatsAppMessage(fromNumber, msg.trim());
+              }
+              break;
+            }
+
+            const matchedContact = await Contact.findOne({
+              userId: user._id,
+              $or: [
+                { name: { $regex: new RegExp(query, 'i') } },
+                { nickname: { $regex: new RegExp(query, 'i') } }
+              ]
+            });
+
+            if (matchedContact) {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `👤 *${matchedContact.name}*\n📞 ফোন: ${matchedContact.phone}\n👥 সম্পর্ক: ${matchedContact.relationship || 'Friend'}\n\n💡 মেসেজ পাঠাতে লিখুন: "${matchedContact.name}-কে মেসেজ দাও যে [আপনার বার্তা]"`
+              );
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `দুঃখিত, আপনার কনট্যাক্ট লিস্টে "${query}" নামের কোনো নম্বর খুঁজে পাওয়া যায়নি।\n\nসেভ করতে লিখুন: "${query}-র নম্বর সেভ করো: 017XXXXXXXX"`
+              );
             }
             break;
           }
