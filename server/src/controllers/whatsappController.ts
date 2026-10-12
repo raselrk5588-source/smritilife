@@ -6,7 +6,7 @@ import TodoList from '../models/TodoList';
 import Note from '../models/Note';
 import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
-import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, cleanPersonName } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 
 export interface ReminderActionState {
@@ -1444,10 +1444,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
           case 'save_contact': {
             const data = aiResponse.data || {};
-            const contactName = (data.name || '').trim();
+            const rawContactName = (data.name || '').trim();
             const contactPhone = (data.phone || '').replace(/[\s\-\(\)]/g, '').trim();
 
-            if (!contactName || !contactPhone) {
+            if (!rawContactName || !contactPhone) {
               await sendMetaWhatsAppMessage(
                 fromNumber,
                 'অনুগ্রহ করে নাম ও নম্বর স্পষ্টভাবে লিখুন। যেমন:\n"রনির নম্বর সেভ করো: 017XXXXXXXX"'
@@ -1455,31 +1455,37 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               break;
             }
 
+            const cleaned = cleanPersonName(rawContactName);
+            const contactName = cleaned.name;
+            const relationship = data.relationship || cleaned.relationship || 'Friend';
             const cleanPhone = contactPhone.startsWith('01') ? contactPhone : contactPhone.replace(/^\+?88/, '');
+            const shortPhone = cleanPhone.length > 10 ? cleanPhone.slice(-10) : cleanPhone;
+
             let existingContact = await Contact.findOne({
               userId: user._id,
               $or: [
-                { name: { $regex: new RegExp(`^${contactName}$`, 'i') } },
                 { phone: cleanPhone },
-                { phone: `88${cleanPhone}` }
+                { phone: `88${cleanPhone}` },
+                { phone: { $regex: new RegExp(shortPhone + '$') } },
+                { name: { $regex: new RegExp(`^${contactName}$`, 'i') } }
               ]
             });
 
             if (existingContact) {
               existingContact.name = contactName;
               existingContact.phone = cleanPhone;
-              if (data.relationship) existingContact.relationship = data.relationship;
+              if (relationship) existingContact.relationship = relationship;
               await existingContact.save();
               await sendMetaWhatsAppMessage(
                 fromNumber,
-                `✏️ আপনার কনট্যাক্ট *${contactName}*-র নম্বর সফলভাবে আপডেট করা হয়েছে:\n\n📞 ${cleanPhone}`
+                `✏️ আপনার কনট্যাক্ট *${contactName}*-র নম্বর সফলভাবে আপডেট করা হয়েছে:\n\n📞 ${cleanPhone}\n\n💡 এখন থেকে "${contactName}-কে মেসেজ দাও..." বললে স্মৃতি স্বয়ংক্রিয়ভাবে এই নম্বরে বার্তা পাঠাবে।`
               );
             } else {
               await Contact.create({
                 userId: user._id,
                 name: contactName,
                 phone: cleanPhone,
-                relationship: data.relationship || 'Friend'
+                relationship: relationship
               });
               await sendMetaWhatsAppMessage(
                 fromNumber,

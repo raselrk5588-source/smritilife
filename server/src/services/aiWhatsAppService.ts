@@ -235,6 +235,48 @@ export const extractWishRecipientName = (rawText: string): string | null => {
 };
 
 /**
+ * Robust cleaner and normalizer for person contact names and relations.
+ * Removes conversational artifacts like 'ar number save koro', 'er number', 'save koro', etc.
+ */
+export const cleanPersonName = (rawName: string): { name: string; relationship?: string } => {
+  let name = (rawName || '').trim();
+
+  // Strip common command prefixes
+  name = name
+    .replace(/^(?:save\s*contact|কন্ট্যাক্ট\s*সেভ|কন্ট্যাক্ট\s*অ্যাড|add\s*contact|সেভ\s*করো|সেভ\s*করে\s*রাখো|সেভ|save|add)\s*[:：\-]?\s*/gi, '')
+    .trim();
+
+  // Strip noise like 'ar number save koro', 'er phone number', 'er contact'
+  name = name
+    .replace(/(?:এর|র|er|ar|r|'s)?\s*(?:ফোন\s*নম্বর|নাম্বার|নম্বর|number|phone|ফোন|মোবাইল|mobile|contact|কন্ট্যাক্ট).*/gi, '')
+    .replace(/\b(?:save\s*koro|save|সেভ\s*করো|সেভ|koro|করো|rakho|রাখো|rekho|রেখো|tulo|তুলো|add)\b/gi, '')
+    .replace(/[^\w\s\u0980-\u09FF]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // If still ends with ar / er / র / এর (e.g. "Bou ar" -> "Bou", "বউয়ের" -> "বউ")
+  name = name
+    .replace(/\b(?:ar|er)$/i, '')
+    .replace(/(?:এর|র)$/, '')
+    .trim();
+
+  // Capitalize first letter if English
+  if (/^[a-z]/i.test(name)) {
+    name = name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  // Detect auto relationship
+  let relationship = undefined;
+  if (/^(?:bou|wife|বউ|স্ত্রী|ammu|abbu|baba|ma|maa|আম্মু|আব্বু|বাবা|মা|vai|bhai|ভাই|bon|apu|আপু|বোন|chachu|kaka|mama|khala)$/i.test(name)) {
+    relationship = 'Family';
+  } else if (/^(?:boss|office|manager|colleague|sir|স্যার|বস|অফিস)$/i.test(name)) {
+    relationship = 'Work';
+  }
+
+  return { name: name || 'পরিচিত ব্যক্তি', relationship };
+};
+
+/**
  * Intelligent extractor for the actual message body intended for the recipient.
  * Handles quoted text, 'j' / 'je' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
  */
@@ -409,12 +451,14 @@ Possible actions:
 
 11. save_contact:
    When user asks to save a person's contact number (or relation).
+   CRITICAL RULE: "name" must ONLY be the clean person's name or title (e.g. "Bou", "বউ", "রনি", "আম্মু", "Shanto"). NEVER include phrases like "ar number save koro", "এর নম্বর সেভ করো", "save koro" inside "name"!
    Examples in Bengali/Banglish:
+   - "Bou ar number save koro 01974718615" -> action: "save_contact", data: { name: "Bou", phone: "01974718615", relationship: "Family" }
    - "রনির ফোন নম্বর সেভ করো: 01712345678" -> action: "save_contact", data: { name: "রনি", phone: "01712345678", relationship: "Friend" }
    - "আম্মুর নাম্বার সেভ করো 01811223344" -> action: "save_contact", data: { name: "আম্মু", phone: "01811223344", relationship: "Family" }
    - "save contact: Shanto 01911223344" -> action: "save_contact", data: { name: "Shanto", phone: "01911223344" }
    Fields in "data":
-   - "name": string
+   - "name": string (ONLY the clean name/title)
    - "phone": string
    - "relationship"?: string
 
@@ -831,18 +875,14 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     if (isSaveContactIntent && hasPhoneInText) {
       const phone = hasPhoneInText[0];
       const textNoPhone = enText.replace(phone, ' ').trim();
-      const extractedContactName = textNoPhone
-        .replace(/^(?:save\s*contact|কন্ট্যাক্ট\s*সেভ|সেভ\s*করো|save|add)\s*[:：\-]?\s*/gi, '')
-        .replace(/(?:এর|র|er|r)?\s*(?:ফোন\s*নম্বর|নাম্বার|নম্বর|number|phone|ফোন|মোবাইল|mobile|contact|কন্ট্যাক্ট)\s*(?:হলো|হচ্ছে|is|সেভ\s*করো|সেভ\s*করে\s*রাখো|রাখো|রেখো|[:：=])\s*$/gi, '')
-        .replace(/[^\w\s\u0980-\u09FF]/g, ' ')
-        .trim();
+      const cleaned = cleanPersonName(textNoPhone);
 
-      const contactName = extractedContactName && extractedContactName.length >= 2 ? extractedContactName : 'পরিচিত ব্যক্তি';
       return {
         action: 'save_contact',
         data: {
-          name: contactName,
-          phone: phone
+          name: cleaned.name,
+          phone: phone,
+          relationship: cleaned.relationship || 'Friend'
         }
       };
     }
