@@ -151,7 +151,7 @@ export default function Paywall() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-extrabold text-primary">৳ ৫০</div>
+                <div className="font-extrabold text-primary">৳ ১৯০</div>
               </div>
             </label>
           </div>
@@ -166,7 +166,7 @@ export default function Paywall() {
                 বিকাশ পেমেন্ট
               </span>
               <span className="bg-white/20 px-3 py-1 rounded-lg text-sm">
-                ৳ ৫০
+                ৳ ১৯০
               </span>
             </div>
           </button>
@@ -211,7 +211,7 @@ export default function Paywall() {
                 </div>
                 
                 <div className="text-gray-800 font-bold mb-4 border-b border-gray-300 pb-2">
-                  Amount: ৳ 50.00
+                  Amount: ৳ 190.00
                 </div>
 
                 <div className="mt-6 mb-8 text-center text-gray-700 font-medium">
