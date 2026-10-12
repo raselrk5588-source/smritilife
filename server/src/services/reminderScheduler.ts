@@ -130,15 +130,9 @@ export const startReminderScheduler = () => {
               await sendWhatsAppAlert(senderNumber, `✅ আসসালামু আলাইকুম! ${reminder.recipientPhone} নম্বরে আপনার নির্ধারিত বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n"${messageBody}"`);
             }
           } else {
-            // Standard reminder for self - Smart Interactive Yes/No Prompt!
             if (senderNumber) {
               const displayTime = formatTime12Hour(reminder.time);
-              const isMeeting = /(?:মিটিং|meeting|কল|call|ইন্টারভিউ|interview|ক্লাস|class|ওয়েবিনার|webinar)/i.test(reminder.title);
-              const question = isMeeting
-                ? 'আপনি কি মিটিংয়ে যোগ দিয়েছেন বা কাজটি সম্পন্ন করেছেন?'
-                : 'আপনি কি কাজটি সম্পন্ন করেছেন?';
-
-              const alertBody = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}\n\n${question}`;
+              const alertBody = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
 
               // Track in active state for tracking response
               userReminderState.set(reminder.userId.toString(), {
