@@ -30,6 +30,28 @@ export const parseBengaliTime = (rawText: string): string => {
   const text = rawText.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
   const lower = text.toLowerCase();
 
+  // 1. Check relative minutes / hours (e.g. "20 minutes por", "২০ মিনিট পর", "1 ghonta por", "আধা ঘণ্টা পর")
+  const relMinMatch = text.match(/(\d+)\s*(?:minute|minutes|min|m|মিনিট|মি\.)\s*(?:por|pore|পরে|পর|বাদ)/i);
+  const relHourMatch = text.match(/(\d+)\s*(?:ghonta|ghanta|hour|hours|hr|hrs|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i);
+  const halfHourMatch = /(?:adha|adho|আধা|অর্ধেক)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
+  const oneAndHalfHourMatch = /(?:der|দেড়|দেড়)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
+
+  if (relMinMatch || relHourMatch || halfHourMatch || oneAndHalfHourMatch) {
+    let addMinutes = 0;
+    if (relMinMatch) addMinutes += parseInt(relMinMatch[1], 10);
+    if (relHourMatch) addMinutes += parseInt(relHourMatch[1], 10) * 60;
+    if (halfHourMatch) addMinutes += 30;
+    if (oneAndHalfHourMatch) addMinutes += 90;
+
+    const now = new Date();
+    const dhakaTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false, hour: '2-digit', minute: '2-digit' });
+    const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
+    const totalMinutes = cHour * 60 + cMin + addMinutes;
+    const finalHour = Math.floor(totalMinutes / 60) % 24;
+    const finalMin = totalMinutes % 60;
+    return `${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
+  }
+
   const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
   if (!timeMatch) return '10:00';
 
@@ -46,11 +68,7 @@ export const parseBengaliTime = (rawText: string): string => {
 
   if (isPM) {
     if (hour < 12) {
-      // e.g. 1টা দুপুর/রাত -> 13:00 / 01:00?
-      // In Bengali: "রাত ১টা" = 01:00 AM (after midnight) or late night. But usually 12, 1, 2, 3, 4 at night can be AM.
-      // Standard: 1pm - 11pm are afternoon/evening/night (+12)
       if (isNight && (hour === 1 || hour === 2 || hour === 3 || hour === 4)) {
-        // Late night/midnight (e.g. 1am, 2am)
         hour = hour;
       } else if (isNight && hour === 12) {
         hour = 0; // midnight 12:00
@@ -69,11 +87,12 @@ export const parseBengaliTime = (rawText: string): string => {
 /**
  * Intelligent relative date parser supporting Bengali ('কাল', 'আগামীকাল', 'পরশু', 'আজ'),
  * Banglish ('kal', 'kaal', 'agamikal', 'porshu', 'aj', 'ajke'), and English ('tomorrow', 'today').
- * If no explicit date keyword is found, but the parsed time has already passed today in Bangladesh,
- * it rolls over to tomorrow to prevent triggering an instant overdue alert!
+ * Also correctly handles relative duration rollover past midnight (e.g. 23:50 + 20 min).
  */
 export const parseRelativeDate = (rawText: string, parsedTime?: string): Date => {
-  const lower = (rawText || '').toLowerCase().trim();
+  const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+  const text = (rawText || '').replace(/[০-৯]/g, (m) => bnToEn[m] || m);
+  const lower = text.toLowerCase().trim();
 
   // Current date & time in Bangladesh (Asia/Dhaka)
   const now = new Date();
@@ -81,8 +100,29 @@ export const parseRelativeDate = (rawText: string, parsedTime?: string): Date =>
   const dhakaTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false }); // "HH:mm:ss"
 
   const [year, month, day] = dhakaStr.split('-').map(Number);
-  // Construct date object representing midnight in UTC for Bangladesh
   const targetDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+
+  // Check if this was a relative duration request (minutes/hours later)
+  const relMinMatch = text.match(/(\d+)\s*(?:minute|minutes|min|m|মিনিট|মি\.)\s*(?:por|pore|পরে|পর|বাদ)/i);
+  const relHourMatch = text.match(/(\d+)\s*(?:ghonta|ghanta|hour|hours|hr|hrs|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i);
+  const halfHourMatch = /(?:adha|adho|আধা|অর্ধেক)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
+  const oneAndHalfHourMatch = /(?:der|দেড়|দেড়)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/i.test(text);
+
+  if (relMinMatch || relHourMatch || halfHourMatch || oneAndHalfHourMatch) {
+    let addMinutes = 0;
+    if (relMinMatch) addMinutes += parseInt(relMinMatch[1], 10);
+    if (relHourMatch) addMinutes += parseInt(relHourMatch[1], 10) * 60;
+    if (halfHourMatch) addMinutes += 30;
+    if (oneAndHalfHourMatch) addMinutes += 90;
+
+    const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
+    const totalMinutes = cHour * 60 + cMin + addMinutes;
+    const daysToAdd = Math.floor(totalMinutes / (24 * 60));
+    if (daysToAdd > 0) {
+      targetDate.setUTCDate(targetDate.getUTCDate() + daysToAdd);
+    }
+    return targetDate;
+  }
 
   // Match tomorrow keywords: Banglish ('kal', 'kaal', 'kalke', 'kaalke', 'agamikal', 'agamikaal', 'tomorrow')
   // and Bengali ('কাল', 'কালে', 'কালকে', 'আগামীকাল') while ensuring Bengali 'সকাল' is NOT mistaken for 'কাল'
@@ -397,10 +437,37 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       console.warn("Could not load dynamic AI training rules:", dbErr);
     }
 
-    const fullSystemInstruction = `${SYSTEM_INSTRUCTION}${dynamicRulesPrompt}`;
+    // Live real-time Bangladesh clock & date
+    const now = new Date();
+    const dhakaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }); // "YYYY-MM-DD"
+    const dhakaTime24 = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false, hour: '2-digit', minute: '2-digit' }); // "HH:mm"
+    const dhakaTime12 = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka', hour12: true, hour: 'numeric', minute: '2-digit' }); // "7:45 PM"
+    const dhakaDayName = now.toLocaleDateString('bn-BD', { timeZone: 'Asia/Dhaka', weekday: 'long' });
 
-    // Helper to try models in order: gemini-3.8-flash, then gemini-2.5-flash
-    const candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash'];
+    const liveClockPrompt = `
+### LIVE BANGLADESH CLOCK (Asia/Dhaka, GMT+6):
+- CURRENT DATE: ${dhakaDateStr} (${dhakaDayName})
+- CURRENT TIME: ${dhakaTime12} (24-hour format: ${dhakaTime24})
+
+### CRITICAL RULES FOR RELATIVE TIME & REMINDERS:
+1. When user requests a reminder after a relative duration (e.g. "২০ মিনিট পর", "20 minute por", "in 20 minutes", "১০ মিনিট পর", "আধা ঘণ্টা পর", "1 ghonta por", "current time theke 20 minutes por"):
+   - ALWAYS calculate the target time by ADDING the specified duration to CURRENT TIME (${dhakaTime24}).
+   - Example: If CURRENT TIME is 19:37 and user says "20 minutes por", Target Time is 19:57! Target Date is ${dhakaDateStr}.
+   - If adding the minutes crosses 23:59 (midnight), set Target Date to tomorrow and wrap the time (e.g. 23:50 + 20 min = 00:10 next day).
+   - NEVER use a default or arbitrary time like 12:00 or 12:20!
+2. EXACT TASK TITLE EXTRACTION:
+   - Extract the EXACT task/action the user stated in their message as the "title".
+   - Example: "20 minutes por akta reminder diow bazar jete hobe" -> title: "বাজার যেতে হবে" (or "বাজার যাওয়া").
+   - Example: "১০ মিনিট পর ওষুধ খাওয়ার রিমাইন্ডার দাও" -> title: "ওষুধ খাওয়া" (or "ওষুধ খেতে হবে").
+   - Example: "আধা ঘণ্টা পর পড়তে বসব মনে করিয়ে দিও" -> title: "পড়তে বসা".
+   - NEVER invent or hallucinate unrelated titles like "কাজে বসা" or "জরুরি কাজ" when a specific task is mentioned!
+3. Date format must be strictly YYYY-MM-DD and time must be 24-hour HH:mm.
+`;
+
+    const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${liveClockPrompt}\n${dynamicRulesPrompt}`;
+
+    // Candidate models in order of stability and quota availability
+    const candidateModels = ['gemini-2.5-flash', 'gemini-3.8-flash'];
     let parsedResponse: any = null;
 
     if (!chatHistories.has(whatsappNumber)) {
@@ -656,8 +723,12 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
       let customMessage: string | undefined = undefined;
       let title = text
-        .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu|sokal|shokal|dupur|bikal|rat)\b|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
-        .replace(/(রিমাইন্ডার\s*(সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*করিয়ে\s*দিও|reminder)/gi, '')
+        .replace(/\b(?:\d+|[০-৯]+)\s*(?:minute|minutes|min|m|মিনিট|ghonta|ghanta|hour|hours|hr|hrs|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)\b/gi, ' ')
+        .replace(/(?:adha|adho|আধা|অর্ধেক|der|দেড়|দেড়)\s*(?:ghonta|ghanta|ঘণ্টা|ঘন্টা)\s*(?:por|pore|পরে|পর|বাদ)/gi, ' ')
+        .replace(/\b(?:current\s*time\s*theke|akhon\s*theke|এখন\s*থেকে)\b/gi, ' ')
+        .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu|sokal|shokal|dupur|bikal|rat)\b|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, ' ')
+        .replace(/(রিমাইন্ডার\s*(সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*করিয়ে\s*দিও|reminder|\b(?:akta|ekta|একটি|একটা|diow|diyo|dio|diba|dao)\b)/gi, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
 
       if (recipientPhone) {
@@ -704,7 +775,7 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-3.8-flash'];
 
     const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
