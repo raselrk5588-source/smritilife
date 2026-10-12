@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smriti Life - 9:16 Promo Ad Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700;800&family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Hind Siliguri', 'Outfit', sans-serif;
+    }
+
+    body {
+      background: #050b0a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 9:16 Canvas Frame */
+    .ad-container {
+      width: 450px;
+      height: 800px;
+      position: relative;
+      background: radial-gradient(circle at 50% 20%, #0d3b2f 0%, #051410 60%, #020705 100%);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.8), 0 0 40px rgba(10, 119, 86, 0.3);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Floating particles background */
+    .particles {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .glow-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(60px);
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .glow-orb-1 {
+      width: 260px;
+      height: 260px;
+      background: #10b981;
+      top: -50px;
+      right: -50px;
+      animation: floatOrb 8s infinite alternate ease-in-out;
+    }
+
+    .glow-orb-2 {
+      width: 200px;
+      height: 200px;
+      background: #059669;
+      bottom: 50px;
+      left: -40px;
+      animation: floatOrb 6s infinite alternate-reverse ease-in-out;
+    }
+
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(30px, 40px) scale(1.15); }
+    }
+
+    /* Progress bar on top */
+    .progress-bar-container {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      right: 16px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10b981, #34d399, #fbbf24);
+      transition: width 0.1s linear;
+      border-radius: 4px;
+    }
+
+    /* Top Logo Watermark */
+    .top-brand {
+      position: absolute;
+      top: 26px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 90;
+    }
+
+    .brand-pill {
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-pill .logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulseDot 1.5s infinite;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.6; }
+    }
+
+    .brand-pill span {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-live {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Scenes system */
+    .scene {
+      position: absolute;
+      inset: 0;
+      padding: 80px 24px 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(20px) scale(0.96);
+      transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 20;
+    }
+
+    .scene.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    /* Scene 1: Problem / Hook */
+    .hook-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      animation: shake 2s infinite ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: rotate(0deg); }
+      20%, 60% { transform: rotate(-8deg); }
+      40%, 80% { transform: rotate(8deg); }
+    }
+
+    .hook-title {
+      font-size: 32px;
+      line-height: 1.25;
+      font-weight: 800;
+      text-align: center;
+      color: #ffffff;
+      margin-bottom: 16px;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+
+    .hook-title span {
+      color: #f87171;
+      text-decoration: underline;
+      text-decoration-color: rgba(239, 68, 68, 0.4);
+    }
+
+    .hook-desc {
+      font-size: 18px;
+      color: #94a3b8;
+      text-align: center;
+      line-height: 1.5;
+      max-width: 340px;
+    }
+
+    .problem-tags {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .problem-tag {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    /* Scene 2: Solution Reveal */
+    .logo-hero {
+      width: 90px;
+      height: 90px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #10b981, #059669, #047857);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 46px;
+      font-weight: 900;
+      color: #fff;
+      box-shadow: 0 0 50px rgba(16, 185, 129, 0.6);
+      margin-bottom: 20px;
+      animation: pulseGlow 2.5s infinite;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 35px rgba(16, 185, 129, 0.4); transform: scale(1); }
+      50% { box-shadow: 0 0 65px rgba(16, 185, 129, 0.8); transform: scale(1.05); }
+    }
+
+    .solution-title {
+      font-size: 38px;
+      font-weight: 900;
+      color: #ffffff;
+      text-align: center;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .solution-title span {
+      background: linear-gradient(90deg, #34d399, #10b981);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .solution-subtitle {
+      font-size: 19px;
+      color: #cbd5e1;
+      text-align: center;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    .feature-pills-column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .feature-pill-card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: #fff;
+      transform: translateX(-15px);
+      opacity: 0;
+      transition: all 0.5s ease;
+    }
+
+    .scene.active .feature-pill-card:nth-child(1) {
+      transform: translateX(0); opacity: 1; transition-delay: 0.2s;
+    }
+    .scene.active .feature-pill-card:nth-child(2) {
+      transform: translateX(0); opacity: 1; transition-delay: 0.4s;
+    }
+    .scene.active .feature-pill-card:nth-child(3) {
+      transform: translateX(0); opacity: 1; transition-delay: 0.6s;
+    }
+
+    .feature-pill-card .icon-box {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    /* Scene 3: WhatsApp Demo Simulation */
+    .phone-mockup {
+      width: 100%;
+      max-width: 360px;
+      background: #0f172a;
+      border-radius: 26px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      padding: 16px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      margin-top: 10px;
+    }
+
+    .phone-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .phone-header .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #10b981;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .chat-bubble {
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 13px;
+      margin-top: 12px;
+      line-height: 1.4;
+      animation: popIn 0.4s ease forwards;
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .chat-user {
+      background: #059669;
+      color: #fff;
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+      max-width: 80%;
+    }
+
+    .chat-bot {
+      background: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+      margin-right: auto;
+      border-bottom-left-radius: 4px;
+      max-width: 85%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .notification-alert {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 95, 70, 0.4));
+      border: 1px solid #10b981;
+      border-radius: 18px;
+      padding: 14px;
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slideAlert 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1.2s forwards;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    @keyframes slideAlert {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Scene 4: Digital Greetings */
+    .wish-card-demo {
+      width: 100%;
+      max-width: 340px;
+      background: linear-gradient(135deg, #ec4899, #8b5cf6);
+      border-radius: 24px;
+      padding: 24px 20px;
+      text-align: center;
+      color: #fff;
+      box-shadow: 0 15px 40px rgba(236, 72, 153, 0.4);
+      position: relative;
+      overflow: hidden;
+      margin-top: 16px;
+      animation: cardPulse 3s infinite ease-in-out;
+    }
+
+    @keyframes cardPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+
+    /* Scene 5: Call To Action (High Converting) */
+    .cta-offer {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid #f59e0b;
+      color: #fbbf24;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 8px 18px;
+      border-radius: 30px;
+      margin-bottom: 16px;
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    .cta-btn {
+      width: 100%;
+      max-width: 360px;
+      padding: 18px;
+      border-radius: 20px;
+      background: linear-gradient(90deg, #10b981, #059669);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 800;
+      border: none;
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: transform 0.2s;
+    }
+
+    .website-link {
+      margin-top: 14px;
+      font-size: 17px;
+      color: #94a3b8;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .website-link span {
+      color: #34d399;
+      text-decoration: underline;
+    }
+
+    /* Controls Overlay */
+    .controls {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .control-btn {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .control-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ad-container" id="adCanvas">
+    
+    <!-- Ambient Glows -->
+    <div class="glow-orb glow-orb-1"></div>
+    <div class="glow-orb glow-orb-2"></div>
+
+    <!-- Top Story Progress Bar -->
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Header Watermark -->
+    <div class="top-brand">
+      <div class="brand-pill">
+        <div class="logo-dot"></div>
+        <span>Smriti Life</span>
+      </div>
+      <div class="badge-live">
+        <span style="display:inline-block; width:6px; height:6px; background:#ef4444; border-radius:50%;"></span>
+        স্মার্ট AI অ্যাসিস্ট্যান্ট
+      </div>
+    </div>
+
+    <!-- SCENE 1: The Hook (0s - 4.5s) -->
+    <div class="scene active" id="scene1">
+      <div class="hook-icon">⏰ 🤯</div>
+      <h2 class="hook-title">জরুরি মিটিং কিংবা স্পেশাল দিন <span>ভুলে যাচ্ছেন?</span></h2>
+      <p class="hook-desc">ব্যস্ত জীবনে গুরুত্বপূর্ণ কাজ বা প্রিয়জনের জন্মদিন মনে রাখা এখন বড় চ্যালেঞ্জ!</p>
+      
+      <div class="problem-tags">
+        <div class="problem-tag">❌ অফিসের মিটিং মিস</div>
+        <div class="problem-tag">❌ জন্মদিনের উইশ করতে দেরি</div>
+        <div class="problem-tag">❌ প্রয়োজনীয় নোট হারিয়ে যাওয়া</div>
+      </div>
+    </div>
+
+    <!-- SCENE 2: The Solution (4.5s - 9s) -->
+    <div class="scene" id="scene2">
+      <div class="logo-hero">S</div>
+      <h2 class="solution-title">চলে এসেছে <span>Smriti Life</span></h2>
+      <p class="solution-subtitle">আপনার ব্যক্তিগত ২৪/৭ স্মার্ট AI সহকারী</p>
+
+      <div class="feature-pills-column">
+        <div class="feature-pill-card">
+          <div class="icon-box" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">💬</div>
+          <div>
+            <div style="font-weight: 800; font-size: 15px;">WhatsApp AI রিমাইন্ডার</div>
+            <div style="font-size: 12px; color: #94a3b8;">মেসেজ করলেই অটোমেটিক রিমাইন্ডার সেট</div>
+          </div>
+        </div>
+
+        <div class="feature-pill-card">
+          <div class="icon-box" style="background: rgba(236, 72, 153, 0.2); color: #f472b6;">🎁</div>
+          <div>
+            <div style="font-weight: 800; font-size: 15px;">স্পেশাল ডেট উইশ কার্ড</div>
+            <div style="font-size: 12px; color: #94a3b8;">সঠিক সময়ে প্রিয়জনকে অটোমেটিক উইশ</div>
+          </div>
+        </div>
+
+        <div class="feature-pill-card">
+          <div class="icon-box" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">📝</div>
+          <div>
+            <div style="font-weight: 800; font-size: 15px;">ডিজিটাল ভয়েস ও সিকিউর নোট</div>
+            <div style="font-size: 12px; color: #94a3b8;">সব তথ্য থাকবে সুরক্ষিত ও গোছানো</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 3: Live WhatsApp Demo (9s - 14s) -->
+    <div class="scene" id="scene3">
+      <div style="font-size: 14px; font-weight: 800; color: #34d399; letter-spacing: 1px; text-transform: uppercase;">
+        ⚡ এতোটাই সহজ!
+      </div>
+      <h2 style="font-size: 26px; font-weight: 800; color: #fff; text-align: center; margin-top: 4px;">
+        শুধু WhatsApp এ বলুন
+      </h2>
+
+      <div class="phone-mockup">
+        <div class="phone-header">
+          <div class="avatar">S</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 800; color: #fff;">Smriti Life Bot</div>
+            <div style="font-size: 10px; color: #34d399;">● Online AI Assistant</div>
+          </div>
+        </div>
+
+        <div class="chat-bubble chat-user">
+          "কাল সকাল ১০টায় ক্লায়েন্ট মিটিং মনে করিয়ে দাও"
+        </div>
+
+        <div class="chat-bubble chat-bot">
+          "✅ রিমাইন্ডার সেট করা হয়েছে! কাল সকাল ১০:০০ টায় আপনাকে মনে করিয়ে দেওয়া হবে। 😊"
+        </div>
+
+        <div class="notification-alert">
+          <div style="font-size: 24px;">🔔</div>
+          <div>
+            <div style="font-weight: 800; font-size: 13px; color: #fff;">মিটিং রিমাইন্ডার!</div>
+            <div style="font-size: 11px; color: #a7f3d0;">"এখনই ক্লায়েন্ট মিটিং এ জয়েন করার সময়।"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 4: AI Greeting Cards (14s - 18s) -->
+    <div class="scene" id="scene4">
+      <div style="font-size: 14px; font-weight: 800; color: #f472b6; letter-spacing: 1px; text-transform: uppercase;">
+        🎉 প্রিয়জনকে চমকে দিন
+      </div>
+      <h2 style="font-size: 26px; font-weight: 800; color: #fff; text-align: center; margin-top: 4px;">
+        অটোমেটিক অ্যানিমেটেড উইশ
+      </h2>
+
+      <div class="wish-card-demo">
+        <div style="font-size: 40px; margin-bottom: 6px;">🎂 ✨</div>
+        <h3 style="font-size: 22px; font-weight: 900; margin-bottom: 4px;">শুভ জন্মদিন প্রিয় বন্ধু!</h3>
+        <p style="font-size: 13px; opacity: 0.9; margin-bottom: 12px;">আপনার দিনটি আনন্দ ও খুশিতে ভরে উঠুক!</p>
+        <div style="background: rgba(255,255,255,0.2); padding: 8px 14px; border-radius: 12px; font-size: 12px; font-weight: 700; display: inline-block;">
+          💌 স্মৃতির মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত
+        </div>
+      </div>
+
+      <p style="font-size: 15px; color: #94a3b8; text-align: center; margin-top: 18px; max-width: 320px;">
+        নির্ধারিত তারিখে রাত ১২টায় বন্ধু বা পরিবারের কাছে চলে যাবে চমৎকার ডিজিটাল কার্ড!
+      </p>
+    </div>
+
+    <!-- SCENE 5: Call to Action (18s - 23s) -->
+    <div class="scene" id="scene5">
+      <div class="cta-offer">
+        🔥 স্পেশাল অফার: মাত্র ৫০ টাকা / মাস
+      </div>
+      <div class="logo-hero" style="width: 76px; height: 76px; font-size: 38px; margin-bottom: 12px;">S</div>
+      <h2 style="font-size: 32px; font-weight: 900; color: #fff; text-align: center; line-height: 1.2;">
+        জীবনকে করুন আরও <br><span style="color: #34d399;">স্মার্ট ও চিন্তামুক্ত</span>
+      </h2>
+
+      <button class="cta-btn" onclick="window.open('https://smritilife.com', '_blank')">
+        <span>রেজিস্ট্রেশন করুন এখনই</span>
+        <span>➔</span>
+      </button>
+
+      <div class="website-link">
+        ওয়েবসাইট: <span>smritilife.com</span>
+      </div>
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="controls">
+      <button class="control-btn" id="playPauseBtn" onclick="togglePlay()">⏸ Pause</button>
+      <div style="font-size: 12px; color: #64748b; font-weight: 700;" id="timerDisplay">00:00 / 00:23</div>
+      <button class="control-btn" onclick="restartVideo()">🔄 Replay</button>
+    </div>
+
+  </div>
+
+  <script>
+    const TOTAL_DURATION = 23000; // 23 seconds
+    const scenes = [
+      { id: 'scene1', start: 0, end: 4500 },
+      { id: 'scene2', start: 4500, end: 9500 },
+      { id: 'scene3', start: 9500, end: 14500 },
+      { id: 'scene4', start: 14500, end: 18500 },
+      { id: 'scene5', start: 18500, end: 23000 }
+    ];
+
+    let startTime = Date.now();
+    let isPlaying = true;
+    let elapsed = 0;
+    let animFrame = null;
+
+    function update() {
+      if (!isPlaying) return;
+
+      const now = Date.now();
+      const currentElapsed = elapsed + (now - startTime);
+
+      if (currentElapsed >= TOTAL_DURATION) {
+        restartVideo();
+        return;
+      }
+
+      // Update progress bar
+      const progressPercent = (currentElapsed / TOTAL_DURATION) * 100;
+      document.getElementById('progressBar').style.width = progressPercent + '%';
+
+      // Update timer
+      const sec = Math.floor(currentElapsed / 1000);
+      document.getElementById('timerDisplay').innerText = `00:${sec < 10 ? '0' : ''}${sec} / 00:23`;
+
+      // Update scenes
+      scenes.forEach(s => {
+        const el = document.getElementById(s.id);
+        if (currentElapsed >= s.start && currentElapsed < s.end) {
+          if (!el.classList.contains('active')) {
+            el.classList.add('active');
+          }
+        } else {
+          el.classList.remove('active');
+        }
+      });
+
+      animFrame = requestAnimationFrame(update);
+    }
+
+    function togglePlay() {
+      if (isPlaying) {
+        isPlaying = false;
+        elapsed += Date.now() - startTime;
+        cancelAnimationFrame(animFrame);
+        document.getElementById('playPauseBtn').innerText = '▶ Play';
+      } else {
+        isPlaying = true;
+        startTime = Date.now();
+        animFrame = requestAnimationFrame(update);
+        document.getElementById('playPauseBtn').innerText = '⏸ Pause';
+      }
+    }
+
+    function restartVideo() {
+      elapsed = 0;
+      startTime = Date.now();
+      isPlaying = true;
+      document.getElementById('playPauseBtn').innerText = '⏸ Pause';
+      animFrame = requestAnimationFrame(update);
+    }
+
+    // Start playback immediately
+    animFrame = requestAnimationFrame(update);
+  </script>
+</body>
+</html>
