@@ -1,5 +1,5 @@
 import express from 'express';
-import { setupAdmin, loginAdmin, getAnalytics, getUsers, toggleSubscription, getTemplates, createTemplate, updateTemplate, deleteTemplate, getSettings, updateSettings, getAllReminders, deleteAnyReminder, getAllWishes, deleteAnyWish, getErrorLogs, logClientError } from '../controllers/adminController';
+import { setupAdmin, loginAdmin, getAnalytics, getUsers, toggleSubscription, getTemplates, createTemplate, updateTemplate, deleteTemplate, getSettings, updateSettings, getAllReminders, deleteAnyReminder, getAllWishes, deleteAnyWish, getErrorLogs, logClientError, getTrainingRules, createTrainingRule, updateTrainingRule, deleteTrainingRule } from '../controllers/adminController';
 
 const router = express.Router();
 
@@ -25,5 +25,10 @@ router.delete('/wishes/:id', deleteAnyWish);
 
 router.get('/errors', getErrorLogs);
 router.post('/errors', logClientError);
+
+router.get('/training-rules', getTrainingRules);
+router.post('/training-rules', createTrainingRule);
+router.put('/training-rules/:id', updateTrainingRule);
+router.delete('/training-rules/:id', deleteTrainingRule);
 
 export default router;

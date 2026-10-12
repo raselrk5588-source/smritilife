@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import SystemSettings from '../models/SystemSettings';
+import AITrainingRule from '../models/AITrainingRule';
 
 // In-memory chat history for WhatsApp users (In production, save to Redis or DB)
 const chatHistories = new Map<string, any[]>();
@@ -379,6 +380,25 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
+    // Fetch dynamic custom training rules trained by Admin via WhatsApp or Dashboard
+    let dynamicRulesPrompt = '';
+    try {
+      const activeRules = await AITrainingRule.find({ isActive: true }).sort({ createdAt: -1 }).limit(25);
+      if (activeRules.length > 0) {
+        const rulesList = activeRules.map((r, i) => {
+          let text = `${i + 1}. ${r.rule}`;
+          if (r.exampleInput) text += ` (User example: "${r.exampleInput}")`;
+          if (r.exampleOutput) text += ` (Expected Output: ${r.exampleOutput})`;
+          return text;
+        }).join('\n');
+        dynamicRulesPrompt = `\n\n### ADMIN CUSTOM TRAINING RULES (MANDATORY TO FOLLOW):\n${rulesList}\n`;
+      }
+    } catch (dbErr) {
+      console.warn("Could not load dynamic AI training rules:", dbErr);
+    }
+
+    const fullSystemInstruction = `${SYSTEM_INSTRUCTION}${dynamicRulesPrompt}`;
+
     // Helper to try models in order: gemini-3.8-flash, then gemini-2.5-flash
     const candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash'];
     let parsedResponse: any = null;
@@ -392,7 +412,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       try {
         const model = genAI.getGenerativeModel({ 
           model: modelName,
-          systemInstruction: SYSTEM_INSTRUCTION
+          systemInstruction: fullSystemInstruction
         });
         const chat = model.startChat({ history });
         const timeoutPromise = new Promise((_, reject) => 

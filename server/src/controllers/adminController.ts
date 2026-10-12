@@ -10,6 +10,7 @@ import WishTemplate from '../models/WishTemplate';
 import Admin from '../models/Admin';
 import SystemSettings from '../models/SystemSettings';
 import ErrorLog from '../models/ErrorLog';
+import AITrainingRule from '../models/AITrainingRule';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
@@ -237,3 +238,53 @@ export const logClientError = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// --- Dynamic AI Training Rules CRUD ---
+export const getTrainingRules = async (req: Request, res: Response) => {
+  try {
+    const rules = await AITrainingRule.find().sort({ createdAt: -1 });
+    res.json({ success: true, rules });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const createTrainingRule = async (req: Request, res: Response) => {
+  try {
+    const { rule, exampleInput, exampleOutput, category } = req.body;
+    if (!rule || rule.trim().length < 3) {
+      return res.status(400).json({ success: false, message: 'Rule content is required' });
+    }
+    const newRule = await AITrainingRule.create({
+      rule: rule.trim(),
+      exampleInput: exampleInput?.trim(),
+      exampleOutput: exampleOutput?.trim(),
+      category: category || 'general',
+      addedBy: 'Admin Panel',
+      isActive: true
+    });
+    res.status(201).json({ success: true, rule: newRule });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateTrainingRule = async (req: Request, res: Response) => {
+  try {
+    const updated = await AITrainingRule.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) return res.status(404).json({ success: false, message: 'Rule not found' });
+    res.json({ success: true, rule: updated });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteTrainingRule = async (req: Request, res: Response) => {
+  try {
+    await AITrainingRule.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Rule deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

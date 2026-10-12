@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
+import AITrainingRule from '../models/AITrainingRule';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 
@@ -252,6 +253,77 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           await user.save();
         }
 
+        const cleanText = (userMessage || '').trim();
+
+        // --- STEP 0: Handle WhatsApp Chat AI Training (/teach, /train, /rules, /unlearn) ---
+        const teachMatch = cleanText.match(/^(?:\/teach|\/train|\/rule|ট্রেন|শেখাও|রুল)\s+(.+)$/is);
+        const isListRules = /^(?:\/rules|\/listrules|নিয়মগুলো|রুলস|কি কি শিখেছো)\b/i.test(cleanText);
+        const unlearnMatch = cleanText.match(/^(?:\/unlearn|\/removerule|\/delete_rule)\s+(.+)$/is);
+
+        if (teachMatch) {
+          const ruleContent = teachMatch[1].trim();
+          if (ruleContent.length < 3) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `⚠️ অনুগ্রহ করে নিয়মটি স্পষ্টভাবে লিখুন। যেমন:\n/teach যখন ইউজার বলবে সালাম, তখন 'ওয়ালাইকুম আসসালাম' বলবে।`
+            );
+            return;
+          }
+
+          // Parse optional example: "Rule... Example: user -> output"
+          const newRule = await AITrainingRule.create({
+            rule: ruleContent,
+            addedBy: fromNumber,
+            isActive: true
+          });
+
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🧠 আলহামদুলিল্লাহ! স্মৃতি এই নতুন নিয়মটি সফলভাবে শিখে নিয়েছে:\n\n📌 "${ruleContent}"\n\nএখন থেকে আপনার AI স্বয়ংক্রিয়ভাবে এই নিয়ম মেনে উত্তর ও অ্যাকশন পরিচালনা করবে!`
+          );
+          return;
+        }
+
+        if (isListRules) {
+          const rules = await AITrainingRule.find({ isActive: true }).sort({ createdAt: -1 }).limit(10);
+          if (rules.length === 0) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🧠 বর্তমানে কোনো কাস্টম শেখানো নিয়ম নেই। নতুন নিয়ম শেখাতে লিখুন:\n/teach [আপনার নিয়ম]`
+            );
+          } else {
+            const listText = rules.map((r, i) => `${i + 1}. ${r.rule}`).join('\n\n');
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🧠 স্মৃতিকে শেখানো বর্তমান নিয়মসমূহ (${rules.length}টি):\n\n${listText}\n\n💡 কোনো নিয়ম মুছে ফেলতে লিখুন:\n/unlearn [নিয়মের শব্দ/সংখ্যা]`
+            );
+          }
+          return;
+        }
+
+        if (unlearnMatch) {
+          const target = unlearnMatch[1].trim();
+          const deleted = await AITrainingRule.findOneAndDelete({
+            $or: [
+              { rule: { $regex: new RegExp(target, 'i') } },
+              { _id: target.length === 24 ? target : undefined }
+            ]
+          });
+
+          if (deleted) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🗑️ নিয়মটি সফলভাবে স্মৃতি থেকে মুছে ফেলা হয়েছে:\n"${deleted.rule}"`
+            );
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `দুঃখিত, "${target}" মেলানো কোনো নিয়ম খুঁজে পাওয়া যায়নি। নিয়মগুলো দেখতে /rules লিখুন।`
+            );
+          }
+          return;
+        }
+
         // --- STEP 1: Handle Interactive Button Clicks ---
         if (buttonId.startsWith('rem_done_')) {
           const remId = buttonId.replace('rem_done_', '');
@@ -282,7 +354,6 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // --- STEP 2: Handle Conversational Yes / No / Reschedule for Active Reminders ---
-        const cleanText = userMessage.trim();
         let activeState = userReminderState.get(user._id.toString());
 
         // If not in memory state, check if there is a recently alerted/snoozed reminder in DB

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle } from 'lucide-react';
+import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle, Brain } from 'lucide-react';
 import { fetchWithAuth } from '../utils/api';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
@@ -85,6 +85,17 @@ interface ErrorLogData {
   userId?: { name: string; mobile: string };
 }
 
+interface AITrainingRuleData {
+  _id: string;
+  rule: string;
+  exampleInput?: string;
+  exampleOutput?: string;
+  category?: string;
+  addedBy?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export default function AdminDashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
@@ -97,9 +108,12 @@ export default function AdminDashboard() {
     openaiApiKey: '', geminiApiKey: '', whatsappApiToken: '', twilioAccountSid: '', twilioPhoneNumber: '', smsGatewayKey: '', freeUserReminderLimit: 5, proUserReminderLimit: 100
   });
   const [errorLogs, setErrorLogs] = useState<ErrorLogData[]>([]);
+  const [trainingRules, setTrainingRules] = useState<AITrainingRuleData[]>([]);
+  const [newRuleInput, setNewRuleInput] = useState('');
+  const [newRuleExample, setNewRuleExample] = useState('');
   
-  // Tabs: 'dashboard', 'users', 'logs', 'revenue', 'templates', 'reminders', 'wishes', 'settings', 'errors'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'logs' | 'revenue' | 'templates' | 'reminders' | 'wishes' | 'settings' | 'errors'>('dashboard');
+  // Tabs: 'dashboard', 'users', 'logs', 'revenue', 'templates', 'reminders', 'wishes', 'settings', 'errors', 'training'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'logs' | 'revenue' | 'templates' | 'reminders' | 'wishes' | 'settings' | 'errors' | 'training'>('dashboard');
 
   // Search & Filter states
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -130,14 +144,15 @@ export default function AdminDashboard() {
     const fetchData = async () => {
       try {
         const headers = { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}`, 'Content-Type': 'application/json' };
-        const [analyticsRes, usersRes, templatesRes, settingsRes, remindersRes, wishesRes, errorsRes] = await Promise.all([
+        const [analyticsRes, usersRes, templatesRes, settingsRes, remindersRes, wishesRes, errorsRes, trainingRes] = await Promise.all([
           fetch(`${import.meta.env.VITE_API_URL}/admin/analytics`, { headers }),
           fetch(`${import.meta.env.VITE_API_URL}/admin/users`, { headers }),
           fetch(`${import.meta.env.VITE_API_URL}/admin/templates`, { headers }),
           fetch(`${import.meta.env.VITE_API_URL}/admin/settings`, { headers }),
           fetch(`${import.meta.env.VITE_API_URL}/admin/reminders`, { headers }),
           fetch(`${import.meta.env.VITE_API_URL}/admin/wishes`, { headers }),
-          fetch(`${import.meta.env.VITE_API_URL}/admin/errors`, { headers })
+          fetch(`${import.meta.env.VITE_API_URL}/admin/errors`, { headers }),
+          fetch(`${import.meta.env.VITE_API_URL}/admin/training-rules`, { headers })
         ]);
         
         const analyticsJson = await analyticsRes.json();
@@ -147,6 +162,7 @@ export default function AdminDashboard() {
         const remindersJson = await remindersRes.json();
         const wishesJson = await wishesRes.json();
         const errorsJson = await errorsRes.json();
+        const trainingJson = await trainingRes.json();
         
         if (analyticsJson.success) setData(analyticsJson.data);
         if (usersJson.success) setUsers(usersJson.users);
@@ -155,6 +171,7 @@ export default function AdminDashboard() {
         if (remindersJson.success) setReminders(remindersJson.reminders);
         if (wishesJson.success) setWishes(wishesJson.wishes);
         if (errorsJson.success) setErrorLogs(errorsJson.errors);
+        if (trainingJson.success) setTrainingRules(trainingJson.rules);
       } catch (error) {
         console.error('Failed to fetch admin data', error);
         toast.error(`Error loading analytics: ${error}`);
@@ -164,6 +181,70 @@ export default function AdminDashboard() {
     };
     fetchData();
   }, []);
+
+  const handleAddTrainingRule = async () => {
+    if (!newRuleInput.trim()) {
+      toast.error('নিয়মটি লিখুন');
+      return;
+    }
+    try {
+      const headers = { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}`, 'Content-Type': 'application/json' };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/training-rules`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          rule: newRuleInput.trim(),
+          exampleInput: newRuleExample.trim()
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setTrainingRules([json.rule, ...trainingRules]);
+        setNewRuleInput('');
+        setNewRuleExample('');
+        toast.success('🧠 AI সফলভাবে নতুন নিয়ম শিখে নিয়েছে!');
+      } else {
+        toast.error(json.message || 'ব্যর্থ হয়েছে');
+      }
+    } catch (err: any) {
+      toast.error('Error adding rule');
+    }
+  };
+
+  const handleDeleteTrainingRule = async (id: string) => {
+    try {
+      const headers = { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}`, 'Content-Type': 'application/json' };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/training-rules/${id}`, {
+        method: 'DELETE',
+        headers
+      });
+      const json = await res.json();
+      if (json.success) {
+        setTrainingRules(trainingRules.filter(r => r._id !== id));
+        toast.success('নিয়ম মুছে ফেলা হয়েছে');
+      }
+    } catch (err) {
+      toast.error('Error deleting rule');
+    }
+  };
+
+  const handleToggleTrainingRule = async (ruleItem: AITrainingRuleData) => {
+    try {
+      const headers = { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}`, 'Content-Type': 'application/json' };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/training-rules/${ruleItem._id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ isActive: !ruleItem.isActive })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setTrainingRules(trainingRules.map(r => r._id === ruleItem._id ? json.rule : r));
+        toast.success(json.rule.isActive ? 'নিয়ম চালু করা হয়েছে' : 'নিয়ম বন্ধ করা হয়েছে');
+      }
+    } catch (err) {
+      toast.error('Error updating rule');
+    }
+  };
 
   const handleToggleSubscription = async (userId: string, currentStatus: boolean) => {
     try {
@@ -446,6 +527,19 @@ export default function AdminDashboard() {
           >
             <Settings className="w-5 h-5" />
             <span>সিস্টেম সেটিংস</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('training')}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${activeTab === 'training' ? 'bg-purple-600 shadow-lg text-white font-bold' : 'hover:bg-purple-500/10 text-slate-300 hover:text-purple-300 font-medium'}`}
+          >
+            <div className="flex items-center space-x-3">
+              <Brain className="w-5 h-5 text-purple-400" />
+              <span>AI ট্রেইনিং (Rules)</span>
+            </div>
+            {trainingRules.length > 0 && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'training' ? 'bg-white/20' : 'bg-purple-500/20 text-purple-300'}`}>{trainingRules.length}</span>
+            )}
           </button>
 
           <button 
@@ -1129,6 +1223,125 @@ export default function AdminDashboard() {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Training & Custom Rules Tab */}
+          {activeTab === 'training' && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-purple-900 to-indigo-900 p-6 rounded-3xl text-white shadow-xl">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <Brain className="w-8 h-8 text-purple-300" />
+                    <h2 className="text-2xl font-bold">AI বিহেভিয়ার ও ট্রেইনিং সেন্টার</h2>
+                  </div>
+                  <p className="text-sm text-purple-200 mt-1">
+                    কোড পরিবর্তন না করেই এখান থেকে অথবা WhatsApp-এ <code className="bg-purple-800/80 px-2 py-0.5 rounded font-mono text-purple-200">/teach [নিয়ম]</code> লিখে স্মৃতিকে সরাসরি নতুন নিয়ম শেখান!
+                  </p>
+                </div>
+              </div>
+
+              {/* Add New Rule Form */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-purple-600" />
+                  নতুন নিয়ম বা আচরণ শেখান
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-bold text-slate-700 block mb-1">নিয়ম বা নির্দেশিকা (Instruction / Rule)</label>
+                    <textarea
+                      value={newRuleInput}
+                      onChange={(e) => setNewRuleInput(e.target.value)}
+                      placeholder="যেমন: ইউজার যদি জন্মদিনের শুভেচ্ছা পাঠাতে চায় কিন্তু নাম না বলে, তবে আগে নাম জিজ্ঞেস করবে।"
+                      rows={2}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-bold text-slate-700 block mb-1">উদাহরণ বা প্রেক্ষাপট (ঐচ্ছিক / Optional Example)</label>
+                    <input
+                      type="text"
+                      value={newRuleExample}
+                      onChange={(e) => setNewRuleExample(e.target.value)}
+                      placeholder="যেমন: 01307... নম্বরে উইশ পাঠাও -> কার জন্য পাঠাতে চান?"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-purple-600"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <div className="text-xs text-slate-500">
+                    💡 <b>টিপ:</b> WhatsApp চ্যাটেও আপনি <span className="font-mono bg-slate-100 px-1 py-0.5 rounded">/teach [নিয়ম]</span> বা <span className="font-mono bg-slate-100 px-1 py-0.5 rounded">/rules</span> লিখে সরাসরি ট্রেন করতে পারেন।
+                  </div>
+                  <button
+                    onClick={handleAddTrainingRule}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-md transition flex items-center gap-2 active:scale-95"
+                  >
+                    <Brain className="w-4 h-4" />
+                    AI-কে শেখান
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Rules List */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-bold text-slate-800">
+                    বর্তমান সক্রিয় নিয়মসমূহ ({trainingRules.length}টি)
+                  </h3>
+                </div>
+
+                {trainingRules.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <Brain className="w-12 h-12 mx-auto text-slate-300 mb-2 opacity-50" />
+                    <p className="font-medium">এখনো কোনো কাস্টম নিয়ম যুক্ত করা হয়নি।</p>
+                    <p className="text-xs text-slate-400 mt-1">উপরের ফর্ম থেকে অথবা WhatsApp-এ /teach লিখে স্মৃতিকে ট্রেন করুন।</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {trainingRules.map((rule, idx) => (
+                      <div key={rule._id} className="py-4 flex items-start justify-between gap-4">
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 font-mono">
+                              #{idx + 1}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${rule.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {rule.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              উৎস: {rule.addedBy || 'Admin'}
+                            </span>
+                          </div>
+                          <p className="text-slate-800 font-medium text-sm pt-1">
+                            {rule.rule}
+                          </p>
+                          {rule.exampleInput && (
+                            <p className="text-xs text-slate-500 italic">
+                              উদাহরণ: {rule.exampleInput}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleToggleTrainingRule(rule)}
+                            className={`text-xs px-3 py-1.5 rounded-lg font-bold transition ${rule.isActive ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                          >
+                            {rule.isActive ? 'Pause' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTrainingRule(rule._id)}
+                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                            title="মুছে ফেলুন"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
