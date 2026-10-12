@@ -630,8 +630,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         itemString = text.split(/[:：]/)[1] || '';
       } else {
         itemString = text
-          .replace(/^(?:বাজারের\s*লিস্টে|আজকের\s*টু[\-\s]*ডু\s*(?:লিস্টে)?|কাজের\s*লিস্টে|টু[\-\s]*ডু\s*লিস্টে|লিস্টে|ফর্দে)\s*/gi, '')
-          .replace(/(?:যোগ\s*করো|এড\s*করো|এড\s*কর|যোগ\s*কর|add|রাখো|তুলে\s*রাখো|লিখো|লিস্ট\s*করো|লিস্ট\s*কর)\s*$/gi, '')
+          .replace(/^(?:বাজারের\s*(?:লিস্টে|ফর্দে)?|আজকের\s*টু[\-\s]*ডু\s*(?:লিস্টে)?|কাজের\s*লিস্টে|টু[\-\s]*ডু\s*লিস্টে|লিস্টে|ফর্দে)\s*/gi, '')
+          .replace(/\s*(?:যোগ\s*করো|এড\s*করো|এড\s*কর|যোগ\s*কর|যোগ|এড|add|রাখো|তুলে\s*রাখো|লিখো|লিস্ট\s*করো|লিস্ট\s*কর)\s*$/gi, '')
           .trim();
       }
 
@@ -640,7 +640,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         // Split by comma, Arabic comma, newline, or 'আর' / 'এবং' / 'ও' / 'and' with optional surrounding spaces
         parsedItems = itemString
           .split(/[,،\n]|\s+(?:আর|এবং|ও|and)\s+|\s*,\s*/i)
-          .map(s => s.trim().replace(/[।\.!?]/g, ''))
+          .map(s => s.trim().replace(/\s*(?:যোগ\s*করো|যোগ\s*কর|এড\s*করো|এড\s*কর|যোগ|এড|add)\s*$/gi, '').replace(/[।\.!?]/g, '').trim())
           .filter(s => s.length > 0 && !/^(?:যোগ|এড|করো|কর|add|please|তুলে|রাখো)$/i.test(s));
       }
 

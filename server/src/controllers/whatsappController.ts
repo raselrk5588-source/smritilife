@@ -93,6 +93,76 @@ export const sendMetaWhatsAppButtons = async (
   return false;
 };
 
+// Function to send interactive list menu via Meta API (Bottom-sheet native selector)
+export const sendMetaWhatsAppListMenu = async (
+  to: string,
+  bodyText: string,
+  buttonTitle: string,
+  sectionTitle: string,
+  rows: Array<{ id: string; title: string; description?: string }>
+): Promise<boolean> => {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneNumberId || rows.length === 0) return false;
+
+  let formattedTo = to.trim();
+  if (formattedTo.startsWith('+')) formattedTo = formattedTo.substring(1);
+  else if (formattedTo.startsWith('01')) formattedTo = `88${formattedTo}`;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: formattedTo,
+          type: 'interactive',
+          interactive: {
+            type: 'list',
+            body: { text: bodyText },
+            action: {
+              button: buttonTitle.substring(0, 20),
+              sections: [
+                {
+                  title: sectionTitle.substring(0, 24),
+                  rows: rows.slice(0, 10).map(r => ({
+                    id: r.id,
+                    title: r.title.substring(0, 24),
+                    description: r.description ? r.description.substring(0, 72) : undefined
+                  }))
+                }
+              ]
+            }
+          }
+        }),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn(`[WhatsAppListMenu] Attempt ${attempt} list menu error:`, data);
+        if (attempt === 2) return false;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        console.log(`✅ [WhatsAppListMenu] Interactive list menu sent successfully to ${formattedTo}`);
+        return true;
+      }
+    } catch (err) {
+      console.error(`[WhatsAppListMenu] Network exception attempt ${attempt}:`, err);
+      if (attempt === 2) return false;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  return false;
+};
+
 // Function to send a message via Meta API
 const sendMetaWhatsAppMessage = async (to: string, text: string) => {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -221,6 +291,9 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           if (message.interactive?.type === 'button_reply') {
             buttonId = message.interactive.button_reply?.id || '';
             userMessage = message.interactive.button_reply?.title || '';
+          } else if (message.interactive?.type === 'list_reply') {
+            buttonId = message.interactive.list_reply?.id || '';
+            userMessage = message.interactive.list_reply?.title || '';
           }
         } else if (message.type === 'button') {
           buttonId = message.button?.payload || '';
@@ -343,7 +416,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // --- STEP 1: Handle Interactive Button Clicks ---
+        // --- STEP 1: Handle Interactive Button / List Menu Clicks ---
         if (buttonId.startsWith('todo_toggle_')) {
           // Format: todo_toggle_{listId}_{itemId}
           const parts = buttonId.replace('todo_toggle_', '').split('_');
@@ -352,6 +425,24 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
           const todoList = await TodoList.findById(listId);
           if (todoList) {
+            if (itemId === 'all') {
+              // Mark all remaining items as completed
+              todoList.items.forEach(it => {
+                it.completed = true;
+                it.completedAt = new Date();
+              });
+              await todoList.save();
+
+              let listText = `🎉 দারুণ! *${todoList.title}*-এর সব কাজ সম্পন্ন হয়েছে!\n\n`;
+              listText += `📋 *${todoList.title}*   (সব সম্পন্ন)\n`;
+              listText += `─────────────────\n`;
+              todoList.items.forEach(it => {
+                listText += `☑️ ~${it.text}~\n`;
+              });
+              await sendMetaWhatsAppMessage(fromNumber, listText.trim());
+              return;
+            }
+
             const item = todoList.items.find(i => i.id === itemId);
             if (item) {
               item.completed = !item.completed;
@@ -360,19 +451,43 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
               const remaining = todoList.items.filter(i => !i.completed).length;
               const remainingText = `${remaining}টি বাকি`;
-              let listText = `📋 *${todoList.title}*   (${remainingText})\n\n`;
+              let listText = `📋 *${todoList.title}*   (${remainingText})\n`;
+              listText += `─────────────────\n`;
               todoList.items.forEach(it => {
                 const box = it.completed ? '☑️' : '◻️';
-                listText += `${box} ${it.text}\n`;
+                const textFormatted = it.completed ? `~${it.text}~` : it.text;
+                listText += `${box} ${textFormatted}\n`;
               });
 
-              const firstUnchecked = todoList.items.find(i => !i.completed);
-              if (firstUnchecked) {
-                await sendMetaWhatsAppButtons(
+              const uncheckedItems = todoList.items.filter(i => !i.completed);
+              if (uncheckedItems.length > 0) {
+                // Interactive List Menu: Native Bottom Sheet Selector with all pending items!
+                const rows = uncheckedItems.slice(0, 9).map(it => ({
+                  id: `todo_toggle_${todoList._id}_${it.id}`,
+                  title: `☑️ ${it.text.substring(0, 20)}`,
+                  description: 'ট্যাপ করে সম্পন্ন করুন'
+                }));
+
+                // Add an option to complete all if more than 1 item
+                if (uncheckedItems.length > 1) {
+                  rows.push({
+                    id: `todo_toggle_${todoList._id}_all`,
+                    title: '✅ সবগুলো সম্পন্ন করুন',
+                    description: 'একসাথে সব আইটেম টিক দিন'
+                  });
+                }
+
+                const listSent = await sendMetaWhatsAppListMenu(
                   fromNumber,
                   listText.trim(),
-                  [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                  'আইটেম সম্পন্ন করুন 📋',
+                  'বাকি থাকা আইটেমসমূহ',
+                  rows
                 );
+
+                if (!listSent) {
+                  await sendMetaWhatsAppMessage(fromNumber, listText.trim());
+                }
               } else {
                 await sendMetaWhatsAppMessage(
                   fromNumber,
@@ -878,13 +993,29 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 listCard += `${box} ${it.text}\n`;
               });
 
-              const firstUnchecked = todoList.items.find(i => !i.completed);
-              if (firstUnchecked) {
-                await sendMetaWhatsAppButtons(
+              const uncheckedItems = todoList.items.filter(i => !i.completed);
+              if (uncheckedItems.length > 0) {
+                const listId = todoList._id;
+                const rows = uncheckedItems.slice(0, 9).map(it => ({
+                  id: `todo_toggle_${listId}_${it.id}`,
+                  title: `☑️ ${it.text.substring(0, 20)}`,
+                  description: 'ট্যাপ করে সম্পন্ন করুন'
+                }));
+                if (uncheckedItems.length > 1) {
+                  rows.push({
+                    id: `todo_toggle_${listId}_all`,
+                    title: '✅ সবগুলো সম্পন্ন করুন',
+                    description: 'একসাথে সব আইটেম টিক দিন'
+                  });
+                }
+                const listSent = await sendMetaWhatsAppListMenu(
                   fromNumber,
                   listCard.trim(),
-                  [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                  'আইটেম সম্পন্ন করুন 📋',
+                  'বাকি থাকা আইটেমসমূহ',
+                  rows
                 );
+                if (!listSent) await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
               } else {
                 await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
               }
@@ -914,16 +1045,33 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               listCard += `─────────────────\n`;
               todoList.items.forEach(it => {
                 const box = it.completed ? '☑️' : '◻️';
-                listCard += `${box} ${it.text}\n`;
+                const textFormatted = it.completed ? `~${it.text}~` : it.text;
+                listCard += `${box} ${textFormatted}\n`;
               });
 
-              const firstUnchecked = todoList.items.find(i => !i.completed);
-              if (firstUnchecked) {
-                await sendMetaWhatsAppButtons(
+              const uncheckedItems = todoList.items.filter(i => !i.completed);
+              if (uncheckedItems.length > 0) {
+                const listId = todoList._id;
+                const rows = uncheckedItems.slice(0, 9).map(it => ({
+                  id: `todo_toggle_${listId}_${it.id}`,
+                  title: `☑️ ${it.text.substring(0, 20)}`,
+                  description: 'ট্যাপ করে সম্পন্ন করুন'
+                }));
+                if (uncheckedItems.length > 1) {
+                  rows.push({
+                    id: `todo_toggle_${listId}_all`,
+                    title: '✅ সবগুলো সম্পন্ন করুন',
+                    description: 'একসাথে সব আইটেম টিক দিন'
+                  });
+                }
+                const listSent = await sendMetaWhatsAppListMenu(
                   fromNumber,
                   listCard.trim(),
-                  [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                  'আইটেম সম্পন্ন করুন 📋',
+                  'বাকি থাকা আইটেমসমূহ',
+                  rows
                 );
+                if (!listSent) await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
               } else {
                 await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
               }
@@ -942,9 +1090,36 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   listCard += `─────────────────\n`;
                   todoList.items.forEach(it => {
                     const box = it.completed ? '☑️' : '◻️';
-                    listCard += `${box} ${it.text}\n`;
+                    const textFormatted = it.completed ? `~${it.text}~` : it.text;
+                    listCard += `${box} ${textFormatted}\n`;
                   });
-                  await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
+
+                  const uncheckedItems = todoList.items.filter(i => !i.completed);
+                  if (uncheckedItems.length > 0) {
+                    const listId = todoList._id;
+                    const rows = uncheckedItems.slice(0, 9).map(it => ({
+                      id: `todo_toggle_${listId}_${it.id}`,
+                      title: `☑️ ${it.text.substring(0, 20)}`,
+                      description: 'ট্যাপ করে সম্পন্ন করুন'
+                    }));
+                    if (uncheckedItems.length > 1) {
+                      rows.push({
+                        id: `todo_toggle_${listId}_all`,
+                        title: '✅ সবগুলো সম্পন্ন করুন',
+                        description: 'একসাথে সব আইটেম টিক দিন'
+                      });
+                    }
+                    const listSent = await sendMetaWhatsAppListMenu(
+                      fromNumber,
+                      listCard.trim(),
+                      'আইটেম সম্পন্ন করুন 📋',
+                      'বাকি থাকা আইটেমসমূহ',
+                      rows
+                    );
+                    if (!listSent) await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
+                  } else {
+                    await sendMetaWhatsAppMessage(fromNumber, `${listCard.trim()}\n\n🎉 সব কাজ সম্পন্ন হয়েছে!`);
+                  }
                 } else {
                   await sendMetaWhatsAppMessage(fromNumber, `লিস্টে "${itemText}" খুঁজে পাওয়া যায়নি।`);
                 }
@@ -954,7 +1129,6 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             } else {
               // View / List
               if (!todoList || todoList.items.length === 0) {
-                // Check if any other todo list exists
                 const anyList = await TodoList.findOne({ userId: user._id }).sort({ updatedAt: -1 });
                 if (anyList && anyList.items.length > 0) {
                   todoList = anyList;
@@ -973,18 +1147,35 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 listCard += `─────────────────\n`;
                 todoList.items.forEach(it => {
                   const box = it.completed ? '☑️' : '◻️';
-                  listCard += `${box} ${it.text}\n`;
+                  const textFormatted = it.completed ? `~${it.text}~` : it.text;
+                  listCard += `${box} ${textFormatted}\n`;
                 });
 
-                const firstUnchecked = todoList.items.find(i => !i.completed);
-                if (firstUnchecked) {
-                  await sendMetaWhatsAppButtons(
+                const uncheckedItems = todoList.items.filter(i => !i.completed);
+                if (uncheckedItems.length > 0) {
+                  const listId = todoList._id;
+                  const rows = uncheckedItems.slice(0, 9).map(it => ({
+                    id: `todo_toggle_${listId}_${it.id}`,
+                    title: `☑️ ${it.text.substring(0, 20)}`,
+                    description: 'ট্যাপ করে সম্পন্ন করুন'
+                  }));
+                  if (uncheckedItems.length > 1) {
+                    rows.push({
+                      id: `todo_toggle_${listId}_all`,
+                      title: '✅ সবগুলো সম্পন্ন করুন',
+                      description: 'একসাথে সব আইটেম টিক দিন'
+                    });
+                  }
+                  const listSent = await sendMetaWhatsAppListMenu(
                     fromNumber,
                     listCard.trim(),
-                    [{ id: `todo_toggle_${todoList._id}_${firstUnchecked.id}`, title: `সম্পন্ন: ${firstUnchecked.text.substring(0, 12)}` }]
+                    'আইটেম সম্পন্ন করুন 📋',
+                    'বাকি থাকা আইটেমসমূহ',
+                    rows
                   );
+                  if (!listSent) await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
                 } else {
-                  await sendMetaWhatsAppMessage(fromNumber, listCard.trim());
+                  await sendMetaWhatsAppMessage(fromNumber, `${listCard.trim()}\n\n🎉 এই তালিকার সব কাজ সম্পন্ন!`);
                 }
               }
             }
