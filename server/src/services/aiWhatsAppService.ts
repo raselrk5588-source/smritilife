@@ -246,9 +246,9 @@ export const cleanPersonName = (rawName: string): { name: string; relationship?:
     .replace(/^(?:save\s*contact|কন্ট্যাক্ট\s*সেভ|কন্ট্যাক্ট\s*অ্যাড|add\s*contact|সেভ\s*করো|সেভ\s*করে\s*রাখো|সেভ|save|add)\s*[:：\-]?\s*/gi, '')
     .trim();
 
-  // Strip noise like 'ar number save koro', 'er phone number', 'er contact'
+  // Strip noise like 'ar number save koro', 'er phone number', 'er contact', mnbr, nmbr
   name = name
-    .replace(/(?:এর|র|er|ar|r|'s)?\s*(?:ফোন\s*নম্বর|নাম্বার|নম্বর|number|phone|ফোন|মোবাইল|mobile|contact|কন্ট্যাক্ট).*/gi, '')
+    .replace(/(?:এর|র|er|ar|r|'s)?\s*(?:ফোন\s*নম্বর|নাম্বার|নম্বর|number|nmbr|numbr|mnbr|nbr|phone|phn|ফোন|মোবাইল|mobile|contact|কন্ট্যাক্ট).*/gi, '')
     .replace(/\b(?:save\s*koro|save|সেভ\s*করো|সেভ|koro|করো|rakho|রাখো|rekho|রেখো|tulo|তুলো|add)\b/gi, '')
     .replace(/[^\w\s\u0980-\u09FF]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -278,26 +278,26 @@ export const cleanPersonName = (rawName: string): { name: string; relationship?:
 
 /**
  * Intelligent extractor for multiple recipients or broadcast keywords.
- * Supports patterns like "roni, bou k ekta message daw", "রনি, বউ আর আম্মুকে মেসেজ পাঠাও", "সবাইকে মেসেজ দাও".
+ * Supports Banglish variations: sbi, sobai, sbai, sob, jara ache, mnbr, msg, etc.
  */
 export const extractMessageRecipients = (rawText: string): { names: string[]; isBroadcastAll: boolean } => {
   const text = (rawText || '').trim();
 
-  // 1. Check broadcast to all contacts
-  if (/(?:সবাইকে|সকলকে|সবাই\s*কে|sobai\s*k|sobaike|all\s*contacts|everyone|সব\s*কন্ট্যাক্টকে|সকল\s*কন্ট্যাক্টকে)\b/i.test(text)) {
+  // 1. Check broadcast to all contacts (sbi, sobai, sbai, sob, jara ache, everyone, ইত্যাদি)
+  if (/(?:সবাইকে|সকলকে|সবাই\s*কে|সবাই|সকল|যারা\s*আছে|sobaike|shobaike|sobai\s*k|shobai\s*k|sobai|shobai|sbi\s*k|sbi|sbai\s*k|sbai|sob\s*k|shob\s*k|\bsob\b|\bshob\b|jara\s*ache|all\s*contacts|everyone|সব\s*কন্ট্যাক্টকে|সকল\s*কন্ট্যাক্টকে)\b/i.test(text)) {
     return { names: ['সবাই'], isBroadcastAll: true };
   }
 
   // 2. Pattern A: Names before message command:
-  // e.g. "roni, bou k akta message daw", "রনি, আকাশ আর রাকিবকে মেসেজ পাঠাও"
+  // e.g. "roni, bou k akta message daw", "রনি, আকাশ আর রাকিবকে মেসেজ পাঠাও", "roni k msg daw"
   let namesPart = '';
-  const matchA = text.match(/(?:^|\s)([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও)/i);
+  const matchA = text.match(/(?:^|\s)([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg|massage|meseg|sms|text|বার্তা)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও|daw|dao|dio|diba|pathao)/i);
   if (matchA && matchA[1]) {
     namesPart = matchA[1];
   } else {
     // 3. Pattern B: Message command before names:
-    // e.g. "akta message daw roni,bou k j...", "একটি মেসেজ দাও রনি আর বউকে যে..."
-    const matchB = text.match(/(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও)\s+([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)(?:\s+(?:j|je|যে|for|নিয়ে))?/i);
+    // e.g. "akta message daw roni,bou k j...", "ekta msg daw roni k..."
+    const matchB = text.match(/(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg|massage|meseg|sms|text|বার্তা)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও|daw|dao|dio|diba|pathao)\s+([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)(?:\s+(?:j|je|k|যে|for|নিয়ে))?/i);
     if (matchB && matchB[1]) {
       namesPart = matchB[1];
     }
@@ -308,7 +308,7 @@ export const extractMessageRecipients = (rawText: string): { names: string[]; is
     const splitNames = namesPart
       .split(/[,،&]|\s+(?:and|ar|আর|ও|এবং)\s+/i)
       .map(n => cleanPersonName(n).name)
-      .filter(n => n && n.length >= 2 && !/^(?:message|msg|মেসেজ|akta|ekta|একটা|দিও|দাও|send|me|আমাকে|তাকে)$/i.test(n));
+      .filter(n => n && n.length >= 2 && !/^(?:message|msg|massage|মেসেজ|akta|ekta|একটা|দিও|দাও|daw|dao|dio|diba|send|me|আমাকে|তাকে)$/i.test(n));
 
     if (splitNames.length > 0) {
       return { names: splitNames, isBroadcastAll: false };
@@ -320,7 +320,7 @@ export const extractMessageRecipients = (rawText: string): { names: string[]; is
 
 /**
  * Intelligent extractor for the actual message body intended for the recipient.
- * Handles quoted text, 'j' / 'je' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
+ * Handles quoted text, colon, 'j' / 'je' / 'k' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
  */
 export const extractScheduledMessage = (rawText: string, recipientPhone?: string): string => {
   let text = rawText.trim();
@@ -328,40 +328,52 @@ export const extractScheduledMessage = (rawText: string, recipientPhone?: string
     text = text.replace(recipientPhone, ' ').trim();
   }
 
-  // 1. Quoted message (e.g. "koi tumi bhiya..." or '...')
+  // 1. Quoted message (e.g. "kal amra ghurte jabo")
   const quoteMatch = text.match(/["'“‘]([^"'“‘”]+)["'”’]/);
   if (quoteMatch && quoteMatch[1].trim().length > 1) {
     return quoteMatch[1].trim();
   }
 
-  // 2. Connector clause: 'j ...', 'je ...', 'যে ...' (e.g. "...ar somoi j bari jaba kobe")
-  const jeMatch = text.match(/\b(?:j|je|যে)\s+(.+)$/i);
-  if (jeMatch && jeMatch[1].trim().length > 1) {
-    return jeMatch[1].trim();
-  }
-
-  // 3. Connector colon: 'message: ...' or 'মেসেজ: ...'
-  const colonMatch = text.match(/(?:message|msg|বার্তা|মেসেজ)\s*[:：\-]\s*(.+)$/i);
+  // 2. Colon separator: e.g. "sobai k msg daw: kal amra ghurte jabo"
+  const colonMatch = text.match(/(?:message|msg|massage|meseg|sms|text|বার্তা|মেসেজ)\s*(?:দাও|দিও|পাঠাও|send|daw|dao|dio|diba)?\s*[:：\-]\s*(.+)$/i);
   if (colonMatch && colonMatch[1].trim().length > 1) {
     return colonMatch[1].trim();
   }
 
-  // 4. Fallback cleanup: strip metadata prefixes cleanly using whole-word boundaries
+  // 3. Message verb followed by connector:
+  // e.g. "message daw k kal amra ghurte jabo", "msg daw j ...", "মেসেজ দাও যে ..."
+  const verbConnectorMatch = text.match(/(?:message|msg|massage|meseg|sms|text|বার্তা|মেসেজ)\s*(?:দাও|দিও|পাঠাও|send|daw|dao|dio|diba)\s*(?:j|je|k|যে|bolba|bolbe|বলো|বলে)\s+(.+)$/i);
+  if (verbConnectorMatch && verbConnectorMatch[1].trim().length > 1) {
+    return verbConnectorMatch[1].trim();
+  }
+
+  // 4. Standalone connector clause: 'j ...', 'je ...', 'যে ...', 'bolba ...'
+  const jeMatch = text.match(/\b(?:j|je|যে|bolba|bolbe|বলো|বলে)\s+(.+)$/i);
+  if (jeMatch && jeMatch[1].trim().length > 1) {
+    return jeMatch[1].trim();
+  }
+
+  // 5. Connector 'k' after send verb:
+  // e.g. "... message daw k kal amra..."
+  const kMatch = text.match(/(?:daw|dao|dio|diba|send|পাঠাও|দাও)\s+k\s+(.+)$/i);
+  if (kMatch && kMatch[1].trim().length > 1) {
+    return kMatch[1].trim();
+  }
+
+  // 6. Fallback cleanup: strip metadata prefixes cleanly
   let cleaned = text
-    .replace(/(?:ay|ei|ai|oi)\s*number(?:\s*(?:a|e|te))?/gi, ' ')
-    .replace(/\b(?:number|nombore|nambare|নাম্বারে|নম্বরে)(?:\s*(?:a|e|te))?\b/gi, ' ')
+    .replace(/(?:ay|ei|ai|oi)\s*(?:mnbr|nmbr|numbr|nbr|number|ফোন|নম্বর|নাম্বার)(?:\s*(?:a|e|te))?/gi, ' ')
+    .replace(/\b(?:mnbr|nmbr|numbr|nbr|number|nombore|nambare|নাম্বারে|নম্বরে)(?:\s*(?:a|e|te))?\b/gi, ' ')
     .replace(/\b(?:akta|ekta|একটি|একটা)\b/gi, ' ')
-    .replace(/\b(?:message|msg|বার্তা|মেসেজ)\b/gi, ' ')
-    .replace(/\b(?:send\s*kore\s*diba|pathiye\s*dio|pathay\s*dio|send\s*koro|pathao|pathano|pathaiba|পাঠিয়ে\s*দিও|পাঠিয়ে\s*দিন|পাঠাও)\b/gi, ' ')
-    .replace(/\b(?:aj|aaj|কাল|আগামীকাল|আজ|kal|kaal|tomorrow|today)(?:\s*k)?\b/gi, ' ')
-    .replace(/\b(?:rat|raat|sokal|shokal|dupur|bikal|sondha|shondha|রাত|সকাল|দুপুর|বিকাল|সন্ধ্যা)\b/gi, ' ')
-    .replace(/(\d{1,2}(?::\d{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?|[০-৯]{1,2}(?::[০-৯]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, ' ')
-    .replace(/\b(?:ar|er|এর|সময়|somoy|somoi|time)\b/gi, ' ')
+    .replace(/\b(?:message|msg|massage|meseg|sms|text|বার্তা|মেসেজ)\b/gi, ' ')
+    .replace(/\b(?:send\s*kore\s*diba|pathiye\s*dio|pathay\s*dio|send\s*koro|pathao|pathano|pathaiba|পাঠিয়ে\s*দিও|পাঠিয়ে\s*দিন|পাঠাও|send|daw|dao|dio|diba)\b/gi, ' ')
+    .replace(/\b(?:sobai|shobai|sbi|sbai|sob|shob|jara\s*ache|সবাই|সকলকে|সবাইকে)(?:\s*k)?\b/gi, ' ')
+    .replace(/^[a-zA-Z\u0980-\u09FF\s,]+\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\s*/i, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Strip leading leftover words like "diba", "k", "j", "pathao", ":"
-  cleaned = cleaned.replace(/^(?:diba|dibo|dio|diyo|pathao|pathano|k|j|je|bolba|bolbe|[:：\-])\s+/i, '').trim();
+  // Strip leading leftover connectors
+  cleaned = cleaned.replace(/^(?:k|j|je|যে|bolba|bolbe|বলে|বলো|[:：\-])\s+/i, '').trim();
 
   return cleaned && cleaned.length >= 2 ? cleaned : 'জরুরি বার্তা';
 };
@@ -912,11 +924,11 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 4.7 Contact Storage & Retrieval Detection (Fallback)
-    // A. Save Contact: e.g. "রনির ফোন নম্বর সেভ করো: 01712345678", "আম্মুর নাম্বার সেভ করো 018..."
+    // A. Save Contact: e.g. "রনির ফোন নম্বর সেভ করো: 01712345678", "আম্মুর নাম্বার সেভ করো 018...", "Bou ar mnbr save koro"
     const hasPhoneInText = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
     const isSaveContactIntent =
       hasPhoneInText &&
-      /(?:নাম্বার|নম্বর|number|phone|ফোন|contact|কন্ট্যাক্ট)\s*.*(?:সেভ|রাখো|রেখো|তুল|তুলে|add|save)/i.test(text) ||
+      /(?:নাম্বার|নম্বর|number|nmbr|numbr|mnbr|nbr|no|phone|phn|ফোন|contact|কন্ট্যাক্ট)\s*.*(?:সেভ|রাখো|রেখো|তুল|তুলে|add|save)/i.test(text) ||
       /^(?:save\s*contact|কন্ট্যাক্ট\s*সেভ)\s*[:：\-]?\s*(.+)/i.test(text);
 
     if (isSaveContactIntent && hasPhoneInText) {
@@ -937,7 +949,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     // B. Get Contact: e.g. "রনির নাম্বার কত?", "রনির ফোন নম্বরটা দাও", "সব কন্ট্যাক্ট দেখাও"
     const isGetContactIntent =
       /(?:সব\s*কন্ট্যাক্ট|আমার\s*কন্ট্যাক্ট|কন্ট্যাক্ট\s*লিস্ট|contact\s*list|show\s*contacts)/i.test(text) ||
-      /(?:নাম্বার|নম্বর|number|phone|ফোন|মোবাইল|mobile)\s*(?:টা|টি)?\s*(?:দাও|বলো|কি|কী|কত|কতো|daw|dao|ki|koto|bolo)/i.test(text);
+      /(?:নাম্বার|নম্বর|number|nmbr|numbr|mnbr|nbr|phone|phn|ফোন|মোবাইল|mobile)\s*(?:টা|টি|ta|ti)?\s*(?:দাও|বলো|কি|কী|কত|কতো|daw|dao|ki|koto|bolo)/i.test(text);
 
     if (isGetContactIntent && !text.includes(':') && !hasPhoneInText) {
       if (/(?:সব|সকল|আমার)\s*কন্ট্যাক্ট|কন্ট্যাক্ট\s*লিস্ট|contact\s*list/i.test(text)) {
@@ -1094,26 +1106,11 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       const recipientPhone = phoneMatch ? phoneMatch[0] : undefined;
       const textWithoutPhone = recipientPhone ? enText.replace(recipientPhone, '') : enText;
 
-      // Extract time
-      let time = parseBengaliTime(textWithoutPhone);
-
-      // Extract date using parseRelativeDate (Banglish & Bengali aware)
-      const targetDate = parseRelativeDate(text, time);
-      const dateStr = targetDate.toISOString().split('T')[0];
-
       let customMessage: string | undefined = undefined;
-      let title = text
-        .replace(/(?:in\s+)?(?:[০-৯\d]+)\s*(?:minutes?|mins?|mnts?|mints?|m|মিনিট(?:ের)?|মি\.)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
-        .replace(/(?:in\s+)?(?:[০-৯\d]+)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
-        .replace(/(?:adha|adho|আধা|অর্ধেক|der|দেড়|দেড়)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
-        .replace(/\b(?:current\s*time\s*theke|akhon\s*theke|এখন\s*থেকে)\b/gi, ' ')
-        .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu|sokal|shokal|dupur|bikal|rat)\b|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, ' ')
-        .replace(/(রিমাইন্ডার\s*(?:সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*(?:করিয়ে|করাই|করে)?\s*(?:দিও|দাও|দিন|করো)?|reminder|\b(?:mone\s*(?:korai|koriye|kore)?\s*(?:diow|diyo|dio|diba|dao|koro)?|akta|ekta|একটি|একটা|diow|diyo|dio|diba|dao)\b)/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
       let recipientNames: string[] = [];
       let isBroadcastAll = false;
+      let title = '';
+
       if (recipientPhone) {
         title = `মেসেজ পাঠানো (${recipientPhone})`;
         customMessage = extractScheduledMessage(text, recipientPhone);
@@ -1131,15 +1128,38 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         }
       }
 
+      // Isolate the command/scheduling portion without the actual message payload
+      // This prevents words like 'kal amra ghurte jabo' from mistakenly setting reminder date to tomorrow
+      const schedulingText = customMessage ? textWithoutPhone.replace(customMessage, ' ') : textWithoutPhone;
+
+      // Extract time from schedulingText only
+      let time = parseBengaliTime(schedulingText);
+
+      // Extract date using parseRelativeDate from schedulingText only
+      const targetDate = parseRelativeDate(schedulingText, time);
+      const dateStr = targetDate.toISOString().split('T')[0];
+
+      if (!title) {
+        title = text
+          .replace(/(?:in\s+)?(?:[০-৯\d]+)\s*(?:minutes?|mins?|mnts?|mints?|m|মিনিট(?:ের)?|মি\.)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
+          .replace(/(?:in\s+)?(?:[০-৯\d]+)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
+          .replace(/(?:adha|adho|আধা|অর্ধেক|der|দেড়|দেড়)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
+          .replace(/\b(?:current\s*time\s*theke|akhon\s*theke|এখন\s*থেকে)\b/gi, ' ')
+          .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu|sokal|shokal|dupur|bikal|rat)\b|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, ' ')
+          .replace(/(রিমাইন্ডার\s*(?:সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*(?:করিয়ে|করাই|করে)?\s*(?:দিও|দাও|দিন|করো)?|reminder|\b(?:mone\s*(?:korai|koriye|kore)?\s*(?:diow|diyo|dio|diba|dao|koro)?|akta|ekta|একটি|একটা|diow|diyo|dio|diba|dao)\b)/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
       if (!title || title.length < 2) title = 'জরুরি কাজ';
 
       // Check if user specifically scheduled for future time/date outside the message body
-      const textOutsideMessage = customMessage ? textWithoutPhone.replace(customMessage, ' ') : textWithoutPhone;
-      const hasSpecificTimeMention = /(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)/i.test(textOutsideMessage) ||
-        /(?:minute|hour|ghonta|মিনিট|ঘণ্টা)/i.test(textOutsideMessage) ||
-        /\b(?:কাল|আগামীকাল|পরশু|kal|kaal|kalke|agamikal|porshu)\b/i.test(textOutsideMessage);
+      const hasSpecificTimeMention = /(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)/i.test(schedulingText) ||
+        /(?:minute|hour|ghonta|মিনিট|ঘণ্টা)/i.test(schedulingText) ||
+        /\b(?:কাল|আগামীকাল|পরশু|kal|kaal|kalke|agamikal|porshu)\b/i.test(schedulingText);
 
-      const sendNow = !hasSpecificTimeMention && !!(recipientPhone || recipientNames.length > 0 || isBroadcastAll);
+      const isMessageAction = !!(recipientPhone || recipientNames.length > 0 || isBroadcastAll);
+      const sendNow = !hasSpecificTimeMention && isMessageAction;
       const formattedDisplayTime = formatTime12Hour(time);
 
       return {
