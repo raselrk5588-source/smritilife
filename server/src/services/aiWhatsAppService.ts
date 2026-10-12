@@ -277,10 +277,183 @@ export const cleanPersonName = (rawName: string): { name: string; relationship?:
 };
 
 /**
+ * Helper to clean and normalize extracted message body
+ */
+export const cleanMessageBody = (msg: string): string => {
+  let cleaned = (msg || '').trim();
+  cleaned = cleaned.replace(/^["'“‘](.*)["'”’]$/, '$1').trim();
+  cleaned = cleaned.replace(/^(?:\b(?:j|je|যে|bolba|bolbe|বলে|বলো)\b|\bk\b|[:：\-])\s*/i, '').trim();
+  return cleaned && cleaned.length >= 1 ? cleaned : 'জরুরি বার্তা';
+};
+
+export interface DirectMessageParseResult {
+  isDirectMessage: boolean;
+  recipientNames: string[];
+  isBroadcastAll: boolean;
+  messageText: string;
+}
+
+/**
+ * Robust bidirectional message command parser supporting all Bengali & Banglish variations:
+ * 1. Command FIRST: "akta message daw roni,bou k j kal amra ghurte jabo"
+ * 2. Message FIRST: "I love you message daw rasel k", "meeting hobe na msg dao roni ke"
+ * 3. Recipient FIRST with message command: "Bou k message daw i love you", "Rasel ke msg dao kal meeting ache"
+ * 4. Recipient FIRST with send verb in middle: "Rasel ke bolba meeting cancle", "sobai k pathao kal meeting"
+ * 5. Message FIRST with send verb: "I love u pathao rasel ke"
+ * 6. Recipient FIRST with send verb at end: "Rasel ke I love u pathao"
+ * 7. Colon format: "Rasel k message: I love you"
+ */
+export const parseDirectMessageCommand = (rawText: string): DirectMessageParseResult => {
+  const text = (rawText || '').trim();
+
+  // 1. Check broadcast to all contacts
+  const isGlobalBroadcast = /(?:সবাইকে|সকলকে|সবাই\s*কে|সবাই|সকল|যারা\s*আছে|sobaike|shobaike|sobai\s*k|shobai\s*k|sobai|shobai|sbi\s*k|sbi|sbai\s*k|sbai|sob\s*k|shob\s*k|\bsob\b|\bshob\b|jara\s*ache|all\s*contacts|everyone|সব\s*কন্ট্যাক্টকে|সকল\s*কন্ট্যাক্টকে)\b/i.test(text);
+
+  const resolveNames = (rawPart: string) => {
+    const isB = isGlobalBroadcast || /(?:sobai|shobai|sbi|sbai|sob|shob|সবাই|সকল|যারা\s*আছে|jara\s*ache)/i.test(rawPart);
+    if (isB) return { isBroadcast: true, names: ['সবাই'] };
+    const split = rawPart
+      .split(/[,،&]|\s+(?:and|ar|আর|ও|এবং)\s+/i)
+      .map(n => cleanPersonName(n).name)
+      .filter(n => n && n.length >= 2 && !/^(?:message|msg|massage|meseg|sms|text|মেসেজ|akta|ekta|একটা|দিও|দাও|daw|dao|dio|diba|send|pathao|পাঠাও)$/i.test(n));
+    return { isBroadcast: false, names: split };
+  };
+
+  // Pattern 1: Command FIRST with connector:
+  // e.g. "akta message daw roni,bou k j kal amra ghurte jabo", "message pathao rasel k je kal asbo"
+  const pat1 = text.match(/^(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg|massage|meseg|sms|text|বার্তা)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও|daw|dao|dio|diba|pathao)\s+([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\b\s*(?:\b(?:j|je|যে|bolba|bolbe|বলে|বলো)\b|\bk\b|[:：\-])?\s*(.+)$/i);
+  if (pat1 && pat1[1] && pat1[2]) {
+    const rawNames = pat1[1].trim();
+    const rawMsg = pat1[2].trim();
+    const { isBroadcast, names } = resolveNames(rawNames);
+    if (names.length > 0 || isBroadcast) {
+      return {
+        isDirectMessage: true,
+        recipientNames: names,
+        isBroadcastAll: isBroadcast,
+        messageText: cleanMessageBody(rawMsg)
+      };
+    }
+  }
+
+  // Pattern 2: Message FIRST, message command, then recipient at end:
+  // e.g. "I love you message daw rasel k", "meeting hobe na msg dao roni ke"
+  const pat2 = text.match(/^(.+?)\s+(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg|massage|meseg|sms|text|বার্তা)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও|daw|dao|dio|diba|pathao)\s+([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\b\s*$/i);
+  if (pat2 && pat2[1] && pat2[2]) {
+    const rawMsg = pat2[1].trim();
+    const { isBroadcast, names } = resolveNames(pat2[2]);
+    if (names.length > 0 || isBroadcast) {
+      return {
+        isDirectMessage: true,
+        recipientNames: names,
+        isBroadcastAll: isBroadcast,
+        messageText: cleanMessageBody(rawMsg)
+      };
+    }
+  }
+
+  // Pattern 3: Recipient FIRST, message command in middle, message at end:
+  // e.g. "Bou k message daw i love you", "Rasel ke msg dao kal meeting ache"
+  const pat3 = text.match(/^([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\b\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg|massage|meseg|sms|text|বার্তা)\s*(?:দাও|দিও|পাঠাও|send|পাঠিয়ে\s*দিও|daw|dao|dio|diba|pathao)\s*(?:\b(?:j|je|যে|bolba|bolbe|বলে|বলো)\b|\bk\b|[:：\-])?\s*(.+)$/i);
+  if (pat3 && pat3[1] && pat3[2]) {
+    const rawNames = pat3[1].trim();
+    const rawMsg = pat3[2].trim();
+    const { isBroadcast, names } = resolveNames(rawNames);
+    if (names.length > 0 || isBroadcast) {
+      return {
+        isDirectMessage: true,
+        recipientNames: names,
+        isBroadcastAll: isBroadcast,
+        messageText: cleanMessageBody(rawMsg)
+      };
+    }
+  }
+
+  // Pattern 4: Recipient FIRST, send/tell verb in middle, message at end:
+  // e.g. "Rasel ke bolba meeting cancle", "sobai k pathao kal meeting", "bou k bolo i love you"
+  const pat4 = text.match(/^([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\b\s+(?:পাঠাও|pathao|pathay|পাঠিয়ে\s*দাও|পাঠিয়ে\s*দিও|send|send\s*koro|daw|dao|dio|diba|দাও|দিও|বলো|bolo|bolba|bolbe)\s*(?:\b(?:j|je|যে|bolba|bolbe|বলে|বলো)\b|\bk\b|[:：\-])?\s*(.+)$/i);
+  if (pat4 && pat4[1] && pat4[2]) {
+    const rawNames = pat4[1].trim();
+    const rawMsg = pat4[2].trim();
+    const { isBroadcast, names } = resolveNames(rawNames);
+    if (names.length > 0 || isBroadcast) {
+      return {
+        isDirectMessage: true,
+        recipientNames: names,
+        isBroadcastAll: isBroadcast,
+        messageText: cleanMessageBody(rawMsg)
+      };
+    }
+  }
+
+  // Pattern 5: Message FIRST, send verb, then recipient at end:
+  // e.g. "I love u pathao rasel ke", "kal dekha hobe send koro bou k"
+  const pat5 = text.match(/^(.+?)\s+(?:পাঠাও|pathao|pathay|send|send\s*koro|পাঠিয়ে\s*দাও|পাঠিয়ে\s*দিও)\s+([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\b\s*$/i);
+  if (pat5 && pat5[1] && pat5[2]) {
+    const rawMsg = pat5[1].trim();
+    const { isBroadcast, names } = resolveNames(pat5[2]);
+    if (names.length > 0 || isBroadcast) {
+      return {
+        isDirectMessage: true,
+        recipientNames: names,
+        isBroadcastAll: isBroadcast,
+        messageText: cleanMessageBody(rawMsg)
+      };
+    }
+  }
+
+  // Pattern 6: Recipient FIRST, message in middle, send verb at end:
+  // e.g. "Rasel ke I love u pathao", "roni k kal asbo bolo"
+  const pat6 = text.match(/^([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)\b\s+(.+?)\s+(?:পাঠাও|pathao|pathay|পাঠিয়ে\s*দাও|পাঠিয়ে\s*দিও|send|send\s*koro|daw|dao|dio|diba|দাও|দিও|বলো|bolo|bolba|bolbe)\s*$/i);
+  if (pat6 && pat6[1] && pat6[2]) {
+    const rawNames = pat6[1].trim();
+    let rawMsg = pat6[2].trim();
+    rawMsg = rawMsg.replace(/(?:একটা\s*|akta\s*|ekta\s*)?(?:মেসেজ|message|msg|massage|meseg|sms|text|বার্তা)\s*$/i, '').trim();
+    const { isBroadcast, names } = resolveNames(rawNames);
+    if (names.length > 0 || isBroadcast) {
+      return {
+        isDirectMessage: true,
+        recipientNames: names,
+        isBroadcastAll: isBroadcast,
+        messageText: cleanMessageBody(rawMsg)
+      };
+    }
+  }
+
+  // Pattern 7: Colon format: e.g. "Rasel k message: I love you", "sobai k msg: kal meeting"
+  const pat7 = text.match(/^([\w\u0980-\u09FF\s,،\+]+?)\s*(?:-?কে|-?k|-?ke|-?re|-?রে)?\s*(?:মেসেজ|message|msg|sms)\s*[:：\-]\s*(.+)$/i);
+  if (pat7 && pat7[1] && pat7[2]) {
+    const rawNames = pat7[1].trim();
+    const rawMsg = pat7[2].trim();
+    const { isBroadcast, names } = resolveNames(rawNames);
+    if (names.length > 0 || isBroadcast) {
+      return {
+        isDirectMessage: true,
+        recipientNames: names,
+        isBroadcastAll: isBroadcast,
+        messageText: cleanMessageBody(rawMsg)
+      };
+    }
+  }
+
+  return {
+    isDirectMessage: false,
+    recipientNames: [],
+    isBroadcastAll: false,
+    messageText: ''
+  };
+};
+
+/**
  * Intelligent extractor for multiple recipients or broadcast keywords.
  * Supports Banglish variations: sbi, sobai, sbai, sob, jara ache, mnbr, msg, etc.
  */
 export const extractMessageRecipients = (rawText: string): { names: string[]; isBroadcastAll: boolean } => {
+  const direct = parseDirectMessageCommand(rawText);
+  if (direct.isDirectMessage && (direct.recipientNames.length > 0 || direct.isBroadcastAll)) {
+    return { names: direct.recipientNames, isBroadcastAll: direct.isBroadcastAll };
+  }
+
   const text = (rawText || '').trim();
 
   // 1. Check broadcast to all contacts (sbi, sobai, sbai, sob, jara ache, everyone, ইত্যাদি)
@@ -323,6 +496,11 @@ export const extractMessageRecipients = (rawText: string): { names: string[]; is
  * Handles quoted text, colon, 'j' / 'je' / 'k' / 'যে' clauses, and cleans prefixes cleanly without corrupting words.
  */
 export const extractScheduledMessage = (rawText: string, recipientPhone?: string): string => {
+  const direct = parseDirectMessageCommand(rawText);
+  if (direct.isDirectMessage && direct.messageText) {
+    return direct.messageText;
+  }
+
   let text = rawText.trim();
   if (recipientPhone) {
     text = text.replace(recipientPhone, ' ').trim();
@@ -385,7 +563,7 @@ export const extractScheduledMessage = (rawText: string, recipientPhone?: string
   // Strip leading leftover connectors
   cleaned = cleaned.replace(/^(?:k|j|je|যে|bolba|bolbe|বলে|বলো|[:：\-])\s+/i, '').trim();
 
-  return cleaned && cleaned.length >= 2 ? cleaned : 'জরুরি বার্তা';
+  return cleaned && cleaned.length >= 1 ? cleaned : 'জরুরি বার্তা';
 };
 
 const SYSTEM_INSTRUCTION = `
@@ -471,8 +649,13 @@ Possible actions:
    - "sendNow": boolean (true if user wants it sent immediately or doesn't specify a future time/date; false if scheduled for future)
 
 6. create_reminder:
-   When user wants a task reminder for themselves or wants to send a message to one or multiple contacts (e.g. "bou k message daw i love you", "একটা মেসেজ দাও রনি, বউকে যে কাল আমরা ঘুরতে যাব", "রনি আর বউকে মেসেজ দাও...", "সবাইকে মেসেজ দাও যে কাল অফিস ছুটি").
-   If user says e.g. "bou k message daw i love you", "customMessage" is "i love you", "recipientNames" is ["Bou"], and "sendNow" is true.
+   When user wants a task reminder for themselves or wants to send a message to one or multiple contacts:
+   - Direct message variations (MUST detect recipient and message text accurately, with sendNow: true):
+     * "Rasel ke I love u pathao" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love u", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }
+     * "I love you message daw rasel k" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love you", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }
+     * "Bou k message daw i love you" -> action: "create_reminder", data: { "recipientNames": ["Bou"], "customMessage": "i love you", "sendNow": true, "title": "মেসেজ পাঠানো (Bou)" }
+     * "akta message daw roni,bou k j kal amra ghurte jabo" -> action: "create_reminder", data: { "recipientNames": ["roni", "bou"], "customMessage": "kal amra ghurte jabo", "sendNow": true }
+     * "sobai k message daw kal meeting" -> action: "create_reminder", data: { "broadcastAll": true, "customMessage": "kal meeting", "sendNow": true }
    Fields in "data":
    - "title": string
    - "recipientNames"?: string[] (e.g. ["রনি", "Bou"] if sent to specific contacts from contact list)
@@ -480,7 +663,7 @@ Possible actions:
    - "recipientPhone"?: string (single phone number if mentioned)
    - "recipientPhones"?: string[] (array of numbers if multiple numbers mentioned)
    - "broadcastAll"?: boolean (true if user asks to send to everyone/all contacts: "সবাইকে মেসেজ দাও", "sobaike message dao", "send to all")
-   - "customMessage"?: string (The actual message to be sent to them, e.g. "কাল আমরা ঘুরতে যাব")
+   - "customMessage"?: string (The actual message to be sent to them, e.g. "kal amra ghurte jabo")
    - "date": string (YYYY-MM-DD)
    - "time": string (HH:mm)
    - "sendNow"?: boolean (true if user wants it sent immediately or didn't specify a future hour/minute)
@@ -662,7 +845,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${liveClockPrompt}\n${dynamicRulesPrompt}`;
 
     // Candidate models in order of stability and quota availability
-    const candidateModels = ['gemini-2.5-flash', 'gemini-3.8-flash'];
+    const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-flash'];
     let parsedResponse: any = null;
 
     if (!chatHistories.has(whatsappNumber)) {
@@ -1158,11 +1341,18 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 3. Reminder Creation or Scheduled Message Detection
+    const directParse = parseDirectMessageCommand(text);
     const hasBanglishDate = /\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu)\b/i.test(text);
     const hasRelativeDuration = matchRelativeDuration(text) !== null;
     const hasMessageKeyword = /\b(?:message|msg|massage|meseg|sms|text|মেসেজ|বার্তা)\b/i.test(text);
-    const hasSendVerb = /\b(?:daw|dao|dio|diyo|diba|send|pathao|pathay|দাও|দিও|পাঠাও|পাঠিয়ে)\b/i.test(text);
-    const hasReminderIntent = text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') || text.includes('কাল') || text.includes('আজ') || hasBanglishDate || hasRelativeDuration || hasMessageKeyword || (hasMessageKeyword && hasSendVerb) || /(?:01\d{9}|\+?8801\d{9})/.test(enText) || /\b(?:mone|korai|koriye|diow|diyo|dio|diba|daw|dao|bazar|osud|kaje|hobe)\b/i.test(text);
+    const hasSendVerb = /\b(?:daw|dao|dio|diyo|diba|send|pathao|pathay|দাও|দিও|পাঠাও|পাঠিয়ে|bolo|bolba|bolbe|বলো|বলবে)\b/i.test(text);
+    const hasRecipientSuffix = /(?:-?কে|-?k|-?ke|-?re|-?রে)\b/i.test(text);
+    const hasReminderIntent = directParse.isDirectMessage ||
+      (hasRecipientSuffix && hasSendVerb) ||
+      text.includes('রিমাইন্ডার') || text.includes('মনে') || text.includes('reminder') || text.includes('মিটিং') ||
+      text.includes('কাল') || text.includes('আজ') || hasBanglishDate || hasRelativeDuration ||
+      hasMessageKeyword || (hasMessageKeyword && hasSendVerb) || /(?:01\d{9}|\+?8801\d{9})/.test(enText) ||
+      /\b(?:mone|korai|koriye|diow|diyo|dio|diba|daw|dao|bazar|osud|kaje|hobe)\b/i.test(text);
 
     if (hasReminderIntent) {
       const phoneMatch = enText.match(/(?:\+?8801\d{9}|01\d{9})/);
@@ -1174,7 +1364,17 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       let isBroadcastAll = false;
       let title = '';
 
-      if (recipientPhone) {
+      if (directParse.isDirectMessage) {
+        if (directParse.isBroadcastAll) {
+          isBroadcastAll = true;
+          recipientNames = ['সবাই'];
+          title = 'সবাইকে মেসেজ পাঠানো';
+        } else if (directParse.recipientNames.length > 0) {
+          recipientNames = directParse.recipientNames;
+          title = `মেসেজ পাঠানো (${recipientNames.join(', ')})`;
+        }
+        customMessage = directParse.messageText;
+      } else if (recipientPhone) {
         title = `মেসেজ পাঠানো (${recipientPhone})`;
         customMessage = extractScheduledMessage(text, recipientPhone);
       } else {
@@ -1264,7 +1464,7 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const candidateModels = ['gemini-2.5-flash', 'gemini-3.8-flash'];
+    const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-flash'];
 
     const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
