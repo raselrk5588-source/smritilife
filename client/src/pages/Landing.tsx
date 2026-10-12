@@ -147,146 +147,101 @@ export default function Landing() {
             </span>
           </div>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600">
-            <button 
-              onClick={() => scrollToSection('how-it-works')} 
-              className="hover:text-[#0A7756] transition cursor-pointer"
-            >
-              কীভাবে কাজ করে
-            </button>
-            <button 
-              onClick={() => scrollToSection('features')} 
-              className="hover:text-[#0A7756] transition cursor-pointer"
-            >
-              কী কাজে লাগে
-            </button>
-            <button 
-              onClick={() => scrollToSection('pricing')} 
-              className="hover:text-[#0A7756] transition cursor-pointer"
-            >
-              প্রাইসিং
-            </button>
-            <button 
-              onClick={() => scrollToSection('faq')} 
-              className="hover:text-[#0A7756] transition cursor-pointer"
-            >
-              সাধারণ প্রশ্ন
-            </button>
-          </nav>
-
-          {/* Desktop Right CTA */}
-          <div className="hidden sm:flex items-center gap-3">
+          {/* Right Controls (Desktop & Mobile) */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
             <button
               onClick={() => navigate('/auth')}
-              className="text-slate-700 hover:text-[#0A7756] font-bold px-4 py-2 text-sm rounded-full transition cursor-pointer flex items-center gap-1.5"
+              className="hidden sm:inline-flex items-center gap-1.5 text-slate-700 hover:text-[#0A7756] font-bold px-4 py-2 text-sm rounded-full transition cursor-pointer"
             >
               <LogIn className="w-4 h-4 text-[#0A7756]" />
               লগইন
             </button>
             <button
               onClick={handleSubscribe}
-              className="bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-sm sm:text-base px-6 py-2.5 rounded-full shadow-md shadow-[#0A7756]/25 hover:shadow-lg transition flex items-center gap-2 cursor-pointer"
+              className="bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-xs sm:text-sm md:text-base px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/25 hover:shadow-lg transition flex items-center gap-2 cursor-pointer"
             >
               এখনই শুরু করুন
             </button>
-          </div>
-
-          {/* Mobile Right Controls */}
-          <div className="flex sm:hidden items-center gap-2">
-            <button
-              onClick={handleSubscribe}
-              className="bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold text-xs px-3.5 py-2 rounded-full shadow-sm cursor-pointer"
-            >
-              এখনই শুরু করুন
-            </button>
+            {/* 3-line / 3-dot hamburger menu button for all devices */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 active:bg-slate-100 rounded-xl transition cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 rounded-xl transition cursor-pointer border border-slate-200/80 bg-white shadow-sm"
               aria-label="Toggle menu"
+              title="মেনু"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6 text-slate-800" /> : <Menu className="w-6 h-6 text-slate-800" />}
-            </button>
-          </div>
-
-          {/* Mobile Toggle on medium screens (between sm and lg) */}
-          <div className="hidden sm:flex lg:hidden items-center">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-900 active:bg-slate-100 rounded-xl transition cursor-pointer"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6 text-slate-800" /> : <Menu className="w-6 h-6 text-slate-800" />}
+              {mobileMenuOpen ? <X className="w-5 h-5 text-slate-800" /> : <Menu className="w-5 h-5 text-slate-800" />}
             </button>
           </div>
 
         </div>
 
-        {/* Mobile Dropdown Menu Card (Refined to match screenshot design) */}
+        {/* Dropdown Menu Modal (Shown when clicking 3-line menu button) */}
         {mobileMenuOpen && (
-          <div className="lg:hidden border-b border-slate-100 bg-[#FAFCFB]/98 backdrop-blur-xl px-5 py-5 space-y-4 shadow-xl animate-in slide-in-from-top-3">
-            
-            {/* Navigation links styled as cards / clean list */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-2 shadow-sm space-y-1">
-              <button
-                onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
-                className="w-full text-left font-bold text-slate-800 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2.5">
-                  <LogIn className="w-4 h-4 text-[#0A7756]" />
-                  লগইন
-                </span>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-              <button
-                onClick={() => scrollToSection('how-it-works')}
-                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
-              >
-                কীভাবে কাজ করে
-              </button>
-
-              <button
-                onClick={() => scrollToSection('features')}
-                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
-              >
-                কী কাজে লাগে
-              </button>
-
-              <button
-                onClick={() => scrollToSection('pricing')}
-                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
-              >
-                প্রাইসিং
-              </button>
-
-              <button
-                onClick={() => scrollToSection('faq')}
-                className="w-full text-left font-semibold text-slate-700 hover:text-[#0A7756] hover:bg-slate-50 px-4 py-3 rounded-xl transition"
-              >
-                সাধারণ প্রশ্ন
-              </button>
-            </div>
-
-            {/* Mobile Actions */}
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={handleSubscribe}
-                className="w-full bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold py-3.5 rounded-2xl text-center shadow-md shadow-[#0A7756]/20 transition flex items-center justify-center gap-2"
-              >
-                <span>এখনই শুরু করুন</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+          <div className="absolute top-full left-0 right-0 bg-[#FAFCFB]/98 backdrop-blur-xl border-b border-slate-200/80 shadow-2xl py-6 px-4 animate-in slide-in-from-top-2 z-50">
+            <div className="max-w-md mx-auto space-y-4">
               
-              <button
-                onClick={handleOpenWhatsApp}
-                className="w-full bg-[#EBF7F2] hover:bg-[#d8f1e7] text-[#0A7756] font-bold py-3 rounded-2xl text-center flex items-center justify-center gap-2 transition"
-              >
-                <MessageCircle className="w-4 h-4 text-[#25D366]" />
-                WhatsApp-এ কথা বলুন
-              </button>
-            </div>
+              {/* Menu items card styled just like Remique */}
+              <div className="bg-white rounded-3xl border border-slate-200/80 p-3 shadow-md space-y-1">
+                <button
+                  onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
+                  className="w-full text-left font-bold text-slate-800 hover:text-[#0A7756] hover:bg-emerald-50/50 px-4 py-3.5 rounded-2xl transition flex items-center justify-between cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <LogIn className="w-4 h-4 text-[#0A7756]" />
+                    লগইন
+                  </span>
+                  <ArrowRight className="w-4 h-4 text-slate-400" />
+                </button>
 
+                <button
+                  onClick={() => scrollToSection('how-it-works')}
+                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/50 px-4 py-3.5 rounded-2xl transition cursor-pointer"
+                >
+                  কীভাবে কাজ করে
+                </button>
+
+                <button
+                  onClick={() => scrollToSection('features')}
+                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/50 px-4 py-3.5 rounded-2xl transition cursor-pointer"
+                >
+                  কী কাজে লাগে
+                </button>
+
+                <button
+                  onClick={() => scrollToSection('pricing')}
+                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/50 px-4 py-3.5 rounded-2xl transition cursor-pointer"
+                >
+                  প্রাইসিং
+                </button>
+
+                <button
+                  onClick={() => scrollToSection('faq')}
+                  className="w-full text-left font-bold text-slate-700 hover:text-[#0A7756] hover:bg-emerald-50/50 px-4 py-3.5 rounded-2xl transition cursor-pointer"
+                >
+                  সাধারণ প্রশ্ন
+                </button>
+              </div>
+
+              {/* Action buttons inside menu */}
+              <div className="space-y-2">
+                <button
+                  onClick={handleSubscribe}
+                  className="w-full bg-[#0A7756] hover:bg-[#086347] active:scale-95 text-white font-bold py-3.5 rounded-2xl text-center shadow-md shadow-[#0A7756]/20 transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>এখনই শুরু করুন</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                
+                <button
+                  onClick={handleOpenWhatsApp}
+                  className="w-full bg-[#EBF7F2] hover:bg-[#d8f1e7] text-[#0A7756] font-bold py-3 rounded-2xl text-center flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4 text-[#25D366]" />
+                  <span>WhatsApp-এ কথা বলুন</span>
+                </button>
+              </div>
+
+            </div>
           </div>
         )}
       </header>
