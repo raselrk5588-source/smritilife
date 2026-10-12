@@ -763,7 +763,7 @@ export default function Landing() {
       </section>
 
       {/* 6. BOTTOM CONTACT FOOTER BAR (GLASS) */}
-      <footer className="mt-auto bg-white/75 backdrop-blur-2xl border-t border-slate-200/60 py-7 sm:py-9">
+      <footer className="mt-auto bg-white/75 backdrop-blur-2xl border-t border-slate-200/60 pt-7 pb-24 sm:py-9">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           
           {/* Left info with WhatsApp Icon */}
@@ -780,9 +780,10 @@ export default function Landing() {
           {/* Right WhatsApp Action Button */}
           <button
             onClick={handleOpenWhatsApp}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-white hover:bg-emerald-50/50 active:scale-95 text-[#0A7756] font-bold text-sm sm:text-base px-6 py-3 rounded-full border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-white hover:bg-emerald-50 active:scale-95 text-[#0A7756] font-bold text-sm sm:text-base px-6 py-3 rounded-full border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all cursor-pointer"
           >
             <MessageCircle className="w-5 h-5 text-[#25D366]" />
+            <span>WhatsApp-এ কথা বলুন</span>
           </button>
 
         </div>
