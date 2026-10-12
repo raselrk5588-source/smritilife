@@ -260,6 +260,24 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         const isListRules = /^(?:\/rules|\/listrules|নিয়মগুলো|রুলস|কি কি শিখেছো)\b/i.test(cleanText);
         const unlearnMatch = cleanText.match(/^(?:\/unlearn|\/removerule|\/delete_rule)\s+(.+)$/is);
 
+        if (teachMatch || isListRules || unlearnMatch) {
+          // Authorized Trainer Numbers: 01844697056, 01307065500, 01734042131
+          const AUTHORIZED_TRAINERS = ['01844697056', '01307065500', '01734042131'];
+          const cleanSender = fromNumber.replace(/\D/g, '');
+          const isAuthorizedTrainer = AUTHORIZED_TRAINERS.some(num => {
+            const shortNum = num.replace(/\D/g, '').slice(-10);
+            return cleanSender.endsWith(shortNum);
+          });
+
+          if (!isAuthorizedTrainer) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `⛔ দুঃখিত, আপনি স্মৃতিকে নতুন নিয়ম শেখানোর অনুমোদিত অ্যাডমিন নন। শুধুমাত্র নির্দিষ্ট অ্যাডমিন নম্বর থেকেই AI ট্রেইনিং কমান্ড কার্যকর হবে।`
+            );
+            return;
+          }
+        }
+
         if (teachMatch) {
           const ruleContent = teachMatch[1].trim();
           if (ruleContent.length < 3) {
