@@ -320,6 +320,46 @@ const downloadMetaAudio = async (mediaId: string): Promise<{ buffer: Buffer; mim
   }
 };
 
+// Function to trigger native WhatsApp "typing..." indicator and mark message as read
+const sendMetaTypingIndicator = (messageId: string) => {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneNumberId || !messageId) return;
+
+  try {
+    fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+        typing_indicator: {
+          type: 'text'
+        }
+      }),
+      signal: AbortSignal.timeout(5000)
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success) {
+          console.log(`💬 [WhatsAppTyping] Typing indicator active for message: ${messageId}`);
+        } else {
+          console.log(`💬 [WhatsAppTyping] Response for message ${messageId}:`, data);
+        }
+      })
+      .catch(err => {
+        console.warn('[WhatsAppTyping] Non-blocking indicator error:', err?.message || err);
+      });
+  } catch (err) {
+    // Non-blocking
+  }
+};
+
 // Webhook Verification (Required by Meta)
 export const verifyWebhook = (req: Request, res: Response) => {
   const verify_token = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -386,6 +426,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         if (!fromNumber || (!userMessage && !isAudio && !buttonId && message.type !== 'contacts')) return;
+
+        // Show native WhatsApp "typing..." status & read receipt while AI processes the request
+        if (message.id) {
+          sendMetaTypingIndicator(message.id);
+        }
 
         // WhatsApp cloud API sends number with country code without +
         // Using a regex to match the end of the number is safer to find the user
@@ -971,7 +1016,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 const timeStr = formatTime12Hour(r.time);
                 text += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${timeStr} (${dStr})\n\n`;
               });
-              text += `💡 পরিবর্তন করতে: "[নাম] রিমাইন্ডারের সময় ৫টায় দাও"\n💡 ডিলিট করতে: "[নাম] ডিলিট করো" অথবা "সব রিমাইন্ডার ডিলিট করে দাও"`;
+              text += `💡 *এডিট বা ডিলিট করতে:* নম্বর দিয়ে বলুন (যেমন: "১ নম্বর সময় ৫টায় দাও" বা "২ নম্বর ডিলিট করো")`;
               await sendMetaWhatsAppMessage(fromNumber, text.trim());
             }
             break;

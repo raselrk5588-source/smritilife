@@ -102,10 +102,10 @@ export default function Paywall() {
       <div className="relative z-10 flex-1 flex flex-col items-center px-4 pt-12">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-white rounded-2xl shadow-xl mx-auto flex items-center justify-center mb-4 transform rotate-3">
-            <span className="text-3xl">🌸</span>
+          <div className="w-16 h-16 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl mx-auto flex items-center justify-center mb-4 p-2.5 border border-white/60">
+            <img src="/robot-icon.png" alt="SmritiLife AI" className="w-full h-full object-contain drop-shadow-sm" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight drop-shadow-sm">Smriti Life (স্মৃতি) Premium</h1>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight drop-shadow-sm">Smriti Life Premium</h1>
           <p className="text-white/90 text-sm font-medium mt-1">আপনার সব সুন্দর স্মৃতিগুলো সুরক্ষিত রাখুন</p>
         </div>
 
@@ -202,10 +202,12 @@ export default function Paywall() {
               <div className="p-6 text-center">
                 <div className="bg-white/90 rounded-lg p-3 inline-block shadow-sm mb-4">
                   <div className="flex items-center justify-center gap-3">
-                    <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">🌸</div>
+                    <div className="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center p-1.5 border border-emerald-100">
+                      <img src="/robot-icon.png" alt="SmritiLife" className="w-full h-full object-contain" />
+                    </div>
                     <div className="text-left">
                       <div className="text-xs text-gray-500">Merchant</div>
-                      <div className="font-bold text-sm text-gray-800">Smriti Life (স্মৃতি)</div>
+                      <div className="font-bold text-sm text-gray-800">Smriti Life</div>
                     </div>
                   </div>
                 </div>

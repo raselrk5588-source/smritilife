@@ -147,7 +147,7 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
       {/* Header */}
       <div className="flex justify-between items-center p-6 relative z-10">
         <div className="flex items-center space-x-2">
-          <h1 className="text-xl font-bold text-slate-800">Smriti <span className="text-[#0A7756]">Life</span> <span className="font-medium text-slate-600 text-sm">(স্মৃতি)</span></h1>
+          <h1 className="text-xl font-bold text-slate-800">Smriti <span className="text-[#0A7756]">Life</span></h1>
         </div>
         <div className="flex space-x-3">
           <button onClick={onClose} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-600 hover:bg-slate-50 transition">

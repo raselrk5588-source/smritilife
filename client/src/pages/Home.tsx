@@ -156,7 +156,7 @@ export default function Home() {
           {/* Header (Hidden on Web because MainLayout has a Top Nav) */}
           <header className="flex md:hidden justify-between items-center mb-6">
             <div className="flex items-center bg-white/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-sm border border-white/50">
-              <h1 className="text-xl font-extrabold tracking-wide text-primary">Smriti Life <span className="font-bold text-slate-600 text-[13px]">(স্মৃতি)</span></h1>
+              <h1 className="text-xl font-extrabold tracking-wide text-primary">Smriti Life</h1>
             </div>
             <div className="flex items-center space-x-3">
               <button onClick={() => navigate('/app/notifications')} className="w-8 h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm text-slate-600 relative active:scale-95 transition">
