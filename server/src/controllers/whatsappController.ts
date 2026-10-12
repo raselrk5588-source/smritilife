@@ -3,6 +3,7 @@ import User from '../models/User';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
 import TodoList from '../models/TodoList';
+import Note from '../models/Note';
 import AITrainingRule from '../models/AITrainingRule';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
@@ -1178,6 +1179,150 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   await sendMetaWhatsAppMessage(fromNumber, `${listCard.trim()}\n\n🎉 এই তালিকার সব কাজ সম্পন্ন!`);
                 }
               }
+            }
+            break;
+          }
+
+          case 'save_note': {
+            const data = aiResponse.data || {};
+            let title = (data.title || 'ব্যক্তিগত তথ্য').trim();
+            let content = (data.content || '').trim();
+            const category = data.category || (/ঠিকানা|address|বাসা|অফিস/i.test(title) ? 'Address' : 'Personal');
+
+            if (!content) {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `কোন তথ্যটি সংরক্ষণ করতে চান তা উল্লেখ করুন (যেমন: "${title}: বাড়ি ১২, রোড ৪, ধানমন্ডি")।`
+              );
+              break;
+            }
+
+            // Check if existing note exists for this user with same or similar title
+            const cleanTitleRegex = new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+            let note = await Note.findOne({ userId: user._id, title: cleanTitleRegex });
+
+            if (note) {
+              note.content = content;
+              note.category = category;
+              await note.save();
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✏️ আপনার *${note.title}* সফলভাবে আপডেট করা হয়েছে!\n\n📍 ${content}\n\n💡 জানতে চাইলে যেকোনো সময় লিখুন: "${note.title} দাও"`
+              );
+            } else {
+              note = await Note.create({
+                userId: user._id,
+                title,
+                content,
+                category,
+                type: 'Personal'
+              });
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `💾 আপনার *${title}* স্মৃতিতে সংরক্ষণ করে রেখেছি!\n\n📍 ${content}\n\n💡 পরবর্তীতে জানতে চাইলে যেকোনো সময় লিখুন: "${title} দাও"`
+              );
+            }
+            break;
+          }
+
+          case 'get_note': {
+            const data = aiResponse.data || {};
+            let query = (data.searchQuery || '').trim();
+
+            // If asking for all notes
+            if (!query || query === 'সব' || /সব|সকল|all|নোটগুলো|নোটগুলা|নোট\s*লিস্ট/i.test(query)) {
+              const allNotes = await Note.find({ userId: user._id }).sort({ updatedAt: -1 });
+              if (allNotes.length === 0) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `📋 আপনার কোনো পার্সোনাল তথ্য বা নোট সেভ করা নেই।\n\nতথ্য সেভ করতে লিখুন:\n"বাসার ঠিকানা: বাড়ি ১২, রোড ৪, ধানমন্ডি"\n"আমার রক্তের গ্রুপ: O+"`
+                );
+              } else {
+                let text = `📋 আপনার সংরক্ষিত তথ্য ও নোটসমূহ (${allNotes.length}টি):\n\n`;
+                allNotes.forEach((n, idx) => {
+                  text += `${idx + 1}. 📌 *${n.title}*:\n   ${n.content}\n\n`;
+                });
+                text += `💡 নির্দিষ্ট কোনো তথ্য জানতে লিখুন: "[নাম] দাও" (যেমন: "বাসার ঠিকানা দাও")\n💡 ডিলিট করতে লিখুন: "[নাম] ডিলিট করো"`;
+                await sendMetaWhatsAppMessage(fromNumber, text.trim());
+              }
+              break;
+            }
+
+            // Search by specific title or content
+            const coreQuery = query
+              .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|খুঁজে|daw|dao|ki|bolo|koto)/gi, '')
+              .trim();
+
+            const searchRegex = new RegExp((coreQuery || query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+            let matchedNote = await Note.findOne({
+              userId: user._id,
+              $or: [
+                { title: searchRegex },
+                { content: searchRegex }
+              ]
+            });
+
+            // Keyword fallbacks
+            if (!matchedNote) {
+              if (/বাসা|বাড়ি|bari|basha|home/i.test(query)) {
+                matchedNote = await Note.findOne({ userId: user._id, title: /বাসা|বাড়ি|home/i });
+              } else if (/অফিস|office/i.test(query)) {
+                matchedNote = await Note.findOne({ userId: user._id, title: /অফিস|office/i });
+              } else if (/রক্ত|blood/i.test(query)) {
+                matchedNote = await Note.findOne({ userId: user._id, title: /রক্ত|blood/i });
+              } else if (/ওয়াইফাই|wifi/i.test(query)) {
+                matchedNote = await Note.findOne({ userId: user._id, title: /ওয়াইফাই|wifi/i });
+              } else if (/এনআইডি|nid/i.test(query)) {
+                matchedNote = await Note.findOne({ userId: user._id, title: /এনআইডি|nid/i });
+              }
+            }
+
+            if (matchedNote) {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `📌 আপনার সংরক্ষিত *${matchedNote.title}*:\n\n📍 ${matchedNote.content}`
+              );
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `দুঃখিত, আপনার "${query}" সম্পর্কিত কোনো তথ্য স্মৃতিতে সেভ করা নেই।\n\n💡 এটি সেভ করতে লিখুন: "${query}: [আপনার তথ্য]"`
+              );
+            }
+            break;
+          }
+
+          case 'delete_note': {
+            const data = aiResponse.data || {};
+            let query = (data.searchQuery || '').trim();
+            const coreQuery = query
+              .replace(/(?:নোট|ঠিকানা|অ্যাড্রেস|এড্রেস|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন)/gi, '')
+              .trim();
+
+            const searchRegex = new RegExp((coreQuery || query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+            let deletedNote = await Note.findOneAndDelete({
+              userId: user._id,
+              $or: [
+                { title: searchRegex },
+                { content: searchRegex }
+              ]
+            });
+
+            if (!deletedNote) {
+              if (/বাসা|বাড়ি|bari|basha|home/i.test(query)) {
+                deletedNote = await Note.findOneAndDelete({ userId: user._id, title: /বাসা|বাড়ি|home/i });
+              } else if (/অফিস|office/i.test(query)) {
+                deletedNote = await Note.findOneAndDelete({ userId: user._id, title: /অফিস|office/i });
+              } else if (/রক্ত|blood/i.test(query)) {
+                deletedNote = await Note.findOneAndDelete({ userId: user._id, title: /রক্ত|blood/i });
+              }
+            }
+
+            if (deletedNote) {
+              await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার "${deletedNote.title}" সফলভাবে মুছে ফেলা হয়েছে।`);
+            } else {
+              await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো নোট বা তথ্য খুঁজে পাওয়া যায়নি।`);
             }
             break;
           }

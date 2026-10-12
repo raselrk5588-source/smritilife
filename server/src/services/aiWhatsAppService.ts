@@ -376,7 +376,38 @@ Possible actions:
    - "items"?: string[] (list of items parsed from the user's message)
    - "itemText"?: string (item to mark done)
 
-8. general_reply (for greetings, conversational questions, or help)
+8. save_note:
+   When the user wants to store/save personal information, addresses, passwords, NID, blood group, documents, or data they want Smriti to remember!
+   Examples in Bengali/Banglish:
+   - "আমার বাসার ঠিকানা: বাড়ি ১২, রোড ৪, ধানমন্ডি, ঢাকা" -> action: "save_note", data: { title: "বাসার ঠিকানা", content: "বাড়ি ১২, রোড ৪, ধানমন্ডি, ঢাকা", category: "Address" }
+   - "আমার অফিসের এড্রেস সেভ করে রাখো: গুলশান ২, ঢাকা" -> action: "save_note", data: { title: "অফিসের ঠিকানা", content: "গুলশান ২, ঢাকা", category: "Address" }
+   - "আমার রক্তের গ্রুপ ও পজিটিভ (O+)" -> action: "save_note", data: { title: "রক্তের গ্রুপ", content: "ও পজিটিভ (O+)", category: "Health" }
+   - "ওয়াইফাই পাসওয়ার্ড মনে রেখো: router#9988" -> action: "save_note", data: { title: "ওয়াইফাই পাসওয়ার্ড", content: "router#9988", category: "Personal" }
+   - "আমার এনআইডি নম্বর: 1990123456789" -> action: "save_note", data: { title: "এনআইডি নম্বর", content: "1990123456789", category: "Personal" }
+   - "নোট করে রাখো: আলমারির চাবি ড্রয়ারে আছে" -> action: "save_note", data: { title: "আলমারির চাবি", content: "ড্রয়ারে আছে", category: "General" }
+   Fields in "data":
+   - "title": string (Specific topic name, e.g. "বাসার ঠিকানা", "অফিসের ঠিকানা", "রক্তের গ্রুপ", "এনআইডি নম্বর", "ওয়াইফাই পাসওয়ার্ড")
+   - "content": string (The actual information/data)
+   - "category"?: "Address" | "Personal" | "Health" | "Work" | "General"
+
+9. get_note:
+   When the user asks for their saved personal info, address, notes, passwords, or asks to see their notes.
+   Examples in Bengali/Banglish:
+   - "আমার বাসার ঠিকানাটা দাও" বা "বাসার ঠিকানা কি?" বা "বাসার এড্রেস বলো" বা "basar address ta daw" -> action: "get_note", data: { searchQuery: "বাসার ঠিকানা" }
+   - "অফিসের ঠিকানাটা দাও" বা "office address ta daw" -> action: "get_note", data: { searchQuery: "অফিসের ঠিকানা" }
+   - "আমার রক্তের গ্রুপ কি?" -> action: "get_note", data: { searchQuery: "রক্তের গ্রুপ" }
+   - "ওয়াইফাই পাসওয়ার্ড কত?" -> action: "get_note", data: { searchQuery: "ওয়াইফাই পাসওয়ার্ড" }
+   - "আমার নোটগুলো দেখাও" বা "সব নোট দেখাও" বা "নোট কি কি আছে" -> action: "get_note", data: { searchQuery: "সব" }
+   Fields in "data":
+   - "searchQuery": string (The topic name being requested, or "সব" to view all saved notes)
+
+10. delete_note:
+   When the user wants to delete or remove a saved note, address, or personal info.
+   Examples: "বাসার ঠিকানা ডিলিট করো", "অফিসের এড্রেস মুছে ফেলো", "ওয়াইফাই পাসওয়ার্ড ডিলিট করো"
+   Fields in "data":
+   - "searchQuery": string
+
+11. general_reply (for greetings, conversational questions, or help)
 
 Example Response for Wish:
 {
@@ -659,6 +690,111 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
           data: {
             type: 'view',
             title: listTitle
+          }
+        };
+      }
+    }
+
+    // 4.6 Personal Info / Notes Storage & Retrieval Detection (Fallback)
+    // A. Delete Note / Info Intent
+    const isDeleteNote =
+      /(?:ডিলিট|মুছে|delete|remove)\s*.*(?:নোট|ঠিকানা|অ্যাড্রেস|এড্রেস|address|তথ্য|পাসওয়ার্ড|password)/i.test(text) ||
+      /(?:নোট|ঠিকানা|অ্যাড্রেস|এড্রেস|address|তথ্য|পাসওয়ার্ড|password)\s*.*(?:ডিলিট|মুছে|delete|remove)/i.test(text);
+
+    if (isDeleteNote) {
+      const cleanQuery = text
+        .replace(/(?:আমার|amr|amar|সব|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে|নোট|note)/gi, '')
+        .trim();
+      return {
+        action: 'delete_note',
+        data: {
+          searchQuery: cleanQuery || 'নোট'
+        }
+      };
+    }
+
+    // B. Get Note / Info Retrieval Intent (e.g. "বাসার ঠিকানা দাও", "অফিস এড্রেস কি", "সব নোট দেখাও")
+    const isGetNoteIntent =
+      /(?:সব\s*নোট|সকল\s*নোট|আমার\s*নোট|নোট\s*লিস্ট|নোটগুলো|নোটগুলা|show\s*notes|my\s*notes)/i.test(text) ||
+      /(?:বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত|আমার)?\s*(?:ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:টা|টি|ta|ti)?\s*(?:দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto)/i.test(text) ||
+      /\b(?:basar|office(?:r)?|barir)\s*(?:address|thikana)\s*(?:ta\s*)?(?:daw|dao|ki|bolo)\b/i.test(text);
+
+    if (isGetNoteIntent) {
+      if (/(?:সব\s*নোট|সকল\s*নোট|আমার\s*নোট|নোট\s*লিস্ট|নোটগুলো|নোটগুলা|show\s*notes|my\s*notes)/i.test(text)) {
+        return {
+          action: 'get_note',
+          data: { searchQuery: 'সব' }
+        };
+      }
+
+      let queryTopic = 'বাসার ঠিকানা';
+      if (/বাসা|বাড়ি|bari|basha|home/i.test(text)) queryTopic = 'বাসার ঠিকানা';
+      else if (/অফিস|office/i.test(text)) queryTopic = 'অফিসের ঠিকানা';
+      else if (/রক্ত|blood/i.test(text)) queryTopic = 'রক্তের গ্রুপ';
+      else if (/ওয়াইফাই|wifi/i.test(text)) queryTopic = 'ওয়াইফাই পাসওয়ার্ড';
+      else if (/এনআইডি|nid/i.test(text)) queryTopic = 'এনআইডি নম্বর';
+      else if (/পাসওয়ার্ড|password/i.test(text)) queryTopic = 'পাসওয়ার্ড';
+      else {
+        queryTopic = text
+          .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto)/gi, '')
+          .trim();
+      }
+
+      return {
+        action: 'get_note',
+        data: { searchQuery: queryTopic }
+      };
+    }
+
+    // C. Save Note / Info Storage Intent (e.g. "বাসার ঠিকানা: বাড়ি ১২...", "বাসার এড্রেস মনে রেখো: ...")
+    const isExplicitSavePrefix =
+      /^(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর)|সেভ\s*(?:করে\s*রাখো|করো|রাখো|কর)|মনে\s*(?:রেখো|রাখো|রাখ)|save\s*note)\s*[:：\-]?\s*(.+)$/i.test(text);
+
+    const isInfoPattern =
+      /(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|is|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i.test(text);
+
+    if (isExplicitSavePrefix || isInfoPattern) {
+      let title = 'ব্যক্তিগত নোট';
+      let content = '';
+      let category = 'Personal';
+
+      if (isExplicitSavePrefix) {
+        const match = text.match(/^(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর)|সেভ\s*(?:করে\s*রাখো|করো|রাখো|কর)|মনে\s*(?:রেখো|রাখো|রাখ)|save\s*note)\s*[:：\-]?\s*(.+)$/i);
+        const payload = match ? match[1].trim() : '';
+        if (payload.includes(':') || payload.includes('：')) {
+          const parts = payload.split(/[:：]/);
+          title = parts[0].trim();
+          content = parts.slice(1).join(':').trim();
+        } else {
+          title = payload.length > 25 ? payload.substring(0, 25) + '...' : payload;
+          content = payload;
+        }
+      } else {
+        const match = text.match(/(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|is|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i);
+        if (match) {
+          const prefix = match[1] || '';
+          const keyword = match[2] || '';
+          title = `${prefix ? prefix + ' ' : ''}${keyword}`.trim();
+          content = (match[3] || '').trim();
+          if (/ঠিকানা|address|বাসা|অফিস/i.test(title)) category = 'Address';
+          else if (/রক্ত|blood/i.test(title)) category = 'Health';
+        }
+      }
+
+      if (title && content) {
+        // Normalize title in Bengali
+        if (/বাসা|বাড়ি|bari|basha|home/i.test(title) && /ঠিকানা|address/i.test(title)) title = 'বাসার ঠিকানা';
+        else if (/অফিস|office/i.test(title) && /ঠিকানা|address/i.test(title)) title = 'অফিসের ঠিকানা';
+        else if (/রক্ত|blood/i.test(title)) title = 'রক্তের গ্রুপ';
+        else if (/ওয়াইফাই|wifi/i.test(title)) title = 'ওয়াইফাই পাসওয়ার্ড';
+        else if (/এনআইডি|nid/i.test(title)) title = 'এনআইডি নম্বর';
+
+        return {
+          action: 'save_note',
+          data: {
+            title,
+            content,
+            category
           }
         };
       }
