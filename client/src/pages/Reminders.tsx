@@ -237,7 +237,7 @@ export default function Reminders() {
   return (
     <div className="bg-[#f6f8f9] min-h-screen pb-24 font-sans">
       {/* Top Header Banner */}
-      <div className="bg-primary text-white p-4 -mt-14 pt-16 md:mt-0 md:pt-10 pb-6 flex justify-between items-center relative overflow-hidden rounded-b-3xl shadow-sm z-20">
+      <div className="bg-primary text-white p-4 pt-6 md:pt-8 pb-6 flex justify-between items-center relative overflow-hidden rounded-b-3xl shadow-sm z-20">
         <div className="absolute inset-0 z-0 bg-cover" style={{ backgroundImage: "url('/theme-bg.png')", backgroundPosition: "center 40%", opacity: "0.9" }}></div>
         <div className="absolute inset-0 z-0 bg-gradient-to-t from-primary/60 via-primary/30 to-black/40"></div>
         

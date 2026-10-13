@@ -141,7 +141,7 @@ export default function Home() {
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       
       {/* Top Section with Scenic Background */}
-      <div className="relative -mt-14 pt-16 md:mt-0 md:pt-6 pb-16 md:pb-24 px-3 md:px-5 rounded-b-[2rem] md:rounded-b-[2.5rem] overflow-hidden">
+      <div className="relative pt-3 md:pt-6 pb-16 md:pb-24 px-3 md:px-5 rounded-b-[2rem] md:rounded-b-[2.5rem] overflow-hidden">
         {/* Background Image / Gradient mimicking the scenic view */}
         <div 
           className="absolute inset-0 z-0 bg-cover bg-center"

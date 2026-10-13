@@ -128,11 +128,11 @@ export default function MainLayout() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative w-full h-full md:h-auto">
         
-        {/* Mobile Sticky Top Navigation Bar (Visible on all main menus) */}
+        {/* Mobile Sticky Top Navigation Bar (Matches bottom nav's white background) */}
         {isMainTab && (
-          <header className="sticky top-0 z-40 md:hidden flex justify-between items-center px-3.5 h-14 bg-transparent pointer-events-none">
-            <Link to="/app" className="flex items-center gap-2 bg-white/85 backdrop-blur-md px-2.5 py-1.5 rounded-2xl shadow-sm border border-white/60 pointer-events-auto select-none">
-              <div className="relative w-7 h-7 rounded-full flex items-center justify-center shrink-0">
+          <header className="sticky top-0 z-40 md:hidden flex justify-between items-center px-4 h-14 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+            <Link to="/app" className="flex items-center gap-2 select-none">
+              <div className="relative w-8 h-8 rounded-full flex items-center justify-center shrink-0">
                 <img 
                   src="/robot-icon.png" 
                   alt="SmritiLife AI" 
@@ -140,20 +140,22 @@ export default function MainLayout() {
                 />
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
               </div>
-              <span className="text-base font-black tracking-tight text-slate-900 pr-1">
+              <span className="text-lg font-black tracking-tight text-slate-900">
                 Smriti<span className="text-[#0A7756]">Life</span>
               </span>
             </Link>
-            <div className="flex items-center space-x-3 pointer-events-auto">
+            <div className="flex items-center space-x-2.5">
               <button 
                 onClick={() => navigate('/app/notifications')} 
-                className="w-8 h-8 bg-white/85 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm text-slate-600 relative active:scale-95 transition border border-white/60 cursor-pointer"
+                className="w-8 h-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 relative active:scale-95 transition border border-slate-200/60 cursor-pointer"
+                title={t('বিজ্ঞপ্তি', 'Notifications')}
               >
                 <Bell className="w-4 h-4" />
               </button>
               <div 
                 onClick={() => navigate('/app/profile')} 
-                className="w-8 h-8 bg-slate-200 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer active:scale-95 transition"
+                className="w-8 h-8 bg-slate-200 rounded-full overflow-hidden border border-slate-200 shadow-xs cursor-pointer active:scale-95 transition"
+                title={t('প্রোফাইল', 'Profile')}
               >
                 <img 
                   src={`https://ui-avatars.com/api/?name=${userName}&background=0a7756&color=fff`} 
