@@ -149,7 +149,8 @@ export const sendMetaWhatsAppTemplate = async (
   to: string,
   templateName: string,
   parameters: string[],
-  languageCode: string = 'bn'
+  languageCode: string = 'bn',
+  buttonUrlSlug?: string
 ): Promise<boolean> => {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -161,9 +162,30 @@ export const sendMetaWhatsAppTemplate = async (
 
   const formattedTo = formatBangladeshPhone(to);
 
+  const components: any[] = [
+    {
+      type: 'body',
+      parameters: parameters.map(p => ({ type: 'text', text: p }))
+    }
+  ];
+
+  if (buttonUrlSlug) {
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [
+        {
+          type: 'text',
+          text: buttonUrlSlug
+        }
+      ]
+    });
+  }
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+      const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -176,12 +198,7 @@ export const sendMetaWhatsAppTemplate = async (
           template: {
             name: templateName,
             language: { code: languageCode },
-            components: [
-              {
-                type: 'body',
-                parameters: parameters.map(p => ({ type: 'text', text: p }))
-              }
-            ]
+            components
           }
         }),
         signal: AbortSignal.timeout(10000)
@@ -230,8 +247,9 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
   let textDelivered = await sendMetaWhatsAppTemplate(
     wish.recipientContact,
     templateName,
-    [sender, wishPhrase, smartCardUrl],
-    templateLang
+    [sender, wishPhrase],
+    templateLang,
+    smartCardId
   );
 
   // If template delivery failed (e.g., template not yet created/approved on Meta), fallback to direct text
