@@ -27,6 +27,14 @@ const getOccasionBadge = (occasion: string) => {
   return map[occasion?.toLowerCase()] || `🎉 ${occasion || 'শুভেচ্ছা'}`;
 };
 
+const PRESET_CARD_IMAGES = [
+  { id: 'cake', title: 'শুভ জন্মদিন', label: '🎂 কেক ও বেলুন', url: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?q=80&w=600&auto=format&fit=crop' },
+  { id: 'gift', title: 'শুভ জন্মদিন', label: '🎁 উপহার বক্স', url: 'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?q=80&w=600&auto=format&fit=crop' },
+  { id: 'flowers', title: 'শুভ ভালোবাসা দিবস', label: '🌹 লাল গোলাপ', url: 'https://images.unsplash.com/photo-1518895949257-7621c3c786d7?q=80&w=600&auto=format&fit=crop' },
+  { id: 'celebrate', title: 'শুভ কামনা', label: '✨ উৎসবের আলো', url: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?q=80&w=600&auto=format&fit=crop' },
+  { id: 'eid', title: 'ঈদ মোবারক', label: '🌙 চাঁদ ও তারা', url: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=600&auto=format&fit=crop' }
+];
+
 export default function Wishes() {
   const { t } = useSettings();
   const [activeTab, setActiveTab] = useState('text');
@@ -59,6 +67,7 @@ export default function Wishes() {
   const [cardSignOff, setCardSignOff] = useState('ভালোবাসা অন্তে,');
   const [recipientPrefix, setRecipientPrefix] = useState('প্রিয়,');
   const [generatedLink, setGeneratedLink] = useState('');
+  const [createdWishId, setCreatedWishId] = useState<string | null>(null);
   const [imageShape, setImageShape] = useState<'round' | 'rounded' | 'square' | 'heart'>('round');
   const [bgMusic, setBgMusic] = useState('none');
   const [dbTemplates, setDbTemplates] = useState<any[]>([]);
@@ -123,36 +132,56 @@ export default function Wishes() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      e.target.value = ''; // Reset so the user can re-select if needed
+
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error(t('ছবিটি অনেক বড় (সর্বোচ্চ ১৫MB)। দয়া করে ছোট ছবি দিন।', 'Image is too large (max 15MB).'));
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          // Max dimensions for the greeting card image
-          const MAX_SIZE = 800;
-          if (width > height && width > MAX_SIZE) {
-            height *= MAX_SIZE / width;
-            width = MAX_SIZE;
-          } else if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
-            height = MAX_SIZE;
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-            setCardImage(compressedBase64);
-          } else {
-            alert('আপনার মোবাইলে ছবিটি প্রসেস করা যাচ্ছে না। দয়া করে ছোট সাইজের ছবি দিন।');
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Max dimensions for the greeting card image
+            const MAX_SIZE = 800;
+            if (width > height && width > MAX_SIZE) {
+              height = Math.round(height * (MAX_SIZE / width));
+              width = MAX_SIZE;
+            } else if (height > MAX_SIZE) {
+              width = Math.round(width * (MAX_SIZE / height));
+              height = MAX_SIZE;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+              setCardImage(compressedBase64);
+              toast.success(t('ছবি সফলভাবে যুক্ত হয়েছে!', 'Image selected successfully!'));
+            } else {
+              setCardImage(event.target?.result as string);
+              toast.success(t('ছবি যুক্ত হয়েছে!', 'Image selected!'));
+            }
+          } catch (err) {
+            setCardImage(event.target?.result as string);
+            toast.success(t('ছবি যুক্ত হয়েছে!', 'Image selected!'));
           }
         };
+        img.onerror = () => {
+          toast.error(t('ছবিটি প্রসেস করা সম্ভব হয়নি। অন্য ছবি দিন।', 'Failed to load image.'));
+        };
         img.src = event.target?.result as string;
+      };
+      reader.onerror = () => {
+        toast.error(t('ছবি পড়তে সমস্যা হয়েছে।', 'Failed to read image file.'));
       };
       reader.readAsDataURL(file);
     }
@@ -165,35 +194,32 @@ export default function Wishes() {
     }
     setIsGenerating(true);
     try {
-      if (cardImage && cardImage.length > 2000000) {
-        alert('আপনার ছবিটি অনেক বড়! দয়া করে ছোট সাইজের ছবি দিন অথবা Background অপশন থেকে ছবি সিলেক্ট করুন।');
-        setIsGenerating(false);
-        return;
-      }
-      
       const actualTitle = cardTitle.startsWith('custom:') ? cardTitle.replace('custom:', '') : cardTitle;
+      const occasionKey = actualTitle.includes('বিবাহ') ? 'anniversary' : actualTitle.includes('জন্মদিন') ? 'birthday' : actualTitle.includes('ভালোবাসা') ? 'valentine' : actualTitle.includes('মা দিবস') ? 'mothersday' : actualTitle.includes('বাবা দিবস') ? 'fathersday' : actualTitle.includes('ঈদ') ? 'eid' : actualTitle.includes('নববর্ষ') ? 'newyear' : 'other';
       
+      const payload = {
+        recipientName: `${recipientPrefix} ${recipient}`.trim() || 'Unknown',
+        occasion: occasionKey,
+        message: cardMessage.trim(),
+        scheduledAt: new Date().toISOString(),
+        deliveryMethod: ['SMS'],
+        status: 'Sent',
+        isSmartCard: true,
+        cardData: {
+          image: cardImage,
+          title: actualTitle,
+          shape: imageShape,
+          senderName: senderName || 'আপনার শুভাকাঙ্ক্ষী',
+          animation: 'envelope',
+          signOff: cardSignOff,
+          music: bgMusic
+        }
+      };
+
       const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipientName: `${recipientPrefix} ${recipient}`.trim() || 'Unknown',
-          occasion: actualTitle.includes('বিবাহ') ? 'anniversary' : actualTitle.includes('জন্মদিন') ? 'birthday' : actualTitle.includes('ভালোবাসা') ? 'valentine' : actualTitle.includes('মা দিবস') ? 'mothersday' : actualTitle.includes('বাবা দিবস') ? 'fathersday' : actualTitle.includes('ঈদ') ? 'eid' : actualTitle.includes('নববর্ষ') ? 'newyear' : 'other',
-          message: cardMessage,
-          scheduledAt: new Date().toISOString(),
-          deliveryMethod: ['SMS'],
-          status: 'Sent',
-          isSmartCard: true, // Make this a premium smart card!
-          cardData: {
-            image: cardImage,
-            title: actualTitle,
-            shape: imageShape,
-            senderName: senderName || 'আপনার শুভাকাঙ্ক্ষী',
-            animation: 'envelope', // Premium interactive envelope
-            signOff: cardSignOff,
-            music: bgMusic
-          }
-        })
+        body: JSON.stringify(payload)
       });
       
       const textResponse = await res.text();
@@ -205,7 +231,10 @@ export default function Wishes() {
       }
       
       if (res.ok) {
+        setCreatedWishId(data._id);
         setGeneratedLink(`${window.location.origin}/w/${data.smartCardId || data._id}`);
+        toast.success(t('ম্যাজিক লিংক তৈরি সম্পন্ন!', 'Magic link created!'));
+        fetchWishes();
       } else {
         toast.error(data.message || 'কার্ড জেনারেট করতে সমস্যা হয়েছে!');
       }
@@ -217,32 +246,103 @@ export default function Wishes() {
   };
 
   const handleSaveWish = async (type: 'send' | 'schedule', isLink: boolean = false) => {
-    let msg = isLink ? `${generatedLink}\n\n${cardMessage}` : (generatedWish ? `${generatedWish.title}\n\n${generatedWish.body.join('\n')}` : '');
-    
+    if (!scheduleContact) {
+      toast.error(t('দয়া করে ফোন নম্বর দিন', 'Please enter recipient phone number'));
+      return;
+    }
+
+    if (type === 'schedule' && (!scheduleDate || !scheduleTime)) {
+      toast.error(t('দয়া করে তারিখ ও সময় দিন', 'Please enter date and time'));
+      return;
+    }
+
     let schedDate = new Date();
     if (type === 'schedule' && scheduleDate && scheduleTime) {
       schedDate = new Date(`${scheduleDate}T${scheduleTime}:00`);
     }
 
     try {
-      await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipientName: recipient || 'Unknown',
+      if (isLink) {
+        // Digital Greeting Card Flow
+        if (!cardImage || !cardTitle || cardTitle === 'custom:' || !cardMessage) {
+          toast.error(t('দয়া করে ছবি, টাইটেল এবং মেসেজ দিন।', 'Please provide image, title and message.'));
+          return;
+        }
+
+        const actualTitle = cardTitle.startsWith('custom:') ? cardTitle.replace('custom:', '') : cardTitle;
+        const occasionKey = actualTitle.includes('বিবাহ') ? 'anniversary' : actualTitle.includes('জন্মদিন') ? 'birthday' : actualTitle.includes('ভালোবাসা') ? 'valentine' : actualTitle.includes('মা দিবস') ? 'mothersday' : actualTitle.includes('বাবা দিবস') ? 'fathersday' : actualTitle.includes('ঈদ') ? 'eid' : actualTitle.includes('নববর্ষ') ? 'newyear' : (selectedOccasion || 'other');
+
+        const cardPayload = {
+          recipientName: `${recipientPrefix} ${recipient}`.trim() || 'Unknown',
           recipientContact: scheduleContact,
-          occasion: selectedOccasion || 'other',
-          message: msg,
+          occasion: occasionKey,
+          message: cardMessage.trim(), // Keep card message clean without raw link
           scheduledAt: schedDate.toISOString(),
           deliveryMethod: [scheduleMethod === 'sms' ? 'SMS' : 'WhatsApp'],
-          status: type === 'send' ? 'Processing' : 'Scheduled'
-        })
-      });
-      setSuccessPopup({show: true, type});
+          status: type === 'send' ? 'Processing' : 'Scheduled',
+          isSmartCard: true,
+          cardData: {
+            image: cardImage,
+            title: actualTitle,
+            shape: imageShape,
+            senderName: senderName || 'আপনার শুভাকাঙ্ক্ষী',
+            animation: 'envelope',
+            signOff: cardSignOff,
+            music: bgMusic
+          }
+        };
+
+        if (createdWishId) {
+          // Update the already generated wish so it gets recipient contact, schedule, and triggers dispatch
+          const updateRes = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes/${createdWishId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cardPayload)
+          });
+          if (!updateRes.ok) {
+            throw new Error('Failed to update wish');
+          }
+        } else {
+          // Create the full smart card wish directly
+          const createRes = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cardPayload)
+          });
+          if (!createRes.ok) {
+            throw new Error('Failed to create wish');
+          }
+          const createdData = await createRes.json();
+          setCreatedWishId(createdData._id);
+          setGeneratedLink(`${window.location.origin}/w/${createdData.smartCardId || createdData._id}`);
+        }
+      } else {
+        // Standard Text/Voice Wish Flow
+        let msg = generatedWish ? `${generatedWish.title}\n\n${generatedWish.body.join('\n')}` : '';
+        const createRes = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipientName: recipient || 'Unknown',
+            recipientContact: scheduleContact,
+            occasion: selectedOccasion || 'other',
+            message: msg,
+            scheduledAt: schedDate.toISOString(),
+            deliveryMethod: [scheduleMethod === 'sms' ? 'SMS' : 'WhatsApp'],
+            status: type === 'send' ? 'Processing' : 'Scheduled'
+          })
+        });
+        if (!createRes.ok) {
+          throw new Error('Failed to create wish');
+        }
+      }
+
+      setSuccessPopup({ show: true, type });
       setShowScheduleForm(false);
-    } catch (e) {
+      fetchWishes();
+    } catch (e: any) {
       console.error(e);
-      toast.error(t('দুঃখিত, কোনো সমস্যা হয়েছে!', 'Sorry, an error occurred!'));
+      toast.error(e.message || t('দুঃখিত, কোনো সমস্যা হয়েছে!', 'Sorry, an error occurred!'));
     }
   };
 
@@ -649,9 +749,27 @@ export default function Wishes() {
                           <span className="text-white text-xs font-bold px-2 py-1 bg-black/50 rounded-lg">{t('পরিবর্তন', 'Change')}</span>
                         </div>
                       </div>
+
+                      {/* Image Action Buttons */}
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('wish-image-upload')?.click()}
+                          className="text-xs font-bold text-primary hover:text-primary-dark px-2.5 py-1 rounded-lg bg-white border border-slate-200 shadow-sm transition"
+                        >
+                          {t('ছবি পরিবর্তন করুন', 'Change Image')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCardImage(null)}
+                          className="text-xs font-bold text-red-500 hover:text-red-700 px-2.5 py-1 rounded-lg bg-white border border-slate-200 shadow-sm transition"
+                        >
+                          {t('মুছে ফেলুন', 'Remove')}
+                        </button>
+                      </div>
                       
                       {/* Shape Selector */}
-                      <div className="mt-6 flex flex-col items-center w-full">
+                      <div className="mt-4 flex flex-col items-center w-full">
                         <label className="text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-wider">{t('ছবির আকার (শেপ)', 'Image Shape')}</label>
                         <div className="grid grid-cols-4 gap-1.5 bg-white rounded-xl p-1.5 w-full shadow-sm border border-slate-100">
                           <button onClick={(e) => { e.preventDefault(); setImageShape('round'); }} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${imageShape === 'round' ? 'bg-amber-100 text-amber-700 shadow-sm transform scale-[1.02]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}>⭕ {t('গোল', 'Round')}</button>
@@ -672,10 +790,43 @@ export default function Wishes() {
                         <ImageIcon className="w-6 h-6 text-amber-500" />
                       </div>
                       <span className="text-sm font-bold text-slate-600">{t('ক্লিক করে ছবি নির্বাচন করুন', 'Click to select image')}</span>
-                      <span className="text-[10px] font-medium text-slate-400 mt-1">{t('JPG, PNG সাপোর্ট করে', 'Supports JPG, PNG')}</span>
+                      <span className="text-[10px] font-medium text-slate-400 mt-1">{t('গ্যালারি বা ক্যামেরা থেকে ছবি দিন (JPG, PNG)', 'From gallery or camera (JPG, PNG)')}</span>
                     </div>
                   </div>
                 )}
+
+                {/* Preset sample images quick select */}
+                <div className="mt-3">
+                  <span className="text-[10px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">
+                    {t('অথবা পছন্দের রেডিমেড ছবি বেছে নিন:', 'Or choose a ready-made image:')}
+                  </span>
+                  <div className="grid grid-cols-5 gap-2">
+                    {PRESET_CARD_IMAGES.map((preset) => {
+                      const isSelected = cardImage === preset.url;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            setCardImage(preset.url);
+                            if (!cardTitle || cardTitle === 'custom:') {
+                              setCardTitle(preset.title);
+                            }
+                          }}
+                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all group ${
+                            isSelected ? 'border-primary ring-2 ring-primary/30 scale-105' : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                          title={preset.label}
+                        >
+                          <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors flex items-end p-1">
+                            <span className="text-[9px] text-white font-bold truncate drop-shadow-sm leading-tight">{preset.label.split(' ')[0]}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               <div>
