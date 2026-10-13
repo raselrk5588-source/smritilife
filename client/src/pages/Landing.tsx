@@ -170,20 +170,12 @@ export default function Landing() {
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <button
               onClick={() => navigate('/auth')}
-              className="inline-flex items-center gap-1 text-slate-700 hover:text-[#0A7756] font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-full bg-white/60 hover:bg-white border border-slate-200/60 shadow-xs backdrop-blur-md transition-all cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 text-slate-700 hover:text-[#0A7756] font-bold px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-full bg-white/70 hover:bg-white border border-slate-200/80 shadow-xs backdrop-blur-md transition-all cursor-pointer whitespace-nowrap active:scale-95"
             >
               <LogIn className="w-3.5 h-3.5 text-[#0A7756]" />
               <span>লগইন</span>
             </button>
-
-            <button
-              onClick={handleSubscribe}
-              className="bg-gradient-to-r from-[#0A7756] to-[#0E9069] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-bold text-xs sm:text-base px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full shadow-md shadow-[#0A7756]/30 hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              <span>এখনই শুরু করুন</span>
-            </button>
-
-            </div>
+          </div>
 
         </div>
       </header>
