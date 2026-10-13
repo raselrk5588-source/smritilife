@@ -103,8 +103,8 @@ export default function Notes() {
 
   return (
     <div className="bg-white min-h-screen">
-      {/* Top Header */}
-      <header className="bg-primary p-4 pt-10 pb-8 flex items-center justify-between border-b border-slate-100 relative overflow-hidden rounded-b-3xl mb-4 shadow-sm">
+      {/* Top Header Banner */}
+      <div className="bg-primary p-4 -mt-14 pt-16 md:mt-0 md:pt-10 pb-8 flex items-center justify-between border-b border-slate-100 relative overflow-hidden rounded-b-3xl mb-4 shadow-sm">
         {/* Notebook Theme */}
         <div className="absolute inset-0 z-0 bg-cover" style={{ backgroundImage: "url('/theme-bg.png')", backgroundPosition: "center 40%", opacity: "0.9" }}></div>
         <div className="absolute inset-0 z-0 bg-gradient-to-t from-primary/60 via-primary/30 to-black/40"></div>
@@ -125,7 +125,7 @@ export default function Notes() {
         >
           <Plus className="w-5 h-5" />
         </button>
-      </header>
+      </div>
 
       <div className="p-4">
         {/* Search */}

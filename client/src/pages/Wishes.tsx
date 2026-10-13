@@ -382,8 +382,8 @@ export default function Wishes() {
 
   return (
     <div className="bg-slate-50 min-h-screen pb-24">
-      {/* Top Header */}
-      <header className="bg-primary text-white p-4 pt-10 pb-8 rounded-b-3xl relative overflow-hidden shadow-sm">
+      {/* Top Header Banner */}
+      <div className="bg-primary text-white p-4 -mt-14 pt-16 md:mt-0 md:pt-10 pb-8 rounded-b-3xl relative overflow-hidden shadow-sm">
         {/* Notebook Theme */}
         <div className="absolute inset-0 z-0 bg-cover" style={{ backgroundImage: "url('/theme-bg.png')", backgroundPosition: "center 40%", opacity: "0.9" }}></div>
         <div className="absolute inset-0 z-0 bg-gradient-to-t from-primary/60 via-primary/30 to-black/40"></div>
@@ -396,7 +396,7 @@ export default function Wishes() {
             <p className="text-white/90 text-[11px] font-medium mt-1 drop-shadow-sm">{t('আপনার কথায়, সুন্দর একটি শুভেচ্ছা বার্তা তৈরি করুন', 'Create a beautiful wish message with your words')}</p>
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="px-4 -mt-5">
         {/* Main Tabs */}

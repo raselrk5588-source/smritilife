@@ -128,7 +128,7 @@ export default function Landing() {
   const currentHero = heroFeatures[currentFeatureIndex];
 
   return (
-    <div className="relative min-h-screen bg-[#F4F9F6] text-slate-800 font-sans selection:bg-[#0A7756]/20 selection:text-[#0A7756] flex flex-col antialiased overflow-x-hidden">
+    <div className="relative min-h-screen bg-[#F4F9F6] text-slate-800 font-sans selection:bg-[#0A7756]/20 selection:text-[#0A7756] flex flex-col antialiased overflow-x-clip">
       
       {/* AMBIENT GLOWING MESH ORBS (MODERN AI GLASS AESTHETIC) */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-emerald-200/40 via-teal-100/30 to-emerald-300/20 rounded-full blur-[130px] pointer-events-none -z-10" />
@@ -139,7 +139,7 @@ export default function Landing() {
       <div className="absolute inset-0 bg-[radial-gradient(#0A7756_1px,transparent_1px)] [background-size:28px_28px] opacity-[0.06] pointer-events-none -z-10" />
 
       {/* 1. TOP NAVBAR (GLASSMORPHISM) */}
-      <header className="sticky top-0 z-50 bg-white/75 backdrop-blur-2xl border-b border-white/60 shadow-[0_4px_30px_rgba(10,119,86,0.03)] transition-all">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/85 backdrop-blur-2xl border-b border-slate-200/60 shadow-[0_4px_30px_rgba(10,119,86,0.05)] transition-all">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           
           {/* Logo with Robot AI Avatar & AI Badge */}
@@ -187,6 +187,9 @@ export default function Landing() {
 
         </div>
       </header>
+
+      {/* Spacer to preserve natural flow underneath the fixed header */}
+      <div className="h-16 sm:h-20 shrink-0" aria-hidden="true" />
 
       {/* 2. HERO SECTION (AI AGENT & LIVE CHAT SIMULATION) */}
       <section className="relative overflow-hidden pt-4 sm:pt-8 pb-6 sm:pb-10">

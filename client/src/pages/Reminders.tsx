@@ -236,8 +236,8 @@ export default function Reminders() {
 
   return (
     <div className="bg-[#f6f8f9] min-h-screen pb-24 font-sans">
-      {/* Top Header */}
-      <header className="bg-primary text-white p-4 pt-10 pb-6 flex justify-between items-center relative overflow-hidden rounded-b-3xl shadow-sm z-20">
+      {/* Top Header Banner */}
+      <div className="bg-primary text-white p-4 -mt-14 pt-16 md:mt-0 md:pt-10 pb-6 flex justify-between items-center relative overflow-hidden rounded-b-3xl shadow-sm z-20">
         <div className="absolute inset-0 z-0 bg-cover" style={{ backgroundImage: "url('/theme-bg.png')", backgroundPosition: "center 40%", opacity: "0.9" }}></div>
         <div className="absolute inset-0 z-0 bg-gradient-to-t from-primary/60 via-primary/30 to-black/40"></div>
         
@@ -245,7 +245,7 @@ export default function Reminders() {
           <h1 className="text-2xl font-bold drop-shadow-md">{t('রিমাইন্ডার', 'Reminders')}</h1>
           <p className="text-white/90 text-[11px] font-medium drop-shadow-sm mt-0.5">{t('কখনো কিছু ভুলবেন না', 'Never forget anything')}</p>
         </div>
-      </header>
+      </div>
 
       <div className="px-4 mt-6">
         

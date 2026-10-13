@@ -10,6 +10,8 @@ export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const userName = localStorage.getItem('userName') || "রিয়াদ";
+  const isMainTab = ['/app', '/app/', '/app/notes', '/app/reminders', '/app/wishes'].includes(location.pathname);
 
   useEffect(() => {
     if (!localStorage.getItem('isAuthenticated')) {
@@ -41,13 +43,20 @@ export default function MainLayout() {
       {/* Web View Top Navigation (Premium Consumer Glassmorphism Style) */}
       <header className="hidden md:flex bg-white/90 backdrop-blur-md text-slate-800 sticky top-0 z-50 h-[70px] items-center px-6 lg:px-12 border-b border-slate-200/70 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)] justify-between transition-all">
         {/* Brand Logo & Name */}
-        <Link to="/app" className="flex items-center space-x-3 group mr-4">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#0A7756] to-emerald-400 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 group-hover:scale-105 transition-transform duration-300">
-            <span className="text-xl font-black tracking-tight font-serif">S</span>
+        <Link to="/app" className="flex items-center space-x-3 group mr-4 select-none">
+          <div className="relative w-10 h-10 rounded-full flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
+            <img 
+              src="/robot-icon.png" 
+              alt="SmritiLife AI" 
+              className="w-full h-full rounded-full object-cover shadow-md shadow-[#0A7756]/20 ring-2 ring-emerald-500/30" 
+            />
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
           </div>
           <div className="flex flex-col">
             <div className="flex items-center space-x-1.5">
-              <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Smriti <span className="text-[#0A7756]">Life</span></span>
+              <span className="text-xl font-black tracking-tight text-slate-900">
+                Smriti<span className="text-[#0A7756]">Life</span>
+              </span>
               <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">স্মৃতি লাইফ</span>
             </div>
             <span className="text-[10px] text-slate-400 font-medium tracking-wide">স্মার্ট ব্যক্তিগত সহকারী</span>
@@ -118,6 +127,44 @@ export default function MainLayout() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative w-full h-full md:h-auto">
+        
+        {/* Mobile Sticky Top Navigation Bar (Visible on all main menus) */}
+        {isMainTab && (
+          <header className="sticky top-0 z-40 md:hidden flex justify-between items-center px-3.5 h-14 bg-transparent pointer-events-none">
+            <Link to="/app" className="flex items-center gap-2 bg-white/85 backdrop-blur-md px-2.5 py-1.5 rounded-2xl shadow-sm border border-white/60 pointer-events-auto select-none">
+              <div className="relative w-7 h-7 rounded-full flex items-center justify-center shrink-0">
+                <img 
+                  src="/robot-icon.png" 
+                  alt="SmritiLife AI" 
+                  className="w-full h-full rounded-full object-cover shadow-xs ring-1.5 ring-emerald-500/30" 
+                />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
+              </div>
+              <span className="text-base font-black tracking-tight text-slate-900 pr-1">
+                Smriti<span className="text-[#0A7756]">Life</span>
+              </span>
+            </Link>
+            <div className="flex items-center space-x-3 pointer-events-auto">
+              <button 
+                onClick={() => navigate('/app/notifications')} 
+                className="w-8 h-8 bg-white/85 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm text-slate-600 relative active:scale-95 transition border border-white/60 cursor-pointer"
+              >
+                <Bell className="w-4 h-4" />
+              </button>
+              <div 
+                onClick={() => navigate('/app/profile')} 
+                className="w-8 h-8 bg-slate-200 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer active:scale-95 transition"
+              >
+                <img 
+                  src={`https://ui-avatars.com/api/?name=${userName}&background=0a7756&color=fff`} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover" 
+                />
+              </div>
+            </div>
+          </header>
+        )}
+
         {/* Scrollable Page Content */}
         {/* We remove default top/side padding so all pages can span edge-to-edge if needed */}
         <div className="flex-1 pb-24 md:pb-0 w-full mx-auto max-w-5xl pt-0 px-0">
@@ -188,7 +235,7 @@ export default function MainLayout() {
       {/* Web View Footer */}
       <footer className="hidden md:block bg-white border-t border-slate-100 py-4 mt-auto shadow-sm relative z-50">
         <div className="max-w-5xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center text-slate-500 text-xs font-medium">
-          <p>© {new Date().getFullYear()} Smriti Life (স্মৃতি). {t('সর্বস্বত্ব সংরক্ষিত।', 'All rights reserved.')}</p>
+          <p>© {new Date().getFullYear()} Smriti Life. {t('সর্বস্বত্ব সংরক্ষিত।', 'All rights reserved.')}</p>
           <div className="flex space-x-6 mt-2 md:mt-0">
             <Link to="#" className="hover:text-[#0A7756] transition-colors">{t('শর্তাবলী', 'Terms')}</Link>
             <Link to="#" className="hover:text-[#0A7756] transition-colors">{t('গোপনীয়তা নীতি', 'Privacy Policy')}</Link>

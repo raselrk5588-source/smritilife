@@ -249,8 +249,8 @@ export default function Profile() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg">
-                {t(theme, theme === 'সবুজ (ডিফল্ট)' ? 'Green (Default)' : theme === 'ডার্ক মোড' ? 'Dark Mode' : theme === 'লাইট মোড' ? 'Light Mode' : 'System Default')}
+              <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg whitespace-nowrap">
+                {theme === 'Dark mode' ? t('ডার্ক মোড', 'Dark mode') : t('লাইট মোড', 'Light mode')}
               </span>
               <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
             </div>
@@ -290,7 +290,7 @@ export default function Profile() {
           <button 
             type="button"
             onClick={() => setShowUnsubscribeConfirm(true)} 
-            className="w-full text-center text-xs text-slate-400 hover:text-slate-600 py-1.5 transition-colors cursor-pointer"
+            className="w-full text-center text-xs text-slate-400 hover:text-rose-500 py-2 transition-colors cursor-pointer border-none bg-transparent hover:underline"
           >
             {t('আনসাবস্ক্রাইব করুন', 'Unsubscribe')}
           </button>

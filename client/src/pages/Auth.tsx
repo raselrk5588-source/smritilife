@@ -128,9 +128,9 @@ export default function Auth() {
 
         <div className="bg-white rounded-[32px] p-8 shadow-xl flex-1 flex flex-col justify-center animate-in fade-in slide-in-from-bottom-8 duration-500">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-extrabold text-slate-800 mb-2">Smriti <span className="text-[#0A7756]">Life</span> <span className="text-xl md:text-2xl font-bold text-slate-700">(স্মৃতি)</span><span className="text-[#0A7756] text-4xl">.</span></h2>
+            <h2 className="text-3xl font-extrabold text-slate-800 mb-2">Smriti <span className="text-[#0A7756]">Life</span><span className="text-[#0A7756] text-4xl">.</span></h2>
             <p className="text-slate-500 text-sm font-medium">
-              Smriti Life (স্মৃতি) অ্যাপে আপনাকে স্বাগতম!
+              Smriti Life অ্যাপে আপনাকে স্বাগতম!
             </p>
           </div>
 

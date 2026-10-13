@@ -23,6 +23,7 @@ export default function Home() {
   const [notesCount, setNotesCount] = useState(0);
   const [remindersCount, setRemindersCount] = useState(0);
 
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -140,7 +141,7 @@ export default function Home() {
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       
       {/* Top Section with Scenic Background */}
-      <div className="relative pt-3 md:pt-6 pb-16 md:pb-24 px-3 md:px-5 rounded-b-[2rem] md:rounded-b-[2.5rem] overflow-hidden">
+      <div className="relative -mt-14 pt-16 md:mt-0 md:pt-6 pb-16 md:pb-24 px-3 md:px-5 rounded-b-[2rem] md:rounded-b-[2.5rem] overflow-hidden">
         {/* Background Image / Gradient mimicking the scenic view */}
         <div 
           className="absolute inset-0 z-0 bg-cover bg-center"
@@ -152,22 +153,7 @@ export default function Home() {
         ></div>
         <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/20 via-white/40 to-[#f6f8f9]"></div>
 
-        <div className="relative z-10">
-          {/* Header (Hidden on Web because MainLayout has a Top Nav) */}
-          <header className="flex md:hidden justify-between items-center mb-6">
-            <div className="flex items-center bg-white/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-sm border border-white/50">
-              <h1 className="text-xl font-extrabold tracking-wide text-primary">Smriti Life</h1>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button onClick={() => navigate('/app/notifications')} className="w-8 h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm text-slate-600 relative active:scale-95 transition">
-                <Bell className="w-4 h-4" />
-              </button>
-              <div onClick={() => navigate('/app/profile')} className="w-8 h-8 bg-slate-200 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer active:scale-95 transition">
-                <img src={`https://ui-avatars.com/api/?name=${userName}&background=0a7756&color=fff`} alt="Profile" className="w-full h-full object-cover" />
-              </div>
-            </div>
-          </header>
-
+        <div className="relative z-10 pt-2">
           {/* Greeting */}
           <div className="mb-3 md:mb-6 flex justify-between items-end">
             <div>
@@ -576,7 +562,7 @@ export default function Home() {
                 <Users className="w-8 h-8 text-white" />
               </div>
               <h2 className="text-xl font-bold text-white mb-1">{t('প্রোফাইল সেটআপ করুন!', 'Setup Profile!')}</h2>
-              <p className="text-white/80 text-sm font-medium">{t('Smriti Life (স্মৃতি) অ্যাপে আপনাকে স্বাগতম', 'Welcome to Smriti Life App')}</p>
+              <p className="text-white/80 text-sm font-medium">{t('Smriti Life অ্যাপে আপনাকে স্বাগতম', 'Welcome to Smriti Life App')}</p>
             </div>
             
             <div className="p-6 space-y-4">
