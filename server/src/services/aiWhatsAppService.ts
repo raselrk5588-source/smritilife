@@ -70,19 +70,23 @@ export const parseBengaliTime = (rawText: string): string => {
     return `${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
   }
 
+  const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|sehri|sahari|seheri|saheri/i.test(lower);
   const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
-  if (!timeMatch) return '10:00';
+  if (!timeMatch) {
+    if (isSehri) return '04:00';
+    return '10:00';
+  }
 
   let hour = parseInt(timeMatch[1], 10);
   const minute = timeMatch[2] || '00';
   const tag = (timeMatch[3] || '').toLowerCase();
 
-  const isMorning = lower.includes('সকাল') || lower.includes('ভোর') || lower.includes('sokal') || lower.includes('shokal') || lower.includes('vhor') || lower.includes('vor') || tag === 'am';
+  const isMorning = isSehri || lower.includes('সকাল') || lower.includes('ভোর') || lower.includes('sokal') || lower.includes('shokal') || lower.includes('vhor') || lower.includes('vor') || tag === 'am';
   const isNoon = lower.includes('দুপুর') || lower.includes('dupur') || lower.includes('dupor');
   const isAfternoon = lower.includes('বিকাল') || lower.includes('বিকেল') || lower.includes('bikal') || lower.includes('bikele') || lower.includes('bikale');
   const isEvening = lower.includes('সন্ধ্যা') || lower.includes('সন্ধে') || lower.includes('sondha') || lower.includes('shondha') || lower.includes('shondhe');
   const isNight = lower.includes('রাত') || lower.includes('রাত্রে') || lower.includes('rat') || lower.includes('raat') || lower.includes('ratri') || lower.includes('ratre');
-  const isPM = tag === 'pm' || isNoon || isAfternoon || isEvening || isNight;
+  const isPM = !isSehri && (tag === 'pm' || isNoon || isAfternoon || isEvening || isNight);
 
   if (isPM) {
     if (hour < 12) {
@@ -654,6 +658,10 @@ Possible actions:
      * "5 mnt por amake uthi diow ghum theke" -> action: "create_reminder", data: { "title": "ঘুম থেকে ওঠা (ওয়েক-আপ অ্যালার্ম)", "category": "wakeup", "isAlarm": true, "relativeMinutes": 5 }
      * "20 mnt por deke diow" / "২০ মিনিট পর ডেকে দিও" -> action: "create_reminder", data: { "title": "ঘুম থেকে ওঠা (ওয়েক-আপ অ্যালার্ম)", "category": "wakeup", "isAlarm": true, "relativeMinutes": 20 }
      * "কাল সকাল ৬টায় ডেকে দিও" / "kal sokal 6ta deke dio" -> action: "create_reminder", data: { "title": "সকাল ৬টায় ঘুম থেকে ওঠা", "category": "wakeup", "isAlarm": true, "time": "06:00" }
+     * "আমাকে প্রতিদিন সেহরি সময়ে তুলে দিবে" / "potidin sahari time a tule dibe" -> action: "create_reminder", data: { "title": "সেহরির জন্য ঘুম থেকে ওঠা 🌙", "category": "wakeup", "isAlarm": true, "repeat": "Daily", "time": "04:00" }
+     * "আজ সেহরিতে ডেকে দিও" / "aj saharite deke dio" -> action: "create_reminder", data: { "title": "সেহরির জন্য ঘুম থেকে ওঠা 🌙", "category": "wakeup", "isAlarm": true, "repeat": "Once", "time": "04:00" }
+     * "কাল সেহরিতে তুলে দিও" / "kal saharite tule dio" -> action: "create_reminder", data: { "title": "সেহরির জন্য ঘুম থেকে ওঠা 🌙", "category": "wakeup", "isAlarm": true, "repeat": "Once", "time": "04:00" }
+     * "প্রতিদিন ভোর ৪টায় সেহরির জন্য ডেকে দিও" -> action: "create_reminder", data: { "title": "সেহরির জন্য ঘুম থেকে ওঠা 🌙", "category": "wakeup", "isAlarm": true, "repeat": "Daily", "time": "04:00" }
    - Direct message variations (MUST detect recipient and message text accurately, with sendNow: true):
      * "Rasel ke I love u pathao" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love u", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }
      * "I love you message daw rasel k" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love you", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }

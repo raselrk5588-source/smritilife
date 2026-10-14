@@ -6,6 +6,28 @@ import { deliverWishCard } from './wishDeliveryService';
 import { formatTime12Hour } from './aiWhatsAppService';
 import { sendMetaWhatsAppButtons, userReminderState } from '../controllers/whatsappController';
 
+export interface ActiveAlarmRinger {
+  reminderId: string;
+  userId: string;
+  phone: string;
+  title: string;
+  isSehri: boolean;
+  ringCount: number;
+  maxRings: number;
+  nextRingAt: number;
+}
+
+export const activeAlarmRingers = new Map<string, ActiveAlarmRinger>();
+
+export const cancelAlarmRinger = (reminderIdOrUserId: string) => {
+  for (const [key, val] of activeAlarmRingers.entries()) {
+    if (val.reminderId === reminderIdOrUserId || val.userId === reminderIdOrUserId || key === reminderIdOrUserId) {
+      activeAlarmRingers.delete(key);
+      console.log(`[AlarmRinger] Alarm ringer stopped for reminder ${val.reminderId} / user ${val.userId}`);
+    }
+  }
+};
+
 // Send message via Meta WhatsApp API
 const sendWhatsAppAlert = async (to: string, message: string) => {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -144,9 +166,14 @@ export const startReminderScheduler = () => {
             if (senderNumber) {
               const displayTime = formatTime12Hour(reminder.time);
               const isWakeup = reminder.category === 'wakeup' || reminder.category === 'alarm' || !!reminder.isAlarm;
+              const isSehri = isWakeup && (
+                /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(reminder.title || '') ||
+                /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(reminder.category || '')
+              );
+
               const categoryMap: Record<string, string> = {
-                wakeup: '⏰ ওয়েক-আপ অ্যালার্ম',
-                alarm: '⏰ ওয়েক-আপ অ্যালার্ম',
+                wakeup: isSehri ? '🌙 সেহরি ওয়েক-আপ' : '⏰ ওয়েক-আপ অ্যালার্ম',
+                alarm: isSehri ? '🌙 সেহরি ওয়েক-আপ' : '⏰ ওয়েক-আপ অ্যালার্ম',
                 medicine: '💊 ওষুধ',
                 work: '💼 কাজ/মিটিং',
                 shopping: '🛒 শপিং/বাজার',
@@ -157,9 +184,15 @@ export const startReminderScheduler = () => {
               const catLabel = categoryMap[reminder.category] || '';
               const catText = catLabel ? `\n🏷️ ক্যাটাগরি: ${catLabel}` : '';
               const salutation = user?.honorific ? ` ${user.honorific}` : (user?.name ? ` ${user.name.split(' ')[0]}` : '');
-              const alertBody = isWakeup 
-                ? `⏰🔔⏰ শুভ সকাল${salutation}! ঘুম থেকে উঠুন!\n\nএটি আপনার স্মৃতি ওয়েক-আপ অ্যালার্ম:\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`
-                : `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
+              
+              let alertBody = '';
+              if (isSehri) {
+                alertBody = `🌙🔔⏰ আসসালামু আলাইকুম${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৪)\n\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
+              } else if (isWakeup) {
+                alertBody = `⏰🔔⏰ শুভ সকাল${salutation}! ঘুম থেকে উঠুন! (রিং ১/৪)\n\nএটি আপনার স্মৃতি ওয়েক-আপ অ্যালার্ম:\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`;
+              } else {
+                alertBody = `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
+              }
 
               // Track in active state for tracking response
               userReminderState.set(reminder.userId.toString(), {
@@ -169,9 +202,23 @@ export const startReminderScheduler = () => {
                 expiresAt: Date.now() + 4 * 60 * 60 * 1000
               });
 
+              // Register multi-ring loop for Wake-up / Sehri alarms (rings every 60s up to 4 times if no reply)
+              if (isWakeup) {
+                activeAlarmRingers.set(reminder._id.toString(), {
+                  reminderId: reminder._id.toString(),
+                  userId: reminder.userId.toString(),
+                  phone: senderNumber,
+                  title: reminder.title,
+                  isSehri,
+                  ringCount: 1,
+                  maxRings: 4,
+                  nextRingAt: Date.now() + 60 * 1000 // Ring 2 fires in 60s
+                });
+              }
+
               const buttons = isWakeup
                 ? [
-                    { id: `rem_done_${reminder._id}`, title: 'জেগে গেছি ✅' },
+                    { id: `rem_done_${reminder._id}`, title: isSehri ? 'জেগে গেছি 🤲' : 'জেগে গেছি ✅' },
                     { id: `rem_reschedule_${reminder._id}`, title: '৫ মিনিট স্নুজ 💤' }
                   ]
                 : [
@@ -313,6 +360,70 @@ export const startReminderScheduler = () => {
     }
   };
 
+  // Urgent ringer loop: Fires Ring 2, 3, 4 every 60s for unanswered wake-up / Sehri alarms
+  const checkAndFireAlarmRingers = async () => {
+    if (mongoose.connection.readyState !== 1) return;
+    if (activeAlarmRingers.size === 0) return;
+
+    const now = Date.now();
+    for (const [remId, ringer] of activeAlarmRingers.entries()) {
+      if (now >= ringer.nextRingAt) {
+        try {
+          // Verify reminder status in database
+          const reminder = await Reminder.findById(ringer.reminderId);
+          if (!reminder || reminder.status === 'Completed' || reminder.status === 'Cancelled') {
+            activeAlarmRingers.delete(remId);
+            continue;
+          }
+
+          ringer.ringCount += 1;
+          const currentRing = ringer.ringCount;
+          const totalRings = ringer.maxRings;
+
+          let ringMsg = '';
+          if (ringer.isSehri) {
+            if (currentRing === 2) {
+              ringMsg = `🚨🌙 (রিং ২/৪) সেহরির অ্যালার্ম! ঘুম ভাঙার সময় হয়ে গেছে! সেহরির শেষ সময় আর বেশি বাকি নেই! ⏰⏰\n\n📌 বিষয়: ${ringer.title}\nঅনুগ্রহ করে এখনই বিছানা ছাড়ুন ও খাবার গ্রহণ করুন! 🤲`;
+            } else if (currentRing === 3) {
+              ringMsg = `🚨📢 (রিং ৩/৪) ঘুম থেকে উঠুন! আর কিছুক্ষণ পরেই সেহরির সময় শেষ হয়ে যাবে! 🔔🔔🔔\n\nদেরি করলে রোজা রাখতে কষ্ট হতে পারে। দয়া করে এখনই উঠুন!`;
+            } else {
+              ringMsg = `🚨🚨🚨 (চূড়ান্ত রিং ৪/৪) সেহরির চূড়ান্ত অ্যালার্ম! আপনি এখনও ঘুম থেকে ওঠেননি! ⏰📢\n\nসময় দ্রুত শেষ হচ্ছে, এখনই সেহরি খেয়ে রোজা রাখুন! 🌙`;
+            }
+          } else {
+            if (currentRing === 2) {
+              ringMsg = `🚨🔔 (রিং ২/৪) ওয়েক-আপ অ্যালার্ম! ঘুম থেকে ওঠার জরুরি সংকেত! ⏰⏰\n\n📌 বিষয়: ${ringer.title}\nঅনুগ্রহ করে জেগে উঠুন!`;
+            } else if (currentRing === 3) {
+              ringMsg = `🚨📢 (রিং ৩/৪) বিছানা ছাড়ুন! আপনার গুরুত্বপূর্ণ রুটিন বা কাজ অপেক্ষা করছে! 🔔🔔🔔`;
+            } else {
+              ringMsg = `🚨🚨🚨 (চূড়ান্ত রিং ৪/৪) চূড়ান্ত ওয়েক-আপ সংকেত! আর দেরি না করে এখনই উঠে পড়ুন! ☀️`;
+            }
+          }
+
+          const buttons = [
+            { id: `rem_done_${ringer.reminderId}`, title: ringer.isSehri ? 'জেগে গেছি 🤲' : 'জেগে গেছি ✅' },
+            { id: `rem_reschedule_${ringer.reminderId}`, title: '৫ মিনিট স্নুজ 💤' }
+          ];
+
+          const sent = await sendMetaWhatsAppButtons(ringer.phone, ringMsg, buttons);
+          if (!sent) {
+            await sendWhatsAppAlert(ringer.phone, `${ringMsg}\n\n👉 জেগে গেলে লিখুন: "জেগে গেছি" বা "উঠেছি"`);
+          }
+
+          console.log(`🔔 [AlarmRinger] Dispatched ring ${currentRing}/${totalRings} for reminder ${ringer.reminderId} to ${ringer.phone}`);
+
+          if (currentRing >= totalRings) {
+            activeAlarmRingers.delete(remId);
+          } else {
+            ringer.nextRingAt = Date.now() + 60 * 1000; // Next ring in 60s
+          }
+        } catch (err) {
+          console.error(`[AlarmRinger] Error processing ring for ${remId}:`, err);
+          activeAlarmRingers.delete(remId);
+        }
+      }
+    }
+  };
+
   // Run on startup
   setTimeout(checkAndDispatchReminders, 5000);
   setTimeout(checkAndSendNightlyFollowUp, 15000);
@@ -321,4 +432,6 @@ export const startReminderScheduler = () => {
   setInterval(checkAndDispatchReminders, 30000);
   // Check nightly follow-up every 2 minutes
   setInterval(checkAndSendNightlyFollowUp, 120000);
+  // Check active alarm ringers every 15 seconds
+  setInterval(checkAndFireAlarmRingers, 15000);
 };

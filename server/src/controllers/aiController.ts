@@ -106,21 +106,32 @@ export const parseCommand = async (req: Request, res: Response) => {
     let intent = "unknown";
     let parsedData: any = {};
 
-    const isWakeup = /ঘুম|ঘুমের|ঘুমিয়ে|ঘুমাবো|ঘুমাব|ঘুমাচ্ছি|nap|dip\s*nap|deep\s*nap|rest|বিশ্রাম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|তুলে|ডেকে|ডাকা|ডেকে দিও|ডেকে দাও|তুলে দিও|তুলে দাও|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(command);
+    const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(command);
+    const isDaily = /প্রতিদিন|দৈনিক|রোজ|রোজই|daily|everyday|every\s*day|protidin|potidin|roj|sob\s*din|shob\s*din/i.test(command);
+    const isWakeup = isSehri || /ঘুম|ঘুমের|ঘুমিয়ে|ঘুমাবো|ঘুমাব|ঘুমাচ্ছি|nap|dip\s*nap|deep\s*nap|rest|বিশ্রাম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|তুলে|ডেকে|ডাকা|ডেকে দিও|ডেকে দাও|তুলে দিও|তুলে দাও|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(command);
 
     if (isWakeup) {
       intent = "create_reminder";
       const rawSubject = extractSubject(command);
-      const cleanTitle = (rawSubject && rawSubject.length > 2 && !/^(আমাকে|ডেকে|তুলে|ঘুম)\b/i.test(rawSubject))
+      let cleanTitle = (rawSubject && rawSubject.length > 2 && !/^(আমাকে|ডেকে|তুলে|ঘুম)\b/i.test(rawSubject))
         ? rawSubject 
-        : "ঘুম থেকে ওঠা (ওয়েক-আপ অ্যালার্ম)";
+        : (isSehri ? "সেহরির জন্য ঘুম থেকে ওঠা 🌙" : "ঘুম থেকে ওঠা (ওয়েক-আপ অ্যালার্ম)");
+      if (isSehri && (!cleanTitle || cleanTitle.includes('ঘুম থেকে ওঠা'))) {
+        cleanTitle = "সেহরির জন্য ঘুম থেকে ওঠা 🌙";
+      }
+
+      let parsedTime = extractTime(command);
+      if (isSehri && (!parsedTime || parsedTime === '10:00')) {
+        parsedTime = '04:00';
+      }
 
       parsedData = {
         title: cleanTitle,
         date: new Date().toISOString().split('T')[0],
-        time: extractTime(command),
+        time: parsedTime,
         category: "wakeup",
         isAlarm: true,
+        repeat: isDaily ? "Daily" : "Once",
         timezone: "Asia/Dhaka"
       };
     } else if (command.toLowerCase().includes('phone') || command.toLowerCase().includes('call') || command.includes('ফোন') || command.includes('রিমাইন্ডার') || command.includes('মনে') || command.includes('কাল') || command.includes('আজ')) {

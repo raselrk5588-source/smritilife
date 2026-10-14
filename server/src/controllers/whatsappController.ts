@@ -8,6 +8,7 @@ import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
+import { cancelAlarmRinger } from '../services/reminderScheduler';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -845,20 +846,60 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
         if (buttonId.startsWith('rem_done_')) {
           const remId = buttonId.replace('rem_done_', '');
+          cancelAlarmRinger(remId);
           const reminder = await Reminder.findByIdAndUpdate(remId, { status: 'Completed' }, { new: true });
           userReminderState.delete(user._id.toString());
           const title = reminder?.title || 'কাজটি';
           const salutation = user.honorific ? ` ${user.honorific}` : '';
-          await sendMetaWhatsAppMessage(
-            fromNumber,
-            `🎉 দারুণ${salutation}! "${title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো। আপনার দিনটি শুভ হোক!`
-          );
+          const isSehri = /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i.test(title);
+
+          if (isSehri) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🤲 মাশাআল্লাহ${salutation}! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। 🌙`
+            );
+          } else if (reminder?.category === 'wakeup' || reminder?.isAlarm) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `☀️ শুভ সকাল${salutation}! আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো। দিনটি আপনার জন্য সফল ও আনন্দময় হোক!`
+            );
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🎉 দারুণ${salutation}! "${title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো। আপনার দিনটি শুভ হোক!`
+            );
+          }
           return;
         }
 
         if (buttonId.startsWith('rem_reschedule_')) {
           const remId = buttonId.replace('rem_reschedule_', '');
+          cancelAlarmRinger(remId);
           const reminder = await Reminder.findById(remId);
+
+          const isWakeup = reminder?.category === 'wakeup' || reminder?.category === 'alarm' || !!reminder?.isAlarm;
+          if (isWakeup && reminder) {
+            // Automatic 5-minute snooze for wake-up and Sehri alarms
+            const now = new Date();
+            const dhakaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
+            dhakaNow.setMinutes(dhakaNow.getMinutes() + 5);
+            const newHours = dhakaNow.getHours().toString().padStart(2, '0');
+            const newMins = dhakaNow.getMinutes().toString().padStart(2, '0');
+            const newTime = `${newHours}:${newMins}`;
+
+            await Reminder.findByIdAndUpdate(remId, {
+              time: newTime,
+              status: 'Pending'
+            });
+            userReminderState.delete(user._id.toString());
+
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `💤 অ্যালার্মটি ৫ মিনিটের জন্য স্নুজ করা হলো (পরবর্তী অ্যালার্ম: ${formatTime12Hour(newTime)})। ঠিক ৫ মিনিট পর আপনাকে আবার ডাকা হবে!`
+            );
+            return;
+          }
+
           userReminderState.set(user._id.toString(), {
             reminderId: remId,
             title: reminder?.title || 'রিমাইন্ডারটি',
@@ -996,15 +1037,47 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
-        const isYesIntent = /^(?:হ্যাঁ|হ্যা|হাঁ|হুম|জি|করেছি|করছি|হয়ে\s*গেছে|হয়েগেছে|সম্পন্ন|yes|done|completed|yep|yeah|koresi|hoise|join\s*koresi)\b/i.test(cleanText);
+        const isYesIntent = /^(?:হ্যাঁ|হ্যা|হাঁ|হুম|জি|করেছি|করছি|হয়ে\s*গেছে|হয়েগেছে|সম্পন্ন|yes|done|completed|yep|yeah|koresi|hoise|join\s*koresi|জেগে\s*গেছি|জেগেছি|উঠেছি|উঠে\s*গেছি|উঠেগেছি|jegechi|uthechi|uthesi)\b/i.test(cleanText);
+        const isSnoozeIntent = /^(?:স্নুজ|snooze|৫\s*মিনিট|5\s*mnt|5\s*min|পরে\s*ডাকো|pore\s*dako)\b/i.test(cleanText);
         const isNoIntent = /^(?:না|নো|না\s*করিনি|না\s*করি\s*নাই|করি\s*নাই|করিনি|no|nope|reschedule|kori\s*ni|hoy\s*ni|join\s*kori\s*ni)\b/i.test(cleanText);
 
         if (activeState && isYesIntent) {
+          cancelAlarmRinger(activeState.reminderId);
           await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Completed' });
           userReminderState.delete(user._id.toString());
+          const isSehri = /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i.test(activeState.title);
+          if (isSehri) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🤲 মাশাআল্লাহ! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। 🌙`
+            );
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🎉 চমৎকার! "${activeState.title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো!`
+            );
+          }
+          return;
+        }
+
+        if (activeState && isSnoozeIntent) {
+          cancelAlarmRinger(activeState.reminderId);
+          const now = new Date();
+          const dhakaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
+          dhakaNow.setMinutes(dhakaNow.getMinutes() + 5);
+          const newHours = dhakaNow.getHours().toString().padStart(2, '0');
+          const newMins = dhakaNow.getMinutes().toString().padStart(2, '0');
+          const newTime = `${newHours}:${newMins}`;
+
+          await Reminder.findByIdAndUpdate(activeState.reminderId, {
+            time: newTime,
+            status: 'Pending'
+          });
+          userReminderState.delete(user._id.toString());
+
           await sendMetaWhatsAppMessage(
             fromNumber,
-            `🎉 চমৎকার! "${activeState.title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো!`
+            `💤 অ্যালার্মটি ৫ মিনিটের জন্য স্নুজ করা হলো (পরবর্তী অ্যালার্ম: ${formatTime12Hour(newTime)})। ঠিক ৫ মিনিট পর আপনাকে আবার ডাকা হবে!`
           );
           return;
         }
@@ -1322,8 +1395,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               const customMsg = aiResponse.data.customMessage || aiResponse.data.description || '';
               const sendNow = !!aiResponse.data.sendNow;
               const reminderDate = new Date(aiResponse.data.date || new Date());
-              const reminderTime = aiResponse.data.time || '10:00';
-              const formattedTime = formatTime12Hour(reminderTime);
+              let reminderTime = aiResponse.data.time || '10:00';
+              let formattedTime = formatTime12Hour(reminderTime);
 
               // 1. Gather all target recipients (Multi-contact broadcast support)
               const resolvedRecipients: Array<{ name: string; phone: string }> = [];
@@ -1509,16 +1582,30 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                                    /ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|নাপা|গ্যাস্ট্রিক|প্যারাসিটামল|প্রেসার|ডায়াবেটিস/i.test(cleanText);
 
                 const isDaily = isMedicine || 
-                                /প্রতিদিন|দৈনিক|রোজ|রোজই|daily|everyday|every\s*day|protidin|roj/i.test(cleanText) ||
+                                /প্রতিদিন|দৈনিক|রোজ|রোজই|daily|everyday|every\s*day|protidin|potidin|roj|sob\s*din|shob\s*din/i.test(cleanText) ||
                                 aiResponse.data.repeat === 'Daily';
 
-                const isWakeup = aiResponse.data.category === 'wakeup' || aiResponse.data.category === 'alarm' || /ঘুম|ঘুমের|ঘুমিয়ে|ঘুমাবো|ঘুমাব|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ডাকা|ডেকে দিও|ডেকে দাও|ডাকবা|উঠাবা|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(cleanTitle) || /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ঘুম ভাঙা/i.test(cleanText);
+                const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(cleanTitle) ||
+                                /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(cleanText);
+
+                const isWakeup = isSehri || aiResponse.data.category === 'wakeup' || aiResponse.data.category === 'alarm' || /ঘুম|ঘুমের|ঘুমিয়ে|ঘুমাবো|ঘুমাব|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ডাকা|ডেকে দিও|ডেকে দাও|ডাকবা|উঠাবা|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(cleanTitle) || /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ঘুম ভাঙা/i.test(cleanText);
                 const finalCategory = isMedicine ? 'medicine' : (isWakeup ? 'wakeup' : (aiResponse.data.category || 'General'));
                 const finalRepeat = isDaily ? 'Daily' : (aiResponse.data.repeat || 'Once');
 
+                let finalTitle = cleanTitle;
+                if (isSehri && (!finalTitle || /^(সেহরি|সাহরি|রমজান|romjan|sahari|sehri)$/i.test(finalTitle.trim()) || finalTitle.length < 5)) {
+                  finalTitle = 'সেহরির জন্য ঘুম থেকে ওঠা 🌙';
+                }
+
+                // Default Sehri time to 04:00 AM if no time was explicitly mentioned
+                if (isSehri && reminderTime === '10:00' && !cleanText.match(/\b(?:10|১০)\b/)) {
+                  reminderTime = '04:00';
+                  formattedTime = '04:00 AM';
+                }
+
                 await Reminder.create({
                   userId: user._id,
-                  title: cleanTitle,
+                  title: finalTitle,
                   description: customMsg,
                   date: reminderDate,
                   time: reminderTime,
@@ -1530,10 +1617,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 });
 
                 let reply = aiResponse.replyText;
-                if (!reply || reply.includes('সেট করা হয়েছে')) {
+                if (isSehri) {
+                  const repeatStr = finalRepeat === 'Daily' ? 'প্রতিদিন ' : '';
+                  reply = `🌙🔔 আপনার সেহরি ওয়েক-আপ অ্যালার্ম "${finalTitle}" ${repeatStr}ভোর ${formattedTime}-এ সফলভাবে সেট করা হয়েছে! নির্ধারিত সময়ে আপনাকে ঘুম থেকে তোলার জন্য উচ্চশব্দে রিং অ্যালার্ম বাজবে।`;
+                } else if (!reply || reply.includes('সেট করা হয়েছে')) {
                   const icon = isMedicine ? '💊' : (isWakeup ? '⏰🔔' : '⏰');
                   const repeatStr = finalRepeat === 'Daily' ? 'প্রতিদিন ' : '';
-                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার "${cleanTitle}" ${repeatStr}সময় ${formattedTime}-এ সফলভাবে সেট করা হয়েছে! নির্ধারিত সময়ে ঘুম ভাঙানোর জন্য অ্যালার্ম বাজবে।`;
+                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার "${finalTitle}" ${repeatStr}সময় ${formattedTime}-এ সফলভাবে সেট করা হয়েছে! নির্ধারিত সময়ে ঘুম ভাঙানোর জন্য অ্যালার্ম বাজবে।`;
                 }
 
                 await sendMetaWhatsAppMessage(fromNumber, reply);

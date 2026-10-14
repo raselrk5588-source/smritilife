@@ -225,20 +225,23 @@ export default function WakeUpAlarmModal() {
 
   if (!activeAlarm) return null;
 
+  const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(activeAlarm.title || '') ||
+                  /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari/i.test(activeAlarm.category || '');
+
   return (
-    <div className="fixed inset-0 z-[99999] bg-gradient-to-b from-amber-950 via-slate-950 to-black text-white flex flex-col justify-between items-center p-6 md:p-12 animate-in fade-in duration-300 select-none">
+    <div className={`fixed inset-0 z-[99999] bg-gradient-to-b ${isSehri ? 'from-emerald-950 via-slate-950 to-black' : 'from-amber-950 via-slate-950 to-black'} text-white flex flex-col justify-between items-center p-6 md:p-12 animate-in fade-in duration-300 select-none`}>
       
       {/* Background Animated Glowing Rings */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
-        <div className="w-[340px] h-[340px] md:w-[500px] md:h-[500px] rounded-full bg-amber-500/20 blur-3xl animate-pulse" />
-        <div className="w-[200px] h-[200px] md:w-[320px] md:h-[320px] rounded-full bg-rose-500/20 blur-2xl animate-ping opacity-30" />
+        <div className={`w-[340px] h-[340px] md:w-[500px] md:h-[500px] rounded-full ${isSehri ? 'bg-emerald-500/20' : 'bg-amber-500/20'} blur-3xl animate-pulse`} />
+        <div className={`w-[200px] h-[200px] md:w-[320px] md:h-[320px] rounded-full ${isSehri ? 'bg-teal-500/20' : 'bg-rose-500/20'} blur-2xl animate-ping opacity-30`} />
       </div>
 
       {/* Top Header Badge */}
       <div className="relative z-10 pt-4 flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 backdrop-blur-md shadow-lg shadow-amber-500/10 text-amber-300 font-bold text-xs uppercase tracking-widest animate-pulse">
-          <SunMedium className="w-4 h-4 text-amber-400" />
-          <span>ওয়েক-আপ অ্যালার্ম • শুভ সকাল!</span>
+        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${isSehri ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300 shadow-emerald-500/10' : 'bg-amber-500/20 border-amber-400/40 text-amber-300 shadow-amber-500/10'} border backdrop-blur-md shadow-lg font-bold text-xs uppercase tracking-widest animate-pulse`}>
+          {isSehri ? <Moon className="w-4 h-4 text-emerald-400" /> : <SunMedium className="w-4 h-4 text-amber-400" />}
+          <span>{isSehri ? '🌙 সেহরির ওয়েক-আপ অ্যালার্ম • পবিত্র রমজান' : 'ওয়েক-আপ অ্যালার্ম • শুভ সকাল!'}</span>
         </div>
       </div>
 
@@ -247,32 +250,32 @@ export default function WakeUpAlarmModal() {
         
         {/* Pulsing Alarm Bell Icon */}
         <div className="relative">
-          <div className="w-24 h-24 md:w-28 md:h-28 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center shadow-2xl shadow-rose-500/40 ring-4 ring-white/20 animate-bounce">
-            <BellRing className="w-12 h-12 md:w-14 md:h-14 text-white drop-shadow-md" />
+          <div className={`w-24 h-24 md:w-28 md:h-28 rounded-full bg-gradient-to-tr ${isSehri ? 'from-emerald-500 to-teal-500 shadow-teal-500/40' : 'from-amber-500 to-rose-500 shadow-rose-500/40'} flex items-center justify-center shadow-2xl ring-4 ring-white/20 animate-bounce`}>
+            {isSehri ? <Moon className="w-12 h-12 md:w-14 md:h-14 text-white drop-shadow-md" /> : <BellRing className="w-12 h-12 md:w-14 md:h-14 text-white drop-shadow-md" />}
           </div>
           <span className="absolute -top-1 -right-1 flex h-6 w-6">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-6 w-6 bg-rose-500 border-2 border-white items-center justify-center text-[10px] font-black">!</span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isSehri ? 'bg-emerald-400' : 'bg-rose-400'} opacity-75`}></span>
+            <span className={`relative inline-flex rounded-full h-6 w-6 ${isSehri ? 'bg-emerald-500' : 'bg-rose-500'} border-2 border-white items-center justify-center text-[10px] font-black`}>!</span>
           </span>
         </div>
 
         {/* Big Live Clock */}
         <div className="space-y-1">
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 drop-shadow-lg font-mono">
+          <h1 className={`text-4xl md:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r ${isSehri ? 'from-emerald-200 via-teal-300 to-emerald-400' : 'from-amber-200 via-yellow-300 to-amber-400'} drop-shadow-lg font-mono`}>
             {currentTimeStr || activeAlarm.time}
           </h1>
-          <p className="text-amber-200/80 text-xs md:text-sm font-semibold tracking-wider">
-            ⏰ ঘুম থেকে ওঠার নির্ধারিত সময়
+          <p className={`${isSehri ? 'text-emerald-200/80' : 'text-amber-200/80'} text-xs md:text-sm font-semibold tracking-wider`}>
+            {isSehri ? '🌙 সেহরি খাওয়ার নির্ধারিত সময়' : '⏰ ঘুম থেকে ওঠার নির্ধারিত সময়'}
           </p>
         </div>
 
         {/* Alarm Title Box */}
         <div className="bg-white/10 backdrop-blur-md border border-white/15 px-6 py-3.5 rounded-2xl max-w-sm shadow-xl">
           <h3 className="text-lg md:text-xl font-extrabold text-white leading-snug">
-            {activeAlarm.title || 'ঘুম থেকে ওঠা'}
+            {activeAlarm.title || (isSehri ? 'সেহরির জন্য ঘুম থেকে ওঠা 🌙' : 'ঘুম থেকে ওঠা')}
           </h3>
           <p className="text-xs text-slate-300 mt-1 italic">
-            "নতুন দিনে আপনাকে স্বাগতম, আপনার লক্ষ্যগুলো পূরণ হোক!"
+            {isSehri ? '"সেহরির বরকতময় খাবার গ্রহণ করে রোজা রাখার নিয়ত করুন!"' : '"নতুন দিনে আপনাকে স্বাগতম, আপনার লক্ষ্যগুলো পূরণ হোক!"'}
           </p>
         </div>
       </div>
@@ -286,7 +289,7 @@ export default function WakeUpAlarmModal() {
           className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-600 to-emerald-600 hover:from-emerald-600 hover:to-teal-700 active:scale-95 text-white font-black text-base md:text-lg shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer border border-emerald-400/30"
         >
           <Check className="w-6 h-6 stroke-[3]" />
-          <span>জেগে গেছি (অ্যালার্ম বন্ধ করুন)</span>
+          <span>{isSehri ? 'জেগে গেছি (সেহরি খাবো) 🤲' : 'জেগে গেছি (অ্যালার্ম বন্ধ করুন)'}</span>
         </button>
 
         {/* Secondary: 5 Minutes Snooze */}
