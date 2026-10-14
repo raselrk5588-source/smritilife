@@ -9,6 +9,7 @@ import AITrainingRule from '../models/AITrainingRule';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
+import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -1126,7 +1127,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
         // If user has not chosen an honorific yet, check if they sent a direct command or just a greeting
         if (!user.honorific && !buttonId) {
-          const isExplicitCommand = /ঘুম|ghum|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|উঠি|uthi|utha|uthe|uthai|তুলে|tule|তুলে দাও|তুলে দিও|ডেকে|deke|ডাকা|dake|ডাকবা|dakba|ডেকে দিও|ডেকে দাও|mnt|min|minute|মিনিট|ঘণ্টা|ghonta|ghanta|মনে|mone|রিমাইন্ডার|reminder|নোট|note|লিস্ট|list|বাজার|মিটিং|meeting|ওষুধ|medicine|উইশ|wish|কার্ড|card/i.test(cleanText);
+          const isExplicitCommand = /ঘুম|ghum|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|উঠি|uthi|utha|uthe|uthai|তুলে|tule|তুলে দাও|তুলে দিও|ডেকে|deke|ডাকা|dake|ডাকবা|dakba|ডেকে দিও|ডেকে দাও|mnt|min|minute|মিনিট|ঘণ্টা|ghonta|ghanta|মনে|mone|রিমাইন্ডার|reminder|নোট|note|লিস্ট|list|বাজার|মিটিং|meeting|ওষুধ|medicine|উইশ|wish|কার্ড|card|রমজান|romjan|ramadan|সেহরি|সাহরি|sehri|sahari|ইফতার|iftar/i.test(cleanText);
 
           if (!isExplicitCommand) {
             const onboardingPrompt = `আসসালামু আলাইকুম! স্মৃতি লাইফে (Smriti Life) আপনাকে স্বাগতম। 🌸\n\nআমি আপনার সার্বক্ষণিক এআই পার্সোনাল অ্যাসিস্ট্যান্ট। আমি আপনাকে কীভাবে সম্বোধন করব? অনুগ্রহ করে নিচের যেকোনো একটি সিলেক্ট করুন বা লিখে জানান:`;
@@ -1150,6 +1151,78 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             user.honorific = 'ভাই';
             await user.save();
           }
+        }
+
+        // --- STEP 2.8: Ramadan & Islamic Fast-Path (0 Cost, Instant Response) ---
+        // 1. District Setup / Update
+        const districtMatch = cleanText.match(/(?:আমার\s*জেলা|জেলা|district|location|লোকেশন|আমি\s*আছি|ami\s*achi|বাসা)\s*[:=]?\s*([a-zA-Z\u0980-\u09FF\s]+)/i);
+        if (districtMatch && districtMatch[1] && districtMatch[1].trim().length >= 3 && !/কখন|সময়|time|কবে|আজ|কাল/i.test(districtMatch[1])) {
+          const matchedD = matchDistrict(districtMatch[1].trim());
+          user.district = matchedD.nameEn;
+          await user.save();
+
+          const times = getRamadanTimes(matchedD.nameEn);
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `📍 আলহামদুলিল্লাহ! আপনার জেলা *${matchedD.nameBn}* সফলভাবে সেট করা হলো। 🌙\n\nআজকের সময়সূচি:\n⏰ সেহরি শেষ সময়: *${times.sehriFormatted}*\n🍽️ ইফতারের সময়: *${times.iftarFormatted}*\n\nস্মৃতি লাইফ প্রতিদিন আপনাকে সেহরি ও ইফতারের পূর্বে স্বয়ংক্রিয়ভাবে স্মরণ করিয়ে দেবে! 🤲`
+          );
+          return;
+        }
+
+        // 2. Iftar Time Query
+        const isIftarQuery = /(?:ইফতার|iftar)\s*(?:কখন|কবে|time|সময়|somoy|koytay|kobe|আজ|aj|আজকে|ajke)/i.test(cleanText) ||
+                             /(?:আজ|আজকে|aj|ajke)?\s*(?:ইফতারের\s*সময়|iftar\s*time|ইফতার\s*কখন)/i.test(cleanText);
+        if (isIftarQuery) {
+          const userDist = user.district || 'Dhaka';
+          const times = getRamadanTimes(userDist);
+
+          // Calculate remaining time
+          const now = new Date();
+          const currentDhakaTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false });
+          const [cH, cM] = currentDhakaTime.split(':').map(Number);
+          const [iH, iM] = times.iftar.split(':').map(Number);
+          const currentTotal = cH * 60 + cM;
+          const iftarTotal = iH * 60 + iM;
+          const diffMins = iftarTotal - currentTotal;
+
+          let countdownText = '';
+          if (diffMins > 0) {
+            const leftH = Math.floor(diffMins / 60);
+            const leftM = diffMins % 60;
+            countdownText = `\n⏳ ইফতারের বাকি: *${leftH > 0 ? `${leftH} ঘণ্টা ` : ''}${leftM} মিনিট*`;
+          } else if (diffMins >= -30) {
+            countdownText = `\n🎉 আলহামদুলিল্লাহ! ইফতারের সময় চলছে, দ্রুত ইফতার সম্পন্ন করুন!`;
+          }
+
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🌙 *আজকের ইফতারের সময়সূচি (${times.districtBn} জেলা):*\n\n🍽️ ইফতারের সময়: *${times.iftarFormatted}*${countdownText}\n\n🤲 *ইফতারের দোয়া:*\n"${RAMADAN_DUAS.iftarDua.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.iftarDua.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.iftarDua.meaning}"\n\n(জেলা পরিবর্তন করতে লিখুন: "আমার জেলা চট্টগ্রাম" বা আপনার জেলার নাম)`
+          );
+          return;
+        }
+
+        // 3. Sehri Time Query
+        const isSehriQuery = /(?:সেহরি|সাহরি|sehri|sahari)\s*(?:কখন|কবে|time|সময়|somoy|koytay|kobe|শেষ|sesh)/i.test(cleanText) ||
+                             /(?:সেহরির\s*সময়|sehri\s*time|সেহরি\s*কখন|সাহরি\s*কখন)/i.test(cleanText);
+        if (isSehriQuery && !cleanText.match(/তুলে|ডেকে|দেও|দাও|dio|daw|ডাকবা|উঠা|alarm|অ্যালার্ম/i)) {
+          const userDist = user.district || 'Dhaka';
+          const times = getRamadanTimes(userDist);
+
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🌙 *সেহরির সময়সূচি (${times.districtBn} জেলা):*\n\n⏰ সেহরি শেষ সময়: *${times.sehriFormatted}*\n🕌 ফজরের আজান: *${formatBanglaTime(times.fajr)}*\n\n🤲 *রোজার নিয়ত:*\n"${RAMADAN_DUAS.sehriNiyyat.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.sehriNiyyat.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.sehriNiyyat.meaning}"\n\n💡 সেহরিতে ওয়েক-আপ অ্যালার্ম দিতে বলুন: "প্রতিদিন সেহরিতে ডেকে দিও"`
+          );
+          return;
+        }
+
+        // 4. Ramadan Duas Query
+        const isDuaQuery = /(?:রোজার\s*নিয়ত|সেহরির\s*দোয়া|ইফতারের\s*দোয়া|রোজার\s*দোয়া|sehri\s*dua|iftar\s*dua)/i.test(cleanText);
+        if (isDuaQuery) {
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🤲 *পবিত্র রমজানের প্রয়োজনীয় দোয়াসমূহ:*\n\n1️⃣ *${RAMADAN_DUAS.sehriNiyyat.title}:*\n"${RAMADAN_DUAS.sehriNiyyat.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.sehriNiyyat.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.sehriNiyyat.meaning}"\n\n2️⃣ *${RAMADAN_DUAS.iftarDua.title}:*\n"${RAMADAN_DUAS.iftarDua.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.iftarDua.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.iftarDua.meaning}"\n\n3️⃣ *${RAMADAN_DUAS.iftarSunnahDua.title}:*\n"${RAMADAN_DUAS.iftarSunnahDua.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.iftarSunnahDua.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.iftarSunnahDua.meaning}"`
+          );
+          return;
         }
 
         // --- STEP 3: Regular AI Message & Audio Analysis ---

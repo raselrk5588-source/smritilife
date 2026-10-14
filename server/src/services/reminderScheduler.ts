@@ -5,6 +5,7 @@ import User from '../models/User';
 import { deliverWishCard } from './wishDeliveryService';
 import { formatTime12Hour } from './aiWhatsAppService';
 import { sendMetaWhatsAppButtons, userReminderState } from '../controllers/whatsappController';
+import { getRamadanTimes, RAMADAN_DUAS } from './ramadanService';
 
 export interface ActiveAlarmRinger {
   reminderId: string;
@@ -424,9 +425,120 @@ export const startReminderScheduler = () => {
     }
   };
 
+  // Automated Ramadan Sehri & Iftar Tracker for 64 Districts
+  const checkAndDispatchRamadanAlerts = async () => {
+    if (mongoose.connection.readyState !== 1) return;
+
+    try {
+      const now = new Date();
+      const dhakaTimeStr = now.toLocaleTimeString('en-GB', {
+        timeZone: 'Asia/Dhaka',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      }); // Format: "HH:mm"
+      const dhakaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }); // "YYYY-MM-DD"
+
+      const users = await User.find({
+        isSubscribed: true,
+        'ramadanAlerts.enabled': { $ne: false },
+        $or: [
+          { whatsapp: { $exists: true, $ne: '' } },
+          { mobile: { $exists: true, $ne: '' } }
+        ]
+      });
+
+      for (const u of users) {
+        const targetNumber = u.whatsapp || u.mobile;
+        if (!targetNumber) continue;
+
+        const district = u.district || 'Dhaka';
+        const times = getRamadanTimes(district, now);
+        const salutation = u.honorific || (u.name ? u.name.split(' ')[0] : 'সুপ্রিয় গ্রাহক');
+
+        // Helper: subtract minutes from "HH:mm"
+        const subMinutes = (timeStr: string, mins: number): string => {
+          const [h, m] = timeStr.split(':').map(Number);
+          const total = h * 60 + m - mins;
+          const normalized = ((total % 1440) + 1440) % 1440;
+          return `${Math.floor(normalized / 60).toString().padStart(2, '0')}:${(normalized % 60).toString().padStart(2, '0')}`;
+        };
+
+        const sehriMinsBefore = u.ramadanAlerts?.sehriMinutesBefore || 40;
+        const sehriAlarmTime = subMinutes(times.sehriEnd, sehriMinsBefore);
+        const iftarNoticeTime = subMinutes(times.iftar, 15);
+        const iftarExactTime = times.iftar;
+
+        // 1. Sehri Wake-up Multi-Ring Alarm
+        if (dhakaTimeStr === sehriAlarmTime && u.ramadanAlerts?.lastSehriAlertDate !== dhakaDateStr) {
+          await User.findByIdAndUpdate(u._id, { 'ramadanAlerts.lastSehriAlertDate': dhakaDateStr });
+
+          const sehriRem = await Reminder.create({
+            userId: u._id,
+            title: `সেহরির অ্যালার্ম (${times.districtBn} জেলা)`,
+            date: new Date(`${dhakaDateStr}T00:00:00.000Z`),
+            time: dhakaTimeStr,
+            priority: 'Urgent',
+            category: 'wakeup',
+            repeat: 'Daily',
+            status: 'Pending',
+            isAlarm: true
+          });
+
+          const alertBody = `🌙🔔⏰ আসসালামু আলাইকুম ${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৪)\n\n📍 আপনার জেলা: ${times.districtBn}\n⏳ সেহরি শেষ: ${times.sehriFormatted} (আর ${sehriMinsBefore} মিনিট বাকি)\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
+
+          const buttons = [
+            { id: `rem_done_${sehriRem._id}`, title: 'জেগে গেছি 🤲' },
+            { id: `rem_reschedule_${sehriRem._id}`, title: '৫ মিনিট স্নুজ 💤' }
+          ];
+
+          activeAlarmRingers.set(sehriRem._id.toString(), {
+            reminderId: sehriRem._id.toString(),
+            userId: u._id.toString(),
+            phone: targetNumber,
+            title: sehriRem.title,
+            isSehri: true,
+            ringCount: 1,
+            maxRings: 4,
+            nextRingAt: Date.now() + 60 * 1000
+          });
+
+          const sent = await sendMetaWhatsAppButtons(targetNumber, alertBody, buttons);
+          if (!sent) {
+            await sendWhatsAppAlert(targetNumber, `${alertBody}\n\n👉 ঘুম ভাঙলে লিখুন: "জেগে গেছি" বা "উঠেছি"`);
+          }
+          console.log(`🌙 [RamadanScheduler] Automated Sehri alarm dispatched to ${targetNumber} (${times.districtBn})`);
+        }
+
+        // 2. Iftar 15-Minute Preparation Notice & Dua
+        if (dhakaTimeStr === iftarNoticeTime && u.ramadanAlerts?.lastIftarNoticeDate !== dhakaDateStr) {
+          await User.findByIdAndUpdate(u._id, { 'ramadanAlerts.lastIftarNoticeDate': dhakaDateStr });
+
+          const iftarNoticeMsg = `🤲🌙 আসসালামু আলাইকুম ${salutation}!\nইফতারের আর মাত্র ১৫ মিনিট বাকি (${times.districtBn} জেলায় ${times.iftarFormatted} এ)।\n\nইফতারের প্রস্তুতি নিন এবং বেশি বেশি দোয়া ও ইস্তিগফার করুন। রাসূলুল্লাহ (সা.) বলেছেন: "ইফতারের সময় রোজাদারের দোয়া আল্লাহ কখনো ফিরিয়ে দেন না।"\n\n🍽️ ইফতারের দোয়া:\n"${RAMADAN_DUAS.iftarDua.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.iftarDua.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.iftarDua.meaning}"`;
+
+          await sendWhatsAppAlert(targetNumber, iftarNoticeMsg);
+          console.log(`🌙 [RamadanScheduler] Iftar 15-min notice dispatched to ${targetNumber} (${times.districtBn})`);
+        }
+
+        // 3. Exact Iftar Moment Alert
+        if (dhakaTimeStr === iftarExactTime && u.ramadanAlerts?.lastIftarAlertDate !== dhakaDateStr) {
+          await User.findByIdAndUpdate(u._id, { 'ramadanAlerts.lastIftarAlertDate': dhakaDateStr });
+
+          const iftarMomentMsg = `🔔🌙 মাগরিবের আজান হয়েছে! ইফতারের সময় হয়ে গেছে (${times.districtBn} জেলা)!\n\nসুন্নাহ অনুযায়ী দ্রুত খেজুর বা পানি দিয়ে ইফতার সম্পন্ন করুন।\n\n🤲 ইফতারের পরের সুন্নাহ দোয়া:\n"${RAMADAN_DUAS.iftarSunnahDua.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.iftarSunnahDua.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.iftarSunnahDua.meaning}"\n\nআল্লাহ আপনার আজকের সিয়াম কবুল করুন। আমিন! 🤲`;
+
+          await sendWhatsAppAlert(targetNumber, iftarMomentMsg);
+          console.log(`🌙 [RamadanScheduler] Exact Iftar moment alert dispatched to ${targetNumber} (${times.districtBn})`);
+        }
+      }
+    } catch (err) {
+      console.error('[RamadanScheduler] Error checking Ramadan alerts:', err);
+    }
+  };
+
   // Run on startup
   setTimeout(checkAndDispatchReminders, 5000);
   setTimeout(checkAndSendNightlyFollowUp, 15000);
+  setTimeout(checkAndDispatchRamadanAlerts, 10000);
 
   // Poll every 30 seconds for reminders
   setInterval(checkAndDispatchReminders, 30000);
@@ -434,4 +546,6 @@ export const startReminderScheduler = () => {
   setInterval(checkAndSendNightlyFollowUp, 120000);
   // Check active alarm ringers every 15 seconds
   setInterval(checkAndFireAlarmRingers, 15000);
+  // Check Ramadan Sehri & Iftar alerts every 30 seconds
+  setInterval(checkAndDispatchRamadanAlerts, 30000);
 };

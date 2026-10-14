@@ -19,6 +19,7 @@ import Paywall from './pages/Paywall';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import CompleteProfile from './pages/CompleteProfile';
+import Ramadan from './pages/Ramadan';
 
 function App() {
   return (
@@ -53,6 +54,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="today-tasks" element={<TodayTasks />} />
+          <Route path="ramadan" element={<Ramadan />} />
           <Route path="admin" element={<Profile />} /> {/* Re-mapped admin to Profile for the bottom nav link to work visually */}
         </Route>
 

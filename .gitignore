@@ -10,3 +10,9 @@ build/
 coverage/
 .vercel/
 vercel.json
+test-*.js
+server/test-*.js
+payload.json
+server/payload.json
+runs.json
+*.mp4

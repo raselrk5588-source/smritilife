@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate } from 'lucide-react';
+import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate, Moon } from 'lucide-react';
 import AIAssistantModal from '../components/AIAssistantModal';
 import WakeUpAlarmModal from '../components/WakeUpAlarmModal';
 import { Toaster } from 'react-hot-toast';
@@ -12,7 +12,7 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const userName = localStorage.getItem('userName') || "রিয়াদ";
-  const isMainTab = ['/app', '/app/', '/app/notes', '/app/reminders', '/app/wishes'].includes(location.pathname);
+  const isMainTab = ['/app', '/app/', '/app/notes', '/app/reminders', '/app/wishes', '/app/ramadan'].includes(location.pathname);
 
   useEffect(() => {
     if (!localStorage.getItem('isAuthenticated')) {
@@ -36,6 +36,7 @@ export default function MainLayout() {
     // Center is Voice Assistant (FAB)
     { path: '/app/reminders', icon: Bell, label: t('রিমাইন্ডার', 'Reminders') },
     { path: '/app/wishes', icon: Gift, label: t('বিশেষ দিন', 'Wishes') },
+    { path: '/app/ramadan', icon: Moon, label: t('রমজান', 'Ramadan') },
   ];
 
   return (
@@ -145,7 +146,15 @@ export default function MainLayout() {
                 Smriti<span className="text-[#0A7756]">Life</span>
               </span>
             </Link>
-            <div className="flex items-center space-x-2.5">
+            <div className="flex items-center space-x-2">
+              <Link 
+                to="/app/ramadan"
+                className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-emerald-900 to-teal-900 text-amber-300 border border-amber-400/40 shadow-xs active:scale-95 transition"
+                title={t('রমজান স্পেশাল', 'Ramadan Special')}
+              >
+                <Moon className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse" />
+                <span className="text-[11px] font-bold tracking-tight">রমজান</span>
+              </Link>
               <button 
                 onClick={() => navigate('/app/notifications')} 
                 className="w-8 h-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 relative active:scale-95 transition border border-slate-200/60 cursor-pointer"

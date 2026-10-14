@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical } from 'lucide-react';
+import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AIAssistantModal from '../components/AIAssistantModal';
@@ -226,6 +226,39 @@ export default function Home() {
 
       <div className="px-3 md:px-5 -mt-8 md:-mt-16 relative z-20 space-y-3 md:space-y-5">
         
+        {/* Ramadan Auto Tracker Special Banner */}
+        <Link 
+          to="/app/ramadan"
+          className="block relative overflow-hidden rounded-2xl md:rounded-3xl p-3.5 md:p-4 bg-gradient-to-r from-[#063828] via-[#0A543A] to-[#04281c] text-white shadow-lg shadow-emerald-950/20 border border-emerald-500/30 group hover:shadow-xl hover:scale-[1.01] transition-all duration-300"
+        >
+          <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-amber-400/10 rounded-full blur-xl pointer-events-none"></div>
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-br from-amber-400/20 to-emerald-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                <Moon className="w-5 h-5 md:w-6 md:h-6 text-amber-300 fill-amber-300 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-1.5 mb-0.5">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                    রমজান স্পেশাল
+                  </span>
+                  <span className="text-[10px] text-emerald-200 font-semibold hidden sm:inline">৬৪ জেলা</span>
+                </div>
+                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
+                  অটো সেহরি ও ইফতার ট্র্যাকার
+                </h4>
+                <p className="text-[10px] md:text-xs text-emerald-200/80 font-medium line-clamp-1">
+                  স্বয়ংক্রিয় সেহরি অ্যালার্ম ও ইফতার নোটিশ চালু করুন
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1 text-amber-300 text-xs font-bold pl-2 shrink-0">
+              <span className="hidden sm:inline">সময় দেখুন</span>
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </Link>
+
         {/* Quick Access Pills Grid */}
         <div className="grid grid-cols-4 gap-1.5 md:gap-2">
           <Link to="/app/notes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
