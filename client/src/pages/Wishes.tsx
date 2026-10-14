@@ -246,19 +246,22 @@ export default function Wishes() {
   };
 
   const handleSaveWish = async (type: 'send' | 'schedule', isLink: boolean = false) => {
-    if (!scheduleContact) {
+    if (!scheduleContact || !scheduleContact.trim()) {
       toast.error(t('দয়া করে ফোন নম্বর দিন', 'Please enter recipient phone number'));
       return;
     }
 
-    if (type === 'schedule' && (!scheduleDate || !scheduleTime)) {
-      toast.error(t('দয়া করে তারিখ ও সময় দিন', 'Please enter date and time'));
-      return;
-    }
-
     let schedDate = new Date();
-    if (type === 'schedule' && scheduleDate && scheduleTime) {
+    if (type === 'schedule') {
+      if (!scheduleDate || !scheduleTime) {
+        toast.error(t('দয়া করে তারিখ ও সময় দিন', 'Please enter date and time'));
+        return;
+      }
       schedDate = new Date(`${scheduleDate}T${scheduleTime}:00`);
+      if (isNaN(schedDate.getTime())) {
+        toast.error(t('সঠিক তারিখ ও সময় নির্বাচন করুন', 'Please select a valid date and time'));
+        return;
+      }
     }
 
     try {
@@ -274,7 +277,7 @@ export default function Wishes() {
 
         const cardPayload = {
           recipientName: `${recipientPrefix} ${recipient}`.trim() || 'Unknown',
-          recipientContact: scheduleContact,
+          recipientContact: scheduleContact.trim(),
           occasion: occasionKey,
           message: cardMessage.trim(), // Keep card message clean without raw link
           scheduledAt: schedDate.toISOString(),
@@ -300,7 +303,8 @@ export default function Wishes() {
             body: JSON.stringify(cardPayload)
           });
           if (!updateRes.ok) {
-            throw new Error('Failed to update wish');
+            const errData = await updateRes.json().catch(() => ({}));
+            throw new Error(errData.message || 'Failed to update wish');
           }
         } else {
           // Create the full smart card wish directly
@@ -310,7 +314,8 @@ export default function Wishes() {
             body: JSON.stringify(cardPayload)
           });
           if (!createRes.ok) {
-            throw new Error('Failed to create wish');
+            const errData = await createRes.json().catch(() => ({}));
+            throw new Error(errData.message || 'Failed to create wish');
           }
           const createdData = await createRes.json();
           setCreatedWishId(createdData._id);
@@ -319,26 +324,35 @@ export default function Wishes() {
       } else {
         // Standard Text/Voice Wish Flow
         let msg = generatedWish ? `${generatedWish.title}\n\n${generatedWish.body.join('\n')}` : '';
+        if (!msg.trim()) {
+          toast.error(t('দয়া করে উইশ বার্তা লিখুন বা তৈরি করুন', 'Please generate or enter wish message'));
+          return;
+        }
+
         const createRes = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wishes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             recipientName: recipient || 'Unknown',
-            recipientContact: scheduleContact,
+            recipientContact: scheduleContact.trim(),
             occasion: selectedOccasion || 'other',
-            message: msg,
+            message: msg.trim(),
             scheduledAt: schedDate.toISOString(),
             deliveryMethod: [scheduleMethod === 'sms' ? 'SMS' : 'WhatsApp'],
             status: type === 'send' ? 'Processing' : 'Scheduled'
           })
         });
         if (!createRes.ok) {
-          throw new Error('Failed to create wish');
+          const errData = await createRes.json().catch(() => ({}));
+          throw new Error(errData.message || 'Failed to create wish');
         }
       }
 
       setSuccessPopup({ show: true, type });
       setShowScheduleForm(false);
+      setScheduleContact('');
+      setScheduleDate('');
+      setScheduleTime('');
       fetchWishes();
     } catch (e: any) {
       console.error(e);

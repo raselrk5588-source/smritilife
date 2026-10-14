@@ -45,19 +45,24 @@ export const createWish = async (req: Request, res: Response) => {
       smartCardId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     }
 
+    let parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : new Date();
+    if (isNaN(parsedScheduledAt.getTime())) {
+      parsedScheduledAt = new Date();
+    }
+
     const wish = new Wish({
       userId: req.user?.id,
-      contactId,
-      recipientName,
+      contactId: contactId && mongoose.Types.ObjectId.isValid(contactId) ? contactId : undefined,
+      recipientName: recipientName || 'প্রিয়জন',
       recipientContact,
-      templateId,
-      occasion,
-      message,
+      templateId: templateId && mongoose.Types.ObjectId.isValid(templateId) ? templateId : undefined,
+      occasion: occasion || 'other',
+      message: message || 'শুভকামনা!',
       cardData,
-      scheduledAt,
-      deliveryMethod,
-      status,
-      isSmartCard,
+      scheduledAt: parsedScheduledAt,
+      deliveryMethod: deliveryMethod && deliveryMethod.length ? deliveryMethod : ['WhatsApp'],
+      status: status || 'Scheduled',
+      isSmartCard: !!isSmartCard,
       smartCardId
     });
     const savedWish = await wish.save();
@@ -68,7 +73,11 @@ export const createWish = async (req: Request, res: Response) => {
         const user = await User.findById(req.user?.id);
         const senderName = cardData?.senderName || user?.name || 'আপনার শুভাকাঙ্ক্ষী';
         const senderWhatsApp = user?.whatsapp || user?.mobile;
-        deliverWishCard(savedWish, senderName, senderWhatsApp).catch(err => {
+        deliverWishCard(savedWish, senderName, senderWhatsApp).then(async (success) => {
+          if (success) {
+            await Wish.findByIdAndUpdate(savedWish._id, { status: 'Sent' });
+          }
+        }).catch(err => {
           console.error('[WishController] Instant wish delivery error:', err);
         });
       } catch (err) {
@@ -84,9 +93,25 @@ export const createWish = async (req: Request, res: Response) => {
 
 export const updateWish = async (req: Request, res: Response) => {
   try {
+    const updateData = { ...req.body };
+    if (!updateData.contactId || !mongoose.Types.ObjectId.isValid(updateData.contactId)) {
+      delete updateData.contactId;
+    }
+    if (!updateData.templateId || !mongoose.Types.ObjectId.isValid(updateData.templateId)) {
+      delete updateData.templateId;
+    }
+    if (updateData.scheduledAt) {
+      const parsed = new Date(updateData.scheduledAt);
+      if (!isNaN(parsed.getTime())) {
+        updateData.scheduledAt = parsed;
+      } else {
+        delete updateData.scheduledAt;
+      }
+    }
+
     const updatedWish = await Wish.findOneAndUpdate(
       { _id: req.params.id, userId: req.user?.id },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!updatedWish) return res.status(404).json({ message: 'Wish not found' });
@@ -97,7 +122,11 @@ export const updateWish = async (req: Request, res: Response) => {
         const user = await User.findById(req.user?.id);
         const senderName = updatedWish.cardData?.senderName || user?.name || 'আপনার শুভাকাঙ্ক্ষী';
         const senderWhatsApp = user?.whatsapp || user?.mobile;
-        deliverWishCard(updatedWish, senderName, senderWhatsApp).catch(err => {
+        deliverWishCard(updatedWish, senderName, senderWhatsApp).then(async (success) => {
+          if (success) {
+            await Wish.findByIdAndUpdate(updatedWish._id, { status: 'Sent' });
+          }
+        }).catch(err => {
           console.error('[WishController] Instant wish delivery error after update:', err);
         });
       } catch (err) {

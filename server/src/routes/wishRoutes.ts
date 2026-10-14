@@ -5,6 +5,7 @@ const router = express.Router();
 
 router.get('/', getWishes);
 router.post('/', createWish);
+router.put('/:id', updateWish);
 router.patch('/:id', updateWish);
 router.delete('/:id', deleteWish);
 
