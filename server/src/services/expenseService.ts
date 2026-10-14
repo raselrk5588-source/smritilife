@@ -182,7 +182,7 @@ export interface ExtractedDateInfo {
  */
 export const parseExpenseDate = (text: string, referenceDate: Date = new Date()): ExtractedDateInfo | null => {
   const dhakaStr = referenceDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
-  const [refYear, refMonth] = dhakaStr.split('-').map(Number);
+  const [refYear, refMonth, refDay] = dhakaStr.split('-').map(Number);
   const clean = text.trim();
 
   const makeDhakaDate = (y: number, m: number, d: number) => {
@@ -358,7 +358,7 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
   if (dateOnlyMatch) {
     const day = parseInt(bnToEnDigits(dateOnlyMatch[1]), 10);
     if (day >= 1 && day <= 31) {
-      const cleaned = clean.replace(dateOnlyMatch[0], '').trim();
+      const cleaned = clean.replace(dateOnlyMatch[0], ' ').trim();
       return {
         dayDate: {
           date: makeDhakaDate(refYear, refMonth, day),
@@ -368,6 +368,20 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
         cleanedText: cleaned
       };
     }
+  }
+
+  // 10. Today keywords explicitly: "আজ", "আজকে", "aj", "ajke", "ajker", "aaj", "aajke", "today"
+  const todayRegex = /(?:^|\s)(?:আজকের?|আজকে?|ajker?|ajke?|aajker?|aajke?|\baj\b|\baaj\b|today)(?:[^\w\u0980-\u09FF]|$)/i;
+  if (todayRegex.test(clean)) {
+    const cleaned = clean.replace(todayRegex, ' ').trim();
+    return {
+      dayDate: {
+        date: makeDhakaDate(refYear, refMonth, refDay),
+        dateLabelBn: 'আজকের',
+        isSpecificDate: false
+      },
+      cleanedText: cleaned
+    };
   }
 
   return null;
@@ -395,9 +409,12 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   const dateInfo = parseExpenseDate(clean, referenceDate);
   const textWithoutDate = dateInfo?.cleanedText !== undefined ? dateInfo.cleanedText : clean;
 
-  const isQueryPhrase = /(?:খরচ|khoroc|khoros|হিসাব|expense)\s*(?:কত|koto|koro|ছিল|chilo|hoyeche|হয়েছে|হলো|holo|dekhao|দেখা|লিস্ট|দাও|daw)?/i.test(textWithoutDate) ||
-    /^(?:খরচ|khoroc|khoros|হিসাব|expense)$/i.test(textWithoutDate) ||
-    /^(?:কত|koto|koro)\s*(?:খরচ|khoroc|khoros)/i.test(textWithoutDate);
+  // Check if text is an expense query
+  const hasExpenseWord = /(?:খরচ|খরচের|khoroc|khoros|expense|expenses|হিসাব|hisab)/i.test(clean);
+  const hasQueryWord = /(?:কত|koto|koro|মোট|mot|total|হয়েছে|হলো|holo|hoyeche|hoise|ছিল|chilo|দেখা|দেখাও|dekha|dekhao|লিস্ট|list|দাও|daw|dao|বলো|bolo|summary)/i.test(clean);
+  const isDirectExpensePhrase = /^(?:আজকের|আজকে|আজ|aj|ajke|ajker|গতকাল|গতকালের|কালকের|gotokal|এই\s*মাসের|মাসের|চলতি\s*মাসের|last\s*month)?\s*(?:খরচ|khoroc|khoros|হিসাব|expense)\s*\??$/i.test(clean);
+
+  const isQuery = (hasExpenseWord && (hasQueryWord || clean.endsWith('?'))) || isDirectExpensePhrase;
 
   // 1. Month Query (e.g. "গত মাসের খরচ কত", "সেপ্টেম্বর মাসের খরচ", "এই মাসের খরচ")
   if (dateInfo?.monthDate) {
@@ -409,7 +426,7 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   }
 
   if (
-    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|month|monthly|maser)\s*(?:খরচ|khoroc|khoros|হিসাব)\s*(?:কত|koto|dekhao|দেখা|লিস্ট|দাও|daw)?/i.test(clean) ||
+    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|month|monthly|maser|last\s*month)\s*(?:খরচ|khoroc|khoros|হিসাব)/i.test(clean) ||
     /^(?:মাসের\s*খরচ|এই\s*মাসের\s*খরচ|মাসের\s*হিসাব)$/i.test(clean)
   ) {
     return {
@@ -419,7 +436,7 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   }
 
   // 2. Specific Date / Yesterday / Day before yesterday Query
-  if (dateInfo?.dayDate && isQueryPhrase) {
+  if (isQuery && dateInfo?.dayDate && dateInfo.dayDate.isSpecificDate) {
     return {
       isQuery: true,
       queryType: 'daily',
@@ -428,15 +445,13 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
     };
   }
 
-  // 3. Today Query
-  if (
-    /(?:আজকের|আজকে|আজ|ajke|aj|ajker)\s*(?:খরচ|khoroc|khoros|হিসাব|খরচের\s*হিসাব)\s*(?:কত|koto|dekhao|দেখা|লিস্ট|দাও|daw)?/i.test(clean) ||
-    /^(?:আজকের\s*খরচ|খরচ\s*কত|আজকের\s*হিসাব)$/i.test(clean)
-  ) {
+  // 3. General or Today Query (e.g. "Aj mot koto khoros hoyeche?", "aj koto khoroc", "mot khoros koto", "খরচ কত")
+  if (isQuery) {
     return {
       isQuery: true,
       queryType: 'daily',
-      dateLabelBn: 'আজকের'
+      targetDate: dateInfo?.dayDate?.date,
+      dateLabelBn: dateInfo?.dayDate?.dateLabelBn || 'আজকের'
     };
   }
 

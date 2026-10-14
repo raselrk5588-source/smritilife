@@ -1557,6 +1557,16 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             if (aiResponse.data) {
               const cleanTitle = (aiResponse.data.title || 'নতুন রিমাইন্ডার').trim();
               const customMsg = aiResponse.data.customMessage || aiResponse.data.description || '';
+
+              // Safety Guard: If title or user message mentions expense/khoroc and no wake-up/alarm command, treat as expense query
+              if (/(?:খরচ|khoroc|khoros|expense)/i.test(cleanTitle + ' ' + userMessage) && !/মনে|ডাক|তুলে|alarm|wake/i.test(userMessage)) {
+                console.log(`[SafetyGuard] Redirecting misclassified expense query away from create_reminder: "${userMessage}"`);
+                const summary = await getExpenseSummaryForDate(user._id, new Date(), 'আজকের');
+                const reply = buildDailyExpenseQueryMessage(summary.dateExpenses, summary.dateTotal, summary.monthTotal, 'আজকের');
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+                break;
+              }
+
               const sendNow = !!aiResponse.data.sendNow;
               const reminderDate = new Date(aiResponse.data.date || new Date());
               let reminderTime = aiResponse.data.time || '10:00';
