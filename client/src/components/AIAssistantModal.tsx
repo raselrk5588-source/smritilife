@@ -105,7 +105,7 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
     toast.loading('সংরক্ষণ করা হচ্ছে...', { id: 'save' });
     try {
       let url = `${import.meta.env.VITE_API_URL}/reminders`;
-      const isWakeup = /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(parsedText) || parsedData.category === 'wakeup';
+      const isWakeup = /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|তুলে|ডেকে|ঘুম ভাঙা|ঘুম ভাঙ্গানি|nap|বিশ্রাম|rest/i.test(parsedText) || parsedData.category === 'wakeup' || parsedData.isAlarm;
       let body: any = { 
         title: parsedText, 
         date: parsedData.date || new Date().toISOString(), 
