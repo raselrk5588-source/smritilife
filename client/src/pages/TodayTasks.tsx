@@ -1,4 +1,5 @@
-import { ArrowLeft, Calendar, FileText, Bell, Gift, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Calendar, FileText, Bell, Gift, Plus, AlarmClock, MessageSquare } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchWithAuth } from '../utils/api';
@@ -43,46 +44,54 @@ export default function TodayTasks() {
         
         if (notesRes.ok) {
           const notes = await notesRes.json();
-          const todayNotes = notes.filter((n: any) => {
-            const date = new Date(n.createdAt);
-            return date >= startOfToday && date <= endOfToday;
-          });
-          
-          allTasks = [...allTasks, ...todayNotes.map((n: any) => ({
-            id: `note_${n._id}`,
-            type: 'note',
-            title: n.title,
-            time: new Date(n.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            desc: n.content.replace(/<[^>]+>/g, '').substring(0, 50) + (n.content.length > 50 ? '...' : ''),
-            color: 'emerald',
-            createdAt: new Date(n.createdAt)
-          }))];
+          if (Array.isArray(notes)) {
+            const todayNotes = notes.filter((n: any) => {
+              const date = n.createdAt ? new Date(n.createdAt) : null;
+              return date && date >= startOfToday && date <= endOfToday;
+            });
+            
+            allTasks = [...allTasks, ...todayNotes.map((n: any) => ({
+              id: `note_${n._id}`,
+              type: 'note',
+              title: n.title,
+              time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+              desc: (n.content || '').replace(/<[^>]+>/g, '').substring(0, 60) + ((n.content || '').length > 60 ? '...' : ''),
+              color: 'emerald',
+              createdAt: n.createdAt ? new Date(n.createdAt) : new Date()
+            }))];
+          }
         }
 
         if (remindersRes.ok) {
           const reminders = await remindersRes.json();
-          const todayReminders = reminders.filter((r: any) => {
-            const date = new Date(r.date);
-            return date >= startOfToday && date <= endOfToday;
-          });
-          
-          allTasks = [...allTasks, ...todayReminders.map((r: any) => ({
-            id: `rem_${r._id}`,
-            type: 'reminder',
-            title: r.title,
-            time: format12h(r.time),
-            recipientPhone: r.recipientPhone,
-            desc: r.recipientPhone ? `প্রাপক: ${r.recipientPhone} • ${r.description || ''}` : (r.description || 'রিমাইন্ডার'),
-            color: 'orange',
-            createdAt: new Date(r.createdAt || r.date)
-          }))];
+          if (Array.isArray(reminders)) {
+            const todayReminders = reminders.filter((r: any) => {
+              const date = r.date ? new Date(r.date) : null;
+              return date && date >= startOfToday && date <= endOfToday;
+            });
+            
+            allTasks = [...allTasks, ...todayReminders.map((r: any) => {
+              const isAlarm = r.category === 'wakeup' || r.category === 'alarm' || r.isAlarm;
+              return {
+                id: `rem_${r._id}`,
+                type: 'reminder',
+                isAlarm,
+                title: r.title,
+                time: format12h(r.time),
+                recipientPhone: r.recipientPhone,
+                desc: r.recipientPhone ? `প্রাপক: ${r.recipientPhone} • ${r.description || ''}` : (r.description || (isAlarm ? 'ওয়েক-আপ অ্যালার্ম' : 'রিমাইন্ডার')),
+                color: isAlarm ? 'amber' : 'orange',
+                createdAt: r.createdAt ? new Date(r.createdAt) : (r.date ? new Date(r.date) : new Date())
+              };
+            })];
+          }
         }
 
         // Sort by creation/target time
         allTasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         setTasks(allTasks);
       } catch (e) {
-        console.error(e);
+        console.error('Error fetching today tasks:', e);
       } finally {
         setLoading(false);
       }
@@ -165,32 +174,40 @@ export default function TodayTasks() {
           }
           return (
             <div className="space-y-3 md:space-y-4">
-              {displayedTasks.map((task) => (
-                <div key={task.id} className={`bg-white p-4 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border border-${task.color}-100 flex items-start cursor-pointer hover:shadow-md transition group`}>
-                  <div className={`w-10 h-10 md:w-12 md:h-12 bg-${task.color}-50 text-${task.color}-500 rounded-full flex items-center justify-center mr-4 shrink-0 group-hover:bg-${task.color}-100 transition`}>
-                    {task.type === 'note' && <FileText className="w-5 h-5 md:w-6 md:h-6" />}
-                    {task.type === 'reminder' && <Bell className="w-5 h-5 md:w-6 md:h-6" />}
-                    {task.type === 'wish' && <Gift className="w-5 h-5 md:w-6 md:h-6" />}
-                  </div>
-                
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <div className="flex justify-between items-start mb-1">
-                    <h3 className="text-sm md:text-base font-bold text-slate-800 truncate pr-2">{task.title}</h3>
-                    <span className={`text-[10px] md:text-xs font-bold text-${task.color}-600 bg-${task.color}-50 px-2 py-0.5 rounded-full shrink-0`}>
-                      {task.time}
-                    </span>
-                  </div>
-                  <p className="text-xs md:text-sm text-slate-500 font-medium truncate mb-2">{task.desc}</p>
-                  <div className="flex items-center text-[9px] md:text-[11px] font-bold text-slate-400">
-                    <span className="uppercase tracking-wider">
-                      {task.type === 'note' && t('নোট', 'Note')}
-                      {task.type === 'reminder' && t('রিমাইন্ডার', 'Reminder')}
-                      {task.type === 'wish' && t('উইশ', 'Wish')}
-                    </span>
+              {displayedTasks.map((task) => {
+                const isEmerald = task.color === 'emerald';
+                const isAmber = task.color === 'amber';
+                const cardBorder = isEmerald ? 'border-emerald-100' : isAmber ? 'border-amber-100' : 'border-orange-100';
+                const iconBg = isEmerald ? 'bg-emerald-50 text-emerald-500 group-hover:bg-emerald-100' : isAmber ? 'bg-amber-50 text-amber-500 group-hover:bg-amber-100' : 'bg-orange-50 text-orange-500 group-hover:bg-orange-100';
+                const badgeStyle = isEmerald ? 'text-emerald-600 bg-emerald-50' : isAmber ? 'text-amber-600 bg-amber-50' : 'text-orange-600 bg-orange-50';
+
+                return (
+                  <div key={task.id} className={`bg-white p-4 md:p-5 rounded-2xl md:rounded-3xl shadow-sm border ${cardBorder} flex items-start cursor-pointer hover:shadow-md transition group`}>
+                    <div className={`w-10 h-10 md:w-12 md:h-12 ${iconBg} rounded-full flex items-center justify-center mr-4 shrink-0 transition`}>
+                      {task.type === 'note' && <FileText className="w-5 h-5 md:w-6 md:h-6" />}
+                      {task.type === 'reminder' && (task.isAlarm ? <AlarmClock className="w-5 h-5 md:w-6 md:h-6" /> : <Bell className="w-5 h-5 md:w-6 md:h-6" />)}
+                      {task.type === 'wish' && <Gift className="w-5 h-5 md:w-6 md:h-6" />}
+                    </div>
+                  
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <div className="flex justify-between items-start mb-1">
+                      <h3 className="text-sm md:text-base font-bold text-slate-800 truncate pr-2">{task.title}</h3>
+                      <span className={`text-[10px] md:text-xs font-bold ${badgeStyle} px-2 py-0.5 rounded-full shrink-0`}>
+                        {task.time}
+                      </span>
+                    </div>
+                    <p className="text-xs md:text-sm text-slate-500 font-medium truncate mb-2">{task.desc}</p>
+                    <div className="flex items-center text-[9px] md:text-[11px] font-bold text-slate-400">
+                      <span className="uppercase tracking-wider">
+                        {task.type === 'note' && t('নোট', 'Note')}
+                        {task.type === 'reminder' && (task.isAlarm ? t('⏰ ওয়েক-আপ অ্যালার্ম', 'Wake-up Alarm') : t('রিমাইন্ডার', 'Reminder'))}
+                        {task.type === 'wish' && t('উইশ', 'Wish')}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       })()}
