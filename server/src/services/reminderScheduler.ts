@@ -186,11 +186,23 @@ export const startReminderScheduler = () => {
               const catText = catLabel ? `\n🏷️ ক্যাটাগরি: ${catLabel}` : '';
               const salutation = user?.honorific ? ` ${user.honorific}` : (user?.name ? ` ${user.name.split(' ')[0]}` : '');
               
+              // Contextual time-of-day greeting for wake-up alarms (Morning vs Afternoon nap vs Evening rest)
+              const getWakeupGreeting = (tStr: string) => {
+                const [hStr] = (tStr || '08:00').split(':');
+                const h = parseInt(hStr, 10);
+                if (h >= 4 && h < 6) return `🌸 শুভ ভোর${salutation}! ভোরের আলো ফুটেছে, ঘুম থেকে উঠুন!`;
+                if (h >= 6 && h < 12) return `☀️ শুভ সকাল${salutation}! নতুন দিন শুরু করার জন্য ঘুম থেকে উঠুন!`;
+                if (h >= 12 && h < 16) return `☕ আসসালামু আলাইকুম${salutation}! দুপুরের বিশ্রামের সময় শেষ, ঘুম থেকে উঠুন!`;
+                if (h >= 16 && h < 19) return `🌅 শুভ বিকাল${salutation}! বিকালের বিশ্রামের সময় শেষ, ঘুম থেকে উঠুন!`;
+                return `⏰ আসসালামু আলাইকুম${salutation}! আপনার নির্ধারিত বিশ্রামের সময় শেষ হয়েছে, ঘুম থেকে উঠুন!`;
+              };
+
               let alertBody = '';
               if (isSehri) {
                 alertBody = `🌙🔔⏰ আসসালামু আলাইকুম${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৩)\n\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
               } else if (isWakeup) {
-                alertBody = `⏰🔔⏰ শুভ সকাল${salutation}! ঘুম থেকে উঠুন! (রিং ১/৩)\n\nএটি আপনার স্মৃতি ওয়েক-আপ অ্যালার্ম:\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`;
+                const greetingText = getWakeupGreeting(reminder.time);
+                alertBody = `⏰🔔⏰ ${greetingText} (রিং ১/৩)\n\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`;
               } else {
                 alertBody = `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
               }

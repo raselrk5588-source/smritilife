@@ -860,10 +860,18 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               `🤲 মাশাআল্লাহ${salutation}! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। 🌙`
             );
           } else if (reminder?.category === 'wakeup' || reminder?.isAlarm) {
-            await sendMetaWhatsAppMessage(
-              fromNumber,
-              `☀️ শুভ সকাল${salutation}! আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো। দিনটি আপনার জন্য সফল ও আনন্দময় হোক!`
-            );
+            const dhakaH = parseInt(new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', hour12: false }), 10);
+            let ackMsg = `☀️ শুভ সকাল${salutation}! আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো। দিনটি সফল ও সুন্দর হোক!`;
+            if (dhakaH >= 12 && dhakaH < 16) {
+              ackMsg = `☕ আপনার দুপুরের বিশ্রামের সংকেত নিশ্চিত করা হলো${salutation}! বাকি দিনটি সুন্দর ও কর্মচঞ্চল কাটুক!`;
+            } else if (dhakaH >= 16 && dhakaH < 19) {
+              ackMsg = `🌅 শুভ বিকাল${salutation}! আপনার বিশ্রামের সংকেত নিশ্চিত করা হলো। আনন্দময় সন্ধ্যা কাটুক!`;
+            } else if (dhakaH >= 19 || dhakaH < 4) {
+              ackMsg = `🌙 আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো${salutation}! আপনার রাতের সময় শুভ হোক!`;
+            } else if (dhakaH >= 4 && dhakaH < 6) {
+              ackMsg = `🌸 শুভ ভোর${salutation}! আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো। দিনটি বরকতময় হোক!`;
+            }
+            await sendMetaWhatsAppMessage(fromNumber, ackMsg);
           } else {
             await sendMetaWhatsAppMessage(
               fromNumber,
