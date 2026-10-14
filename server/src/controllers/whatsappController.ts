@@ -100,31 +100,49 @@ export const sendMetaWhatsAppButtons = async (
 /**
  * Helper to detect user honorific/salutation choice in Bengali or English
  */
-export const extractHonorificChoice = (text: string): string | null => {
+export const extractHonorificChoice = (text: string, isAlreadySet: boolean = false): string | null => {
   if (!text) return null;
   const clean = text.trim();
   const cmdMatch = clean.match(/^(?:\/title|\/honorific|\/callme|\/সম্বোধন)\s+(.+)$/i);
   const target = (cmdMatch ? cmdMatch[1] : clean).trim().toLowerCase();
 
-  const phraseMatch = target.match(/(?:আমাকে\s+(?:এখন\s+থেকে\s+)?|আমায়\s+)?(চিফ|chief|স্যার|sir|বস|boss|ভাই|ভাইয়া|bhai|bhaiya|আপু|আপি|apu|api|ম্যাডাম|madam)(?:\s*(?:বলে|হিসেবে))?\s*(?:ডাকবেন|সম্বোধন\s*করবেন|বলবেন|ডাকো|বলো)?/i);
-  const exactMatch = target.match(/^(?:চিফ|chief|স্যার|sir|বস|boss|ভাই|ভাইয়া|bhai|bhaiya|আপু|আপি|apu|api|ম্যাডাম|madam)[\s🎖️👔👑❤️]*$/i);
-
-  let raw = '';
-  if (exactMatch) {
-    raw = exactMatch[0];
-  } else if (phraseMatch && (phraseMatch[0].length >= target.length * 0.7 || phraseMatch[0].includes('ডাক') || phraseMatch[0].includes('সম্বোধন') || phraseMatch[0].includes('বলবেন') || phraseMatch[0].includes('ডাকো') || phraseMatch[0].includes('বলো') || cmdMatch)) {
-    raw = phraseMatch[1];
+  // 1. Explicit title instruction/phrase:
+  // e.g. "আমাকে ভাই ডাকবেন", "আমাকে স্যার বলবেন", "এখন থেকে বস বলবেন", "ভাই বলে ডাকো", "vai bolben"
+  const phraseMatch = target.match(/(?:(?:আমাকে|আমায়|এখন\s*থেকে)\s+)?(চিফ|chief|chife|cheif|স্যার|sir|shir|স্যর|সার|বস|boss|bos|ভাই|ভাইয়া|ভায়া|ভাইরে|ভাইজান|vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|bro|brother|আপু|আপি|আপা|আপ্পি|apu|api|apa|apuu|appu|sis|sister|ম্যাডাম|মেডাম|madam|ma'am|mam|medam)(?:\s*(?:বলে|হিসেবে))?\s*(?:ডাকবেন|সম্বোধন\s*করবেন|বলবেন|ডাকো|বলো|ডাকিস|বলিস|বলবা|ডাকবা)/i);
+  if (phraseMatch || cmdMatch) {
+    const raw = (phraseMatch ? phraseMatch[1] : target).toLowerCase();
+    if (/চিফ|chief|chife|cheif/.test(raw)) return 'চিফ';
+    if (/স্যার|sir|shir|স্যর|সার/.test(raw)) return 'স্যার';
+    if (/বস|boss|bos/.test(raw)) return 'বস';
+    if (/ভাই|ভাইয়া|ভায়া|vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bro|brother/.test(raw)) return 'ভাই';
+    if (/আপু|আপি|আপা|apu|api|apa|sis|sister/.test(raw)) return 'আপু';
+    if (/ম্যাডাম|madam|ma'am|mam/.test(raw)) return 'ম্যাডাম';
   }
 
-  if (raw) {
-    const l = raw.toLowerCase();
-    if (l.includes('চিফ') || l.includes('chief')) return 'চিফ';
-    if (l.includes('স্যার') || l.includes('sir')) return 'স্যার';
-    if (l.includes('বস') || l.includes('boss')) return 'বস';
-    if (l.includes('ভাই') || l.includes('bhai')) return 'ভাই';
-    if (l.includes('আপু') || l.includes('আপি') || l.includes('apu') || l.includes('api')) return 'আপু';
-    if (l.includes('ম্যাডাম') || l.includes('madam')) return 'ম্যাডাম';
+  // 2. Exact single title match (stripped of punctuation/emojis/spaces)
+  // e.g. "vai", "vaia", "ভাই", "sir", "chief", "chife", "boss", "apu"
+  const exactSingle = target.replace(/[।.,!?🎖️👔👑❤️🌸✨🤝\s]/g, '');
+  if (/^(?:চিফ|chief|chife|cheif)$/i.test(exactSingle)) return 'চিফ';
+  if (/^(?:স্যার|স্যর|সার|sir|shir)$/i.test(exactSingle)) return 'স্যার';
+  if (/^(?:বস|boss|bos)$/i.test(exactSingle)) return 'বস';
+  if (/^(?:ভাই|ভাইয়া|ভায়া|ভাইরে|ভাইজান|vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|bro|brother)$/i.test(exactSingle)) return 'ভাই';
+  if (/^(?:আপু|আপি|আপা|আপ্পি|apu|api|apa|apuu|appu|sis|sister)$/i.test(exactSingle)) return 'আপু';
+  if (/^(?:ম্যাডাম|মেডাম|madam|ma'am|mam|medam)$/i.test(exactSingle)) return 'ম্যাডাম';
+
+  // 3. During initial onboarding (!isAlreadySet), accept natural phrases like:
+  // "vai bolchi", "vai bolbo", "vaiya bolben", "chife dakben", "sir dako"
+  if (!isAlreadySet) {
+    const notAction = !/\b(?:reminder|রিমাইন্ডার|ওষুধ|মিটিং|meeting|note|নোট|wish|উইশ|card|কার্ড|todo|টুডু)\b/i.test(target);
+    if (notAction) {
+      if (/\b(?:vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|ভাই|ভাইয়া|ভায়া|ভাইরে)\b/i.test(target)) return 'ভাই';
+      if (/\b(?:apu|api|apa|আপু|আপি|আপা)\b/i.test(target)) return 'আপু';
+      if (/\b(?:চিফ|chief|chife|cheif)\b/i.test(target)) return 'চিফ';
+      if (/\b(?:স্যার|স্যর|সার|sir|shir)\b/i.test(target)) return 'স্যার';
+      if (/\b(?:বস|boss|bos)\b/i.test(target)) return 'বস';
+      if (/\b(?:ম্যাডাম|মেডাম|madam|ma'am|mam)\b/i.test(target)) return 'ম্যাডাম';
+    }
   }
+
   return null;
 };
 
@@ -791,7 +809,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // --- STEP 1.5: Handle User Honorific/Salutation (Selection or Onboarding) ---
-        const selectedTitle = extractHonorificChoice(cleanText);
+        const selectedTitle = extractHonorificChoice(cleanText, !!user.honorific);
         if (selectedTitle) {
           user.honorific = selectedTitle;
           await user.save();
@@ -808,16 +826,16 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           const buttons = [
             { id: 'honorific_chief', title: 'চিফ (Chief) 🎖️' },
             { id: 'honorific_sir', title: 'স্যার (Sir) 👔' },
-            { id: 'honorific_boss', title: 'বস (Boss) 👑' }
+            { id: 'honorific_bhai', title: 'ভাই (Bhai) 🤝' }
           ];
           const buttonsSent = await sendMetaWhatsAppButtons(
             fromNumber,
             onboardingPrompt,
             buttons,
-            'অথবা ভাই / আপু লিখে জানান'
+            'অথবা বস / আপু লিখে জানান'
           );
           if (!buttonsSent) {
-            const fallbackText = `${onboardingPrompt}\n\n• চিফ (Chief)\n• স্যার (Sir)\n• বস (Boss)\n• ভাই (Bhai)\n• আপু (Apu)\n\n👉 যেকোনো একটি লিখে রিপ্লাই দিন।`;
+            const fallbackText = `${onboardingPrompt}\n\n• চিফ (Chief)\n• স্যার (Sir)\n• ভাই (Bhai)\n• বস (Boss)\n• আপু (Apu)\n\n👉 যেকোনো একটি লিখে রিপ্লাই দিন।`;
             await sendMetaWhatsAppMessage(fromNumber, fallbackText);
           }
           return;
