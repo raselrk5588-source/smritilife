@@ -16,12 +16,32 @@ export interface RamadanDayTimes {
   district: string;
   districtBn: string;
   dateStr: string;
+  isRamadan: boolean;
+  hijriDay: number;
+  hijriMonth: number;
+  hijriMonthName: string;
+  hijriYear: number;
+  ramadanDay?: number;
   sehriEnd: string;       // "04:30" (24h)
   sehriFormatted: string; // "ভোর ০৪:৩০"
   iftar: string;          // "17:45" (24h)
   iftarFormatted: string; // "সন্ধ্যা ০৫:৪৫"
   fajr: string;
   maghrib: string;
+  prayers: {
+    fajr: string;
+    fajrFormatted: string;
+    sunrise: string;
+    sunriseFormatted: string;
+    dhuhr: string;
+    dhuhrFormatted: string;
+    asr: string;
+    asrFormatted: string;
+    maghrib: string;
+    maghribFormatted: string;
+    isha: string;
+    ishaFormatted: string;
+  };
 }
 
 // 64 Districts of Bangladesh with official Islamic Foundation offsets from Dhaka
@@ -113,7 +133,16 @@ export const BD_DISTRICTS: DistrictInfo[] = [
  * Coordinates: 23.8103° N, 90.4125° E
  * Calculates Sunrise, Sunset, Fajr (18° angle) and Maghrib with Islamic Foundation cautionary offsets.
  */
-function calculateDhakaTimes(date: Date): { sehriEnd: string; fajr: string; iftar: string } {
+function calculateDhakaTimes(date: Date): {
+  sehriEnd: string;
+  fajr: string;
+  sunrise: string;
+  dhuhr: string;
+  asr: string;
+  maghrib: string;
+  iftar: string;
+  isha: string;
+} {
   // Day of year
   const startOfYear = new Date(Date.UTC(date.getFullYear(), 0, 1));
   const diff = date.getTime() - startOfYear.getTime();
@@ -153,6 +182,20 @@ function calculateDhakaTimes(date: Date): { sehriEnd: string; fajr: string; ifta
   const fajrMinutes = Math.round(tnoon - 4 * Hf);
   // Sunset / Maghrib in minutes from midnight
   const sunsetMinutes = Math.round(tnoon + 4 * H0);
+  // Sunrise
+  const sunriseMinutes = Math.round(tnoon - 4 * H0);
+  // Dhuhr (solar noon + 2 min caution)
+  const dhuhrMinutes = Math.round(tnoon + 2);
+
+  // Hanafi Asr (shadow factor = 2, Bangladesh standard)
+  const phi = Math.abs(latRad - decl);
+  const asrAlt = Math.atan(1 / (2 + Math.tan(phi)));
+  const cosHasr = (Math.sin(asrAlt) - Math.sin(latRad) * Math.sin(decl)) / (Math.cos(latRad) * Math.cos(decl));
+  const Hasr = Math.acos(Math.max(-1, Math.min(1, cosHasr))) * (180 / Math.PI);
+  const asrMinutes = Math.round(tnoon + 4 * Hasr);
+
+  // Isha time (18° below horizon + 2 min margin)
+  const ishaMinutes = Math.round(tnoon + 4 * Hf + 2);
 
   // Islamic Foundation Bangladesh rules:
   // Sehri ends 3 minutes before Fajr start
@@ -170,8 +213,57 @@ function calculateDhakaTimes(date: Date): { sehriEnd: string; fajr: string; ifta
   return {
     sehriEnd: minToTimeStr(sehriEndMinutes),
     fajr: minToTimeStr(fajrMinutes),
-    iftar: minToTimeStr(iftarMinutes)
+    sunrise: minToTimeStr(sunriseMinutes),
+    dhuhr: minToTimeStr(dhuhrMinutes),
+    asr: minToTimeStr(asrMinutes),
+    maghrib: minToTimeStr(iftarMinutes),
+    iftar: minToTimeStr(iftarMinutes),
+    isha: minToTimeStr(ishaMinutes)
   };
+}
+
+/**
+ * Detect Islamic Season and Hijri Date
+ */
+export function getIslamicSeason(date: Date = new Date()) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric'
+    });
+    const parts = formatter.formatToParts(date);
+    const day = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
+    const month = parseInt(parts.find(p => p.type === 'month')?.value || '1', 10);
+    const year = parseInt(parts.find(p => p.type === 'year')?.value || '1448', 10);
+
+    const monthNamesBn = [
+      '', 'মুহররম', 'সফর', 'রবিউল আউয়াল', 'রবিউস সানি',
+      'জমাদিউল আউয়াল', 'জমাদিউস সানি', 'রজব', 'শাবান',
+      'রমজান', 'শাওয়াল', 'জিলকদ', 'জিলহজ'
+    ];
+
+    // Ramadan is Islamic Month 9 or Sha'ban 26+ (preparation window)
+    const isRamadan = month === 9 || (month === 8 && day >= 26);
+    const ramadanDay = month === 9 ? day : undefined;
+
+    return {
+      isRamadan,
+      hijriDay: day,
+      hijriMonth: month,
+      hijriMonthName: monthNamesBn[month] || (isRamadan ? 'রমজান' : 'মাস'),
+      hijriYear: year,
+      ramadanDay
+    };
+  } catch (e) {
+    return {
+      isRamadan: false,
+      hijriDay: 1,
+      hijriMonth: 1,
+      hijriMonthName: 'মুহররম',
+      hijriYear: 1448
+    };
+  }
 }
 
 /**
@@ -219,11 +311,12 @@ export function formatBanglaTime(time24: string): string {
 }
 
 /**
- * Get Ramadan Day Times for a given District
+ * Get Ramadan and 5 Daily Prayer Times for a given District
  */
 export function getRamadanTimes(districtQuery: string, date: Date = new Date()): RamadanDayTimes {
   const district = matchDistrict(districtQuery);
   const dhakaTimes = calculateDhakaTimes(date);
+  const season = getIslamicSeason(date);
 
   // Apply district offset in minutes
   const applyOffset = (timeStr: string, offsetMins: number): string => {
@@ -237,7 +330,12 @@ export function getRamadanTimes(districtQuery: string, date: Date = new Date()):
 
   const finalSehriEnd = applyOffset(dhakaTimes.sehriEnd, district.sehriOffset);
   const finalFajr = applyOffset(dhakaTimes.fajr, district.sehriOffset);
-  const finalIftar = applyOffset(dhakaTimes.iftar, district.iftarOffset);
+  const finalSunrise = applyOffset(dhakaTimes.sunrise, district.sehriOffset);
+  const finalDhuhr = applyOffset(dhakaTimes.dhuhr, district.iftarOffset);
+  const finalAsr = applyOffset(dhakaTimes.asr, district.iftarOffset);
+  const finalMaghrib = applyOffset(dhakaTimes.maghrib, district.iftarOffset);
+  const finalIftar = finalMaghrib;
+  const finalIsha = applyOffset(dhakaTimes.isha, district.iftarOffset);
 
   const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
@@ -245,12 +343,32 @@ export function getRamadanTimes(districtQuery: string, date: Date = new Date()):
     district: district.nameEn,
     districtBn: district.nameBn,
     dateStr,
+    isRamadan: season.isRamadan,
+    hijriDay: season.hijriDay,
+    hijriMonth: season.hijriMonth,
+    hijriMonthName: season.hijriMonthName,
+    hijriYear: season.hijriYear,
+    ramadanDay: season.ramadanDay,
     sehriEnd: finalSehriEnd,
     sehriFormatted: formatBanglaTime(finalSehriEnd),
     iftar: finalIftar,
     iftarFormatted: formatBanglaTime(finalIftar),
     fajr: finalFajr,
-    maghrib: finalIftar
+    maghrib: finalMaghrib,
+    prayers: {
+      fajr: finalFajr,
+      fajrFormatted: formatBanglaTime(finalFajr),
+      sunrise: finalSunrise,
+      sunriseFormatted: formatBanglaTime(finalSunrise),
+      dhuhr: finalDhuhr,
+      dhuhrFormatted: formatBanglaTime(finalDhuhr),
+      asr: finalAsr,
+      asrFormatted: formatBanglaTime(finalAsr),
+      maghrib: finalMaghrib,
+      maghribFormatted: formatBanglaTime(finalMaghrib),
+      isha: finalIsha,
+      ishaFormatted: formatBanglaTime(finalIsha)
+    }
   };
 }
 

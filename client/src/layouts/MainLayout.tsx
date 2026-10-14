@@ -29,6 +29,19 @@ export default function MainLayout() {
     };
   }, [navigate]);
 
+  // Dynamic check for Ramadan season (Month 9 of Islamic calendar or Sha'ban 26+)
+  const isRamadanSeason = () => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { month: 'numeric', day: 'numeric' }).formatToParts(new Date());
+      const m = parseInt(parts.find(p => p.type === 'month')?.value || '1', 10);
+      const d = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
+      return m === 9 || (m === 8 && d >= 26);
+    } catch (e) {
+      return false;
+    }
+  };
+  const isRamadan = isRamadanSeason();
+
   // New nav items based on user feedback
   const navItems = [
     { path: '/app', icon: Home, label: t('হোম', 'Home') },
@@ -36,7 +49,7 @@ export default function MainLayout() {
     // Center is Voice Assistant (FAB)
     { path: '/app/reminders', icon: Bell, label: t('রিমাইন্ডার', 'Reminders') },
     { path: '/app/wishes', icon: Gift, label: t('বিশেষ দিন', 'Wishes') },
-    { path: '/app/ramadan', icon: Moon, label: t('রমজান', 'Ramadan') },
+    { path: '/app/ramadan', icon: Moon, label: isRamadan ? t('রমজান স্পেশাল', 'Ramadan') : t('নামাজ ও রোজা', 'Prayer & Fast') },
   ];
 
   return (
@@ -147,14 +160,16 @@ export default function MainLayout() {
               </span>
             </Link>
             <div className="flex items-center space-x-2">
-              <Link 
-                to="/app/ramadan"
-                className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-emerald-900 to-teal-900 text-amber-300 border border-amber-400/40 shadow-xs active:scale-95 transition"
-                title={t('রমজান স্পেশাল', 'Ramadan Special')}
-              >
-                <Moon className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse" />
-                <span className="text-[11px] font-bold tracking-tight">রমজান</span>
-              </Link>
+              {isRamadan && (
+                <Link 
+                  to="/app/ramadan"
+                  className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-emerald-900 to-teal-900 text-amber-300 border border-amber-400/40 shadow-xs active:scale-95 transition"
+                  title={t('রমজান স্পেশাল', 'Ramadan Special')}
+                >
+                  <Moon className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse" />
+                  <span className="text-[11px] font-bold tracking-tight">রমজান</span>
+                </Link>
+              )}
               <button 
                 onClick={() => navigate('/app/notifications')} 
                 className="w-8 h-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 relative active:scale-95 transition border border-slate-200/60 cursor-pointer"

@@ -1225,6 +1225,20 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        // 5. 5 Daily Prayer Times Query (Year-round for all 64 districts)
+        const isPrayerQuery = /(?:নামাজের?\s*সময়|নামাজের?\s*ওয়াক্ত|namaj|namaz|prayer\s*time|ওয়াক্তের?\s*সময়|আজকের\s*নামাজ|আজকে\s*নামাজ|আজ\s*নামাজ|ফজর\s*কখন|জোহর\s*কখন|আসর\s*কখন|মাগরিব\s*কখন|এশা\s*কখন|পাঁচ\s*ওয়াক্ত)/i.test(cleanText) &&
+                              !cleanText.match(/মনে|রিমাইন্ডার|reminder|লিস্ট|ডাক|তুলে|alarm/i);
+        if (isPrayerQuery) {
+          const userDist = user.district || 'Dhaka';
+          const times = getRamadanTimes(userDist);
+
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🕌 *আজকের ৫ ওয়াক্ত নামাজের সময়সূচি*\n📍 জেলা: *${times.districtBn}*\n📅 ${times.hijriDay} ${times.hijriMonthName} ${times.hijriYear} হিজরি\n\n• ফজর: *${times.prayers.fajrFormatted}* (সেহরি শেষ: ${times.sehriFormatted})\n• সূর্যোদয়: *${times.prayers.sunriseFormatted}*\n• জোহর: *${times.prayers.dhuhrFormatted}*\n• আসর: *${times.prayers.asrFormatted}*\n• মাগরিব: *${times.prayers.maghribFormatted}* (ইফতার)\n• এশা: *${times.prayers.ishaFormatted}*\n\n💡 জেলা পরিবর্তন করতে লিখুন: "আমার জেলা চট্টগ্রাম" বা আপনার জেলার নাম`
+          );
+          return;
+        }
+
         // --- STEP 3: Regular AI Message & Audio Analysis ---
         let aiResponse: any;
 

@@ -226,38 +226,54 @@ export default function Home() {
 
       <div className="px-3 md:px-5 -mt-8 md:-mt-16 relative z-20 space-y-3 md:space-y-5">
         
-        {/* Ramadan Auto Tracker Special Banner */}
-        <Link 
-          to="/app/ramadan"
-          className="block relative overflow-hidden rounded-2xl md:rounded-3xl p-3.5 md:p-4 bg-gradient-to-r from-[#063828] via-[#0A543A] to-[#04281c] text-white shadow-lg shadow-emerald-950/20 border border-emerald-500/30 group hover:shadow-xl hover:scale-[1.01] transition-all duration-300"
-        >
-          <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-amber-400/10 rounded-full blur-xl pointer-events-none"></div>
-          <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-br from-amber-400/20 to-emerald-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                <Moon className="w-5 h-5 md:w-6 md:h-6 text-amber-300 fill-amber-300 animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-1.5 mb-0.5">
-                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
-                    রমজান স্পেশাল
-                  </span>
-                  <span className="text-[10px] text-emerald-200 font-semibold hidden sm:inline">৬৪ জেলা</span>
+        {/* Islamic Prayer & Ramadan Auto Tracker Special Banner */}
+        {(() => {
+          const isRamadanSeason = () => {
+            try {
+              const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { month: 'numeric', day: 'numeric' }).formatToParts(new Date());
+              const m = parseInt(parts.find(p => p.type === 'month')?.value || '1', 10);
+              const d = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
+              return m === 9 || (m === 8 && d >= 26);
+            } catch (e) {
+              return false;
+            }
+          };
+          const isRamadan = isRamadanSeason();
+
+          return (
+            <Link 
+              to="/app/ramadan"
+              className="block relative overflow-hidden rounded-2xl md:rounded-3xl p-3 md:p-3.5 bg-gradient-to-r from-[#063828] via-[#0A543A] to-[#04281c] text-white shadow-md shadow-emerald-950/20 border border-emerald-500/30 group hover:shadow-lg hover:scale-[1.01] transition-all duration-300"
+            >
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-400/10 rounded-full blur-xl pointer-events-none"></div>
+              <div className="relative z-10 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-gradient-to-br from-amber-400/20 to-emerald-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                    <Moon className="w-4 h-4 md:w-5 md:h-5 text-amber-300 fill-amber-300 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-1.5 mb-0.5">
+                      <span className="text-[9px] uppercase tracking-wider font-extrabold text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                        {isRamadan ? 'রমজান স্পেশাল' : 'নামাজ ও রোজা'}
+                      </span>
+                      <span className="text-[9px] text-emerald-200 font-semibold hidden sm:inline">৬৪ জেলা</span>
+                    </div>
+                    <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
+                      {isRamadan ? 'অটো সেহরি ও ইফতার ট্র্যাকার' : '৫ ওয়াক্ত নামাজের সময়সূচি'}
+                    </h4>
+                    <p className="text-[9px] md:text-xs text-emerald-200/80 font-medium line-clamp-1">
+                      {isRamadan ? 'স্বয়ংক্রিয় সেহরি অ্যালার্ম ও ইফতার নোটিশ চালু করুন' : 'আজকের ওয়াক্ত, সেহরি ও ইফতার সময় দেখুন'}
+                    </p>
+                  </div>
                 </div>
-                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
-                  অটো সেহরি ও ইফতার ট্র্যাকার
-                </h4>
-                <p className="text-[10px] md:text-xs text-emerald-200/80 font-medium line-clamp-1">
-                  স্বয়ংক্রিয় সেহরি অ্যালার্ম ও ইফতার নোটিশ চালু করুন
-                </p>
+                <div className="flex items-center space-x-1 text-amber-300 text-xs font-bold pl-2 shrink-0">
+                  <span className="hidden sm:inline">সময় দেখুন</span>
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
               </div>
-            </div>
-            <div className="flex items-center space-x-1 text-amber-300 text-xs font-bold pl-2 shrink-0">
-              <span className="hidden sm:inline">সময় দেখুন</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-        </Link>
+            </Link>
+          );
+        })()}
 
         {/* Quick Access Pills Grid */}
         <div className="grid grid-cols-4 gap-1.5 md:gap-2">
