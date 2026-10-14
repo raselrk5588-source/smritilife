@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon } from 'lucide-react';
+import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AIAssistantModal from '../components/AIAssistantModal';
@@ -297,13 +297,12 @@ export default function Home() {
             </div>
             <span className="text-[10px] font-bold text-slate-700">{t('বিশেষ দিন', 'Wishes')}</span>
           </Link>
-          <div onClick={() => toast('টেমপ্লেট ফিচারটি খুব শীঘ্রই আসছে!', { icon: '🚀' })} className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 active:scale-95 transition">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-purple-50 text-purple-500 rounded-xl flex items-center justify-center mb-1 md:mb-1 relative">
-              <LayoutTemplate className="w-4 h-4 md:w-5 md:h-5" />
-              <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">20</div>
+          <Link to="/app/expenses" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+            <div className="w-9 h-9 md:w-10 md:h-10 bg-teal-50 text-[#0A7756] rounded-xl flex items-center justify-center mb-1 md:mb-1 relative">
+              <Wallet className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[10px] font-bold text-slate-700 mt-[2px]">{t('টেমপ্লেট', 'Templates')}</span>
-          </div>
+            <span className="text-[10px] font-bold text-slate-700 mt-[2px]">{t('হিসাব খাতা', 'Expenses')}</span>
+          </Link>
         </div>
 
         {/* Tasks and Calendar Row */}

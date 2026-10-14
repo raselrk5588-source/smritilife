@@ -22,6 +22,7 @@ import adminRoutes from './routes/adminRoutes';
 import userRoutes from './routes/userRoutes';
 import whatsappRoutes from './routes/whatsappRoutes';
 import ramadanRoutes from './routes/ramadanRoutes';
+import expenseRoutes from './routes/expenseRoutes';
 import ErrorLog from './models/ErrorLog';
 
 dotenv.config();
@@ -58,6 +59,7 @@ app.use('/api/ai', protect, aiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/ramadan', ramadanRoutes);
+app.use('/api/expenses', protect, expenseRoutes);
 
 app.get('/', (req, res) => {
   res.send('Smriti API is running...');

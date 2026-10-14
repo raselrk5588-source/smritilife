@@ -10,6 +10,7 @@ import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
+import { parseExpenseInput, recordExpense, getExpenseSummary, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -1245,6 +1246,32 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             `🕌 *আজকের ৫ ওয়াক্ত নামাজের সময়সূচি*\n📍 জেলা: *${times.districtBn}*\n📅 ${times.hijriDay} ${times.hijriMonthName} ${times.hijriYear} হিজরি\n\n• ফজর: *${times.prayers.fajrFormatted}* (সেহরি শেষ: ${times.sehriFormatted})\n• সূর্যোদয়: *${times.prayers.sunriseFormatted}*\n• জোহর: *${times.prayers.dhuhrFormatted}*\n• আসর: *${times.prayers.asrFormatted}*\n• মাগরিব: *${times.prayers.maghribFormatted}* (ইফতার)\n• এশা: *${times.prayers.ishaFormatted}*\n\n💡 জেলা পরিবর্তন করতে লিখুন: "আমার জেলা চট্টগ্রাম" বা আপনার জেলার নাম`
           );
           return;
+        }
+
+        // --- STEP 2.9: Daily Expense Tracker Fast-Path (0 Cost, Instant Response) ---
+        const isReminderContext = /মনে|রিমাইন্ডার|reminder|লিস্ট|ডাক|তুলে|alarm|অ্যালার্ম|কাল|আগামীকাল|tomorrow|pm|am|সকাল|বিকাল|রাত|ফজর|মাগরিব/i.test(cleanText);
+        if (!isReminderContext) {
+          const parsedExpense = parseExpenseInput(cleanText);
+          if (parsedExpense) {
+            if (parsedExpense.isQuery) {
+              const summary = await getExpenseSummary(user._id);
+              if (parsedExpense.isMonthly) {
+                const reply = buildMonthlyExpenseQueryMessage(summary.monthTotal, summary.monthCount, summary.categoryBreakdown);
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+              } else {
+                const reply = buildDailyExpenseQueryMessage(summary.todayExpenses, summary.todayTotal, summary.monthTotal);
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+              }
+              return;
+            } else if (parsedExpense.title && parsedExpense.amount) {
+              await recordExpense(user._id, parsedExpense.title, parsedExpense.amount, parsedExpense.paymentMethod);
+              const summary = await getExpenseSummary(user._id);
+              const cat = detectExpenseCategory(parsedExpense.title);
+              const reply = buildExpenseLoggedMessage(parsedExpense.title, parsedExpense.amount, cat, summary.todayTotal, summary.monthTotal);
+              await sendMetaWhatsAppMessage(fromNumber, reply);
+              return;
+            }
+          }
         }
 
         // --- STEP 3: Regular AI Message & Audio Analysis ---
