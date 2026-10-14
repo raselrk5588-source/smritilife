@@ -213,7 +213,7 @@ export const startReminderScheduler = () => {
                   isSehri,
                   ringCount: 1,
                   maxRings: 3,
-                  nextRingAt: Date.now() + 60 * 1000 // Ring 2 fires in 60s
+                  nextRingAt: Date.now() + 15 * 1000 // Ring 2 fires in 15s (rapid alert)
                 });
               }
 
@@ -411,7 +411,7 @@ export const startReminderScheduler = () => {
           if (currentRing >= totalRings) {
             activeAlarmRingers.delete(remId);
           } else {
-            ringer.nextRingAt = Date.now() + 60 * 1000; // Next ring in 60s
+            ringer.nextRingAt = Date.now() + 15 * 1000; // Next ring in 15s (rapid alert)
           }
         } catch (err) {
           console.error(`[AlarmRinger] Error processing ring for ${remId}:`, err);
@@ -496,7 +496,7 @@ export const startReminderScheduler = () => {
             isSehri: true,
             ringCount: 1,
             maxRings: 3,
-            nextRingAt: Date.now() + 60 * 1000
+            nextRingAt: Date.now() + 15 * 1000 // Ring 2 fires in 15s (rapid alert)
           });
 
           const sent = await sendMetaWhatsAppButtons(targetNumber, alertBody, buttons);
@@ -540,8 +540,8 @@ export const startReminderScheduler = () => {
   setInterval(checkAndDispatchReminders, 30000);
   // Check nightly follow-up every 2 minutes
   setInterval(checkAndSendNightlyFollowUp, 120000);
-  // Check active alarm ringers every 15 seconds
-  setInterval(checkAndFireAlarmRingers, 15000);
+  // Check active alarm ringers every 5 seconds (for rapid 15s rings)
+  setInterval(checkAndFireAlarmRingers, 5000);
   // Check Ramadan Sehri & Iftar alerts every 30 seconds
   setInterval(checkAndDispatchRamadanAlerts, 30000);
 };
