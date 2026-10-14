@@ -225,24 +225,37 @@ export default function ViewWish() {
               onClick={handleOpenEnvelope}
               className="relative z-20 cursor-pointer flex flex-col items-center group py-8"
             >
-              <div className="relative w-72 sm:w-80 h-52 sm:h-56 bg-amber-100 rounded-2xl shadow-2xl overflow-hidden group-hover:scale-105 transition-transform duration-500 border border-amber-200">
-                {/* Envelope Flap (Closed) */}
-                <div className="absolute top-0 left-0 w-full h-1/2 bg-amber-200 origin-top transform rotate-x-0 z-20 border-b border-amber-300 shadow-md flex justify-center items-end pb-3">
-                  <div className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center shadow-xl border-2 border-red-600 animate-pulse">
-                    <Heart className="text-white w-7 h-7 fill-current" />
+              <div className="relative w-72 sm:w-84 h-56 sm:h-60 bg-gradient-to-b from-[#fef9ee] to-[#fbf0d9] rounded-2xl shadow-2xl overflow-hidden group-hover:scale-105 transition-transform duration-500 border-2 border-amber-300/80">
+                {/* Envelope Flap with crisp triangle SVG fold */}
+                <div className="absolute top-0 left-0 w-full h-24 sm:h-26 z-20 pointer-events-none">
+                  <svg className="w-full h-full drop-shadow-md" viewBox="0 0 320 100" preserveAspectRatio="none">
+                    <polygon points="0,0 320,0 160,100" className="fill-[#fde68a] stroke-[#f59e0b] stroke-[1.5]" />
+                  </svg>
+                </div>
+
+                {/* Wax Seal centered on the flap tip */}
+                <div className="absolute top-[72px] sm:top-[76px] left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                  <div className="w-13 h-13 sm:w-14 sm:h-14 bg-gradient-to-br from-red-500 via-rose-600 to-red-700 rounded-full flex items-center justify-center shadow-xl border-2 border-red-300 ring-4 ring-red-400/25 animate-pulse">
+                    <Heart className="text-white w-6 h-6 sm:w-7 sm:h-7 fill-current drop-shadow-xs" />
                   </div>
                 </div>
-                {/* Envelope Body */}
-                <div className="absolute inset-0 bg-amber-50 shadow-inner z-10 flex flex-col items-center justify-center pt-10 px-4">
-                  <span className="text-[11px] font-bold tracking-wider text-amber-900/60 uppercase mb-1">আপনার জন্য একটি বিশেষ চিঠি</span>
-                  <p className="text-amber-900 font-serif font-bold text-xl italic text-center line-clamp-2">
+
+                {/* Envelope Lower Area: Fully visible, high-contrast Recipient Details */}
+                <div className="absolute inset-x-0 bottom-0 h-28 z-10 flex flex-col items-center justify-center px-4 pb-3 text-center space-y-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-200/90 border border-amber-300/80 shadow-2xs">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-800" />
+                    <span className="text-xs font-black text-amber-950 tracking-wider">
+                      আপনার জন্য একটি বিশেষ চিঠি
+                    </span>
+                  </div>
+                  <p className="text-amber-950 font-serif font-black text-xl sm:text-2xl italic tracking-wide leading-tight drop-shadow-2xs line-clamp-1">
                     {wishData.recipient ? wishData.recipient : 'প্রিয় বন্ধু'}
                   </p>
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/15 to-transparent z-30 pointer-events-none"></div>
               </div>
-              <p className="mt-6 text-white/95 font-bold tracking-widest uppercase animate-pulse text-xs sm:text-sm bg-white/10 px-5 py-2 rounded-full border border-white/20 shadow-md">
-                চিঠিটি খুলতে ট্যাপ করুন ✨
+              <p className="mt-6 text-white/95 font-bold tracking-widest uppercase animate-pulse text-xs sm:text-sm bg-white/10 px-5 py-2.5 rounded-full border border-white/20 shadow-md flex items-center gap-2">
+                <span>চিঠিটি খুলতে ট্যাপ করুন</span>
+                <span>✨</span>
               </p>
             </motion.div>
           ) : (
