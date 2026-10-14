@@ -188,9 +188,9 @@ export const startReminderScheduler = () => {
               
               let alertBody = '';
               if (isSehri) {
-                alertBody = `🌙🔔⏰ আসসালামু আলাইকুম${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৪)\n\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
+                alertBody = `🌙🔔⏰ আসসালামু আলাইকুম${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৩)\n\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
               } else if (isWakeup) {
-                alertBody = `⏰🔔⏰ শুভ সকাল${salutation}! ঘুম থেকে উঠুন! (রিং ১/৪)\n\nএটি আপনার স্মৃতি ওয়েক-আপ অ্যালার্ম:\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`;
+                alertBody = `⏰🔔⏰ শুভ সকাল${salutation}! ঘুম থেকে উঠুন! (রিং ১/৩)\n\nএটি আপনার স্মৃতি ওয়েক-আপ অ্যালার্ম:\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`;
               } else {
                 alertBody = `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
               }
@@ -203,7 +203,7 @@ export const startReminderScheduler = () => {
                 expiresAt: Date.now() + 4 * 60 * 60 * 1000
               });
 
-              // Register multi-ring loop for Wake-up / Sehri alarms (rings every 60s up to 4 times if no reply)
+              // Register multi-ring loop for Wake-up / Sehri alarms (rings every 60s up to 3 times if no reply)
               if (isWakeup) {
                 activeAlarmRingers.set(reminder._id.toString(), {
                   reminderId: reminder._id.toString(),
@@ -212,7 +212,7 @@ export const startReminderScheduler = () => {
                   title: reminder.title,
                   isSehri,
                   ringCount: 1,
-                  maxRings: 4,
+                  maxRings: 3,
                   nextRingAt: Date.now() + 60 * 1000 // Ring 2 fires in 60s
                 });
               }
@@ -384,19 +384,15 @@ export const startReminderScheduler = () => {
           let ringMsg = '';
           if (ringer.isSehri) {
             if (currentRing === 2) {
-              ringMsg = `🚨🌙 (রিং ২/৪) সেহরির অ্যালার্ম! ঘুম ভাঙার সময় হয়ে গেছে! সেহরির শেষ সময় আর বেশি বাকি নেই! ⏰⏰\n\n📌 বিষয়: ${ringer.title}\nঅনুগ্রহ করে এখনই বিছানা ছাড়ুন ও খাবার গ্রহণ করুন! 🤲`;
-            } else if (currentRing === 3) {
-              ringMsg = `🚨📢 (রিং ৩/৪) ঘুম থেকে উঠুন! আর কিছুক্ষণ পরেই সেহরির সময় শেষ হয়ে যাবে! 🔔🔔🔔\n\nদেরি করলে রোজা রাখতে কষ্ট হতে পারে। দয়া করে এখনই উঠুন!`;
+              ringMsg = `🚨🌙 (রিং ২/৩) সেহরির অ্যালার্ম! ঘুম ভাঙার সময় হয়ে গেছে! সেহরির শেষ সময় আর বেশি বাকি নেই! ⏰⏰\n\n📌 বিষয়: ${ringer.title}\nঅনুগ্রহ করে এখনই বিছানা ছাড়ুন ও খাবার গ্রহণ করুন! 🤲`;
             } else {
-              ringMsg = `🚨🚨🚨 (চূড়ান্ত রিং ৪/৪) সেহরির চূড়ান্ত অ্যালার্ম! আপনি এখনও ঘুম থেকে ওঠেননি! ⏰📢\n\nসময় দ্রুত শেষ হচ্ছে, এখনই সেহরি খেয়ে রোজা রাখুন! 🌙`;
+              ringMsg = `🚨🚨🚨 (চূড়ান্ত রিং ৩/৩) সেহরির চূড়ান্ত অ্যালার্ম! আপনি এখনও ঘুম থেকে ওঠেননি! ⏰📢\n\nসময় দ্রুত শেষ হচ্ছে, এখনই সেহরি খেয়ে রোজা রাখুন! 🌙`;
             }
           } else {
             if (currentRing === 2) {
-              ringMsg = `🚨🔔 (রিং ২/৪) ওয়েক-আপ অ্যালার্ম! ঘুম থেকে ওঠার জরুরি সংকেত! ⏰⏰\n\n📌 বিষয়: ${ringer.title}\nঅনুগ্রহ করে জেগে উঠুন!`;
-            } else if (currentRing === 3) {
-              ringMsg = `🚨📢 (রিং ৩/৪) বিছানা ছাড়ুন! আপনার গুরুত্বপূর্ণ রুটিন বা কাজ অপেক্ষা করছে! 🔔🔔🔔`;
+              ringMsg = `🚨🔔 (রিং ২/৩) ওয়েক-আপ অ্যালার্ম! ঘুম থেকে ওঠার জরুরি সংকেত! ⏰⏰\n\n📌 বিষয়: ${ringer.title}\nঅনুগ্রহ করে জেগে উঠুন!`;
             } else {
-              ringMsg = `🚨🚨🚨 (চূড়ান্ত রিং ৪/৪) চূড়ান্ত ওয়েক-আপ সংকেত! আর দেরি না করে এখনই উঠে পড়ুন! ☀️`;
+              ringMsg = `🚨🚨🚨 (চূড়ান্ত রিং ৩/৩) চূড়ান্ত ওয়েক-আপ সংকেত! আপনার গুরুত্বপূর্ণ কাজ অপেক্ষা করছে, আর দেরি না করে এখনই উঠে পড়ুন! ☀️`;
             }
           }
 
@@ -485,7 +481,7 @@ export const startReminderScheduler = () => {
             isAlarm: true
           });
 
-          const alertBody = `🌙🔔⏰ আসসালামু আলাইকুম ${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৪)\n\n📍 আপনার জেলা: ${times.districtBn}\n⏳ সেহরি শেষ: ${times.sehriFormatted} (আর ${sehriMinsBefore} মিনিট বাকি)\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
+          const alertBody = `🌙🔔⏰ আসসালামু আলাইকুম ${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৩)\n\n📍 আপনার জেলা: ${times.districtBn}\n⏳ সেহরি শেষ: ${times.sehriFormatted} (আর ${sehriMinsBefore} মিনিট বাকি)\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
 
           const buttons = [
             { id: `rem_done_${sehriRem._id}`, title: 'জেগে গেছি 🤲' },
@@ -499,7 +495,7 @@ export const startReminderScheduler = () => {
             title: sehriRem.title,
             isSehri: true,
             ringCount: 1,
-            maxRings: 4,
+            maxRings: 3,
             nextRingAt: Date.now() + 60 * 1000
           });
 
