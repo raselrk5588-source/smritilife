@@ -8,7 +8,9 @@ import { deliverWishCard } from '../services/wishDeliveryService';
 
 export const getWishes = async (req: Request, res: Response) => {
   try {
-    const wishes = await Wish.find({ userId: req.user?.id }).populate('contactId templateId').sort({ scheduledAt: 1 });
+    const wishes = await Wish.find({ userId: req.user?.id })
+      .populate('contactId templateId')
+      .sort({ createdAt: -1, _id: -1 });
     res.json(wishes);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
@@ -40,6 +42,14 @@ export const createWish = async (req: Request, res: Response) => {
   try {
     const { contactId, recipientName, recipientContact, templateId, occasion, message, cardData, scheduledAt, deliveryMethod, status, isSmartCard, smartCardId: incomingSmartCardId } = req.body;
     
+    // Strict Anti-Scam / Anti-Impersonation: Always use the registered user's account name
+    const user = await User.findById(req.user?.id);
+    const verifiedSenderName = user?.name?.trim() || 'স্মৃতি ব্যবহারকারী';
+
+    if (cardData) {
+      cardData.senderName = verifiedSenderName;
+    }
+
     let smartCardId = incomingSmartCardId;
     if (isSmartCard && !smartCardId) {
       smartCardId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -70,10 +80,8 @@ export const createWish = async (req: Request, res: Response) => {
     // If scheduled for now and has a recipient phone, dispatch the card image right away
     if (recipientContact && (status === 'Sent' || status === 'Processing' || !scheduledAt || new Date(scheduledAt) <= new Date())) {
       try {
-        const user = await User.findById(req.user?.id);
-        const senderName = cardData?.senderName || user?.name || 'আপনার শুভাকাঙ্ক্ষী';
         const senderWhatsApp = user?.whatsapp || user?.mobile;
-        deliverWishCard(savedWish, senderName, senderWhatsApp).then(async (success) => {
+        deliverWishCard(savedWish, verifiedSenderName, senderWhatsApp).then(async (success) => {
           if (success) {
             await Wish.findByIdAndUpdate(savedWish._id, { status: 'Sent' });
           }
@@ -94,6 +102,15 @@ export const createWish = async (req: Request, res: Response) => {
 export const updateWish = async (req: Request, res: Response) => {
   try {
     const updateData = { ...req.body };
+    
+    // Strict Anti-Scam / Anti-Impersonation: Always enforce the registered user's account name
+    const user = await User.findById(req.user?.id);
+    const verifiedSenderName = user?.name?.trim() || 'স্মৃতি ব্যবহারকারী';
+
+    if (updateData.cardData) {
+      updateData.cardData.senderName = verifiedSenderName;
+    }
+
     if (!updateData.contactId || !mongoose.Types.ObjectId.isValid(updateData.contactId)) {
       delete updateData.contactId;
     }
@@ -119,10 +136,8 @@ export const updateWish = async (req: Request, res: Response) => {
     // If updated to Processing or Sent and has a recipient phone, dispatch the card image right away
     if (updatedWish.recipientContact && (updatedWish.status === 'Sent' || updatedWish.status === 'Processing' || !updatedWish.scheduledAt || new Date(updatedWish.scheduledAt) <= new Date())) {
       try {
-        const user = await User.findById(req.user?.id);
-        const senderName = updatedWish.cardData?.senderName || user?.name || 'আপনার শুভাকাঙ্ক্ষী';
         const senderWhatsApp = user?.whatsapp || user?.mobile;
-        deliverWishCard(updatedWish, senderName, senderWhatsApp).then(async (success) => {
+        deliverWishCard(updatedWish, verifiedSenderName, senderWhatsApp).then(async (success) => {
           if (success) {
             await Wish.findByIdAndUpdate(updatedWish._id, { status: 'Sent' });
           }

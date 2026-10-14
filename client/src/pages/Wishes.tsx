@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Sparkles, Image as ImageIcon, Mic, Copy, Download, Share2, Wand2, Calendar, Phone, Clock, Trash2, CheckCircle2, Gift, Eye, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Sparkles, Image as ImageIcon, Mic, Copy, Download, Share2, Wand2, Calendar, Phone, Clock, Trash2, CheckCircle2, Gift, Eye, RefreshCw, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { generateWishTemplates } from '../utils/wishGenerator';
@@ -15,14 +15,14 @@ const formatName = (name: string) => {
 
 const getOccasionBadge = (occasion: string) => {
   const map: Record<string, string> = {
-    birthday: '🎂 জন্মদিন (Birthday)',
-    anniversary: '💍 বিবাহবার্ষিকী (Anniversary)',
-    eid: '🌙 ঈদ মোবারক (Eid)',
-    newyear: '🎆 শুভ নববর্ষ (New Year)',
-    valentine: '❤️ ভালোবাসা দিবস (Valentine)',
-    mothersday: '💐 মা দিবস (Mother\'s Day)',
-    fathersday: '👔 বাবা দিবস (Father\'s Day)',
-    other: '🎉 বিশেষ দিন (Special Day)'
+    birthday: '🎂 জন্মদিন',
+    anniversary: '💍 বিবাহবার্ষিকী',
+    eid: '🌙 ঈদ মোবারক',
+    newyear: '🎆 শুভ নববর্ষ',
+    valentine: '❤️ ভালোবাসা দিবস',
+    mothersday: '💐 মা দিবস',
+    fathersday: '👔 বাবা দিবস',
+    other: '🎉 বিশেষ দিন'
   };
   return map[occasion?.toLowerCase()] || `🎉 ${occasion || 'শুভেচ্ছা'}`;
 };
@@ -42,7 +42,7 @@ export default function Wishes() {
   // Form States
   const [selectedOccasion, setSelectedOccasion] = useState('');
   const [recipient, setRecipient] = useState('');
-  const [senderName, setSenderName] = useState('');
+  const [senderName, setSenderName] = useState(() => localStorage.getItem('userName') || '');
   const [selectedStyle, setSelectedStyle] = useState('');
   const [extraPrompt, setExtraPrompt] = useState('');
   const [customOccasion, setCustomOccasion] = useState('');
@@ -114,6 +114,24 @@ export default function Wishes() {
   };
 
   useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const cached = localStorage.getItem('userName');
+        if (cached) setSenderName(cached);
+
+        const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/users/profile`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.name) {
+            setSenderName(data.name);
+            localStorage.setItem('userName', data.name);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load user profile in Wishes:', err);
+      }
+    };
+
     const fetchTemplates = async () => {
       try {
         const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/wish-templates`);
@@ -125,6 +143,7 @@ export default function Wishes() {
         console.error('Failed to load DB templates:', err);
       }
     };
+    fetchUserProfile();
     fetchTemplates();
     fetchWishes();
   }, []);
@@ -245,6 +264,36 @@ export default function Wishes() {
     }
   };
 
+  const resetForm = () => {
+    // Reset Common Fields
+    setRecipient('');
+    // Lock senderName to verified account name
+    setSenderName(localStorage.getItem('userName') || senderName);
+    setScheduleContact('');
+    setScheduleDate('');
+    setScheduleTime('');
+    setShowScheduleForm(false);
+    
+    // Reset Greeting Card Fields
+    setCardImage(null);
+    setCardTitle('');
+    setCardMessage('');
+    setCardSignOff('ভালোবাসা অন্তে,');
+    setRecipientPrefix('প্রিয়,');
+    setGeneratedLink('');
+    setCreatedWishId(null);
+    setImageShape('round');
+    setBgMusic('none');
+
+    // Reset Text/Voice Wish Fields
+    setSelectedOccasion('');
+    setSelectedStyle('');
+    setExtraPrompt('');
+    setCustomOccasion('');
+    setGeneratedWish(null);
+    setVoiceTranscript('');
+  };
+
   const handleSaveWish = async (type: 'send' | 'schedule', isLink: boolean = false) => {
     if (!scheduleContact || !scheduleContact.trim()) {
       toast.error(t('দয়া করে ফোন নম্বর দিন', 'Please enter recipient phone number'));
@@ -349,10 +398,7 @@ export default function Wishes() {
       }
 
       setSuccessPopup({ show: true, type });
-      setShowScheduleForm(false);
-      setScheduleContact('');
-      setScheduleDate('');
-      setScheduleTime('');
+      resetForm();
       fetchWishes();
     } catch (e: any) {
       console.error(e);
@@ -632,21 +678,29 @@ export default function Wishes() {
 
             {/* Step 3 */}
             <div>
-              <div className="flex items-center mb-3">
-                <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold mr-2">3</div>
-                <h2 className="text-[13px] font-bold text-slate-700">{t('আপনার নাম লিখুন (যে উইশ পাঠাবে)', 'Enter your name (sender)')}</h2>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold mr-2">3</div>
+                  <h2 className="text-[13px] font-bold text-slate-700">{t('প্রেরকের নাম (আপনার অ্যাকাউন্ট)', 'Sender Name')}</h2>
+                </div>
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  {t('ভেরিফাইড', 'Verified')}
+                </span>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl p-3 flex items-center shadow-sm">
-                <User className="w-5 h-5 text-slate-400 mr-2" />
-                <input 
-                  type="text" 
-                  value={senderName}
-                  onChange={(e) => setSenderName(e.target.value)}
-                  onBlur={() => setSenderName(formatName(senderName))}
-                  placeholder={t("যেমন: শুভ, রাকিব, আপনার নাম...", "e.g. Shuvo, Rakib, your name...")}
-                  className="flex-1 bg-transparent border-none focus:outline-none text-sm" 
-                />
+              <div 
+                className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-xs select-none"
+                title={t('সুরক্ষার স্বার্থে প্রেরকের নাম পোর্টাল অ্যাকাউন্ট থেকে নির্ধারিত', 'Sender name is locked to your verified portal account')}
+              >
+                <div className="flex items-center min-w-0">
+                  <User className="w-5 h-5 text-emerald-600 mr-2 shrink-0" />
+                  <span className="text-sm font-bold text-slate-800 truncate">{senderName || localStorage.getItem('userName') || 'অ্যাকাউন্ট ব্যবহারকারী'}</span>
+                </div>
+                <Lock className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
               </div>
+              <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                <span>🔒 {t('অ্যাকাউন্টের সুরক্ষায় পোর্টাল অ্যাকাউন্টের নামই স্বয়ংক্রিয়ভাবে প্রেরক হিসেবে থাকবে।', 'For security, your portal account name is used as the verified sender.')}</span>
+              </p>
             </div>
 
             {/* Step 4 */}
@@ -935,7 +989,13 @@ export default function Wishes() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">{t('যিনি পাঠাচ্ছেন (আপনার নাম)', 'Sender Details')}</label>
+                <label className="text-xs font-bold text-slate-500 mb-1 flex items-center justify-between">
+                  <span>{t('যিনি পাঠাচ্ছেন (আপনার নাম)', 'Sender Details')}</span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    {t('ভেরিফাইড অ্যাকাউন্ট', 'Verified Account')}
+                  </span>
+                </label>
                 <div className="flex gap-2">
                   <select 
                     value={cardSignOff}
@@ -950,14 +1010,17 @@ export default function Wishes() {
                     <option value="স্নেহাশীষ,">স্নেহাশীষ,</option>
                     <option value="">(কিছু না)</option>
                   </select>
-                  <input 
-                    type="text" 
-                    value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
-                    placeholder={t('আপনার নাম', 'Your Name')}
-                    className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-primary/50" 
-                  />
+                  <div 
+                    className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm flex items-center justify-between text-slate-800 font-semibold select-none shadow-2xs"
+                    title={t('সুরক্ষার স্বার্থে প্রেরকের নাম পোর্টাল অ্যাকাউন্ট থেকে নির্ধারিত', 'Sender name is locked to your verified portal account')}
+                  >
+                    <span className="truncate">{senderName || localStorage.getItem('userName') || 'অ্যাকাউন্ট ব্যবহারকারী'}</span>
+                    <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1.5" />
+                  </div>
                 </div>
+                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                  <span>🔒 {t('অ্যাকাউন্টের সুরক্ষায় প্রেরক হিসেবে পোর্টাল অ্যাকাউন্টের নামই ব্যবহৃত হবে।', 'For security, your portal account name is used as the verified sender.')}</span>
+                </p>
               </div>
 
               {!generatedLink ? (
@@ -974,31 +1037,83 @@ export default function Wishes() {
                 </button>
               ) : (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mt-4 animate-in zoom-in-95">
-                  <h3 className="text-emerald-800 font-bold text-sm mb-2 text-center">{t('আপনার গ্রিটিং কার্ড তৈরি হয়েছে!', 'Your Greeting Card is Ready!')}</h3>
-                  <div className="bg-white border border-emerald-100 rounded-lg p-2.5 flex items-center justify-between mb-3 shadow-sm">
-                    <span className="text-xs text-slate-600 truncate mr-2">{generatedLink}</span>
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-emerald-900 font-bold text-sm text-center">
+                      {t('আপনার গ্রিটিং কার্ড তৈরি হয়েছে!', 'Your Greeting Card is Ready!')}
+                    </h3>
+                  </div>
+
+                  <div className="bg-white border border-emerald-200/90 rounded-xl p-2 pl-3 flex items-center justify-between mb-3 shadow-xs">
+                    <span className="text-xs text-slate-600 font-mono truncate mr-2 select-all">{generatedLink}</span>
                     <button 
+                      type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(generatedLink);
                         toast.success(t('লিংক কপি করা হয়েছে!', 'Link Copied!'));
                       }}
-                      className="bg-emerald-100 text-emerald-700 p-1.5 rounded-md hover:bg-emerald-200 transition"
+                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shrink-0 active:scale-95 border border-emerald-200/60"
+                      title={t('লিংক কপি করুন', 'Copy Link')}
                     >
-                      <Copy className="w-4 h-4" />
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{t('কপি', 'Copy')}</span>
                     </button>
                   </div>
-                  <div className="flex gap-2">
-                    <a href={generatedLink} target="_blank" rel="noopener noreferrer" className="flex-1 text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm">
-                      {t('প্রিভিউ দেখুন', 'Preview')}
+
+                  {/* WhatsApp Direct Share Button */}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const shareText = encodeURIComponent(`🎉 আপনার জন্য একটি সুন্দর গ্রিটিং কার্ড তৈরি করা হয়েছে! দেখতে লিংকে ট্যাপ করুন:\n${generatedLink}`);
+                      window.open(`https://api.whatsapp.com/send?text=${shareText}`, '_blank');
+                    }}
+                    className="w-full flex items-center justify-center py-2.5 px-3 bg-[#25D366] hover:bg-[#20ba59] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition shadow-xs gap-2 mb-2"
+                  >
+                    <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                    <span>{t('হোয়াটসঅ্যাপে পাঠান', 'Share on WhatsApp')}</span>
+                  </button>
+
+                  {/* Actions Grid */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <a 
+                      href={generatedLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="flex items-center justify-center py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs gap-1.5"
+                    >
+                      <Eye className="w-4 h-4 shrink-0" />
+                      <span className="whitespace-nowrap">{t('প্রিভিউ দেখুন', 'Preview')}</span>
                     </a>
                     <button 
+                      type="button"
                       onClick={() => {
                         setScheduleMethod('whatsapp');
-                        setShowScheduleForm(true);
+                        setShowScheduleForm(prev => !prev);
                       }}
-                      className="flex-1 flex items-center justify-center py-2 bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50 rounded-xl text-xs font-bold transition shadow-sm"
+                      className={`flex items-center justify-center py-2.5 px-2 rounded-xl text-xs font-bold transition shadow-xs gap-1.5 active:scale-95 border ${
+                        showScheduleForm 
+                          ? 'bg-emerald-700 text-white border-emerald-700' 
+                          : 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
+                      }`}
                     >
-                      <Calendar className="w-3.5 h-3.5 mr-1" /> {t('লিংক শিডিউল করুন', 'Schedule Link')}
+                      <Calendar className="w-4 h-4 shrink-0" />
+                      <span className="whitespace-nowrap">{t('শিডিউল করুন', 'Schedule')}</span>
+                    </button>
+                  </div>
+
+                  {/* Reset/Create New */}
+                  <div className="flex items-center justify-between pt-2.5 border-t border-emerald-200/60 mt-3 text-[11px] text-emerald-800">
+                    <span>{t('নতুন কোনো কার্ড তৈরি করতে চান?', 'Want to create another card?')}</span>
+                    <button
+                      type="button"
+                      onClick={() => resetForm()}
+                      className="font-bold underline text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                    >
+                      {t('নতুন তৈরি করুন', 'Create New')}
                     </button>
                   </div>
                 </div>
@@ -1006,32 +1121,60 @@ export default function Wishes() {
             </div>
             
             {showScheduleForm && activeTab === 'image' && (
-              <div className="mt-4 p-4 bg-purple-50/50 rounded-2xl border border-purple-100 animate-in fade-in slide-in-from-top-2 text-left">
-                <h4 className="text-sm font-bold text-slate-700 mb-3">{t('লিংক পাঠানোর তথ্য দিন', 'Enter link sending details')}</h4>
+              <div className="mt-4 p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 animate-in fade-in slide-in-from-top-2 text-left">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-emerald-600" />
+                    <span>{t('কার্ড পাঠানোর তথ্য দিন', 'Enter card sending details')}</span>
+                  </h4>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowScheduleForm(false)} 
+                    className="w-6 h-6 rounded-full hover:bg-emerald-200/60 flex items-center justify-center text-xs text-slate-500 hover:text-slate-700 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1 block">{t('কীভাবে পাঠাবেন?', 'How to send?')}</label>
+                    <label className="text-xs font-bold text-slate-600 mb-1 block">{t('কীভাবে পাঠাবেন?', 'How to send?')}</label>
                     <div className="flex gap-2">
-                      <button onClick={() => setScheduleMethod('whatsapp')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${scheduleMethod === 'whatsapp' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-slate-500 border-slate-200'}`}>WhatsApp</button>
-                      <button onClick={() => setScheduleMethod('sms')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${scheduleMethod === 'sms' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}`}>SMS</button>
+                      <button 
+                        type="button" 
+                        onClick={() => setScheduleMethod('whatsapp')} 
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition ${
+                          scheduleMethod === 'whatsapp' ? 'bg-green-600 text-white border-green-600 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        WhatsApp
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setScheduleMethod('sms')} 
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition ${
+                          scheduleMethod === 'sms' ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        SMS
+                      </button>
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1 block">{t('তারিখ ও সময়', 'Date & Time')}</label>
+                    <label className="text-xs font-bold text-slate-600 mb-1 block">{t('তারিখ ও সময়', 'Date & Time')}</label>
                     <div className="flex gap-2">
-                      <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-purple-300" />
-                      <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-purple-300" />
+                      <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 bg-white" />
+                      <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 bg-white" />
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1 block">
+                    <label className="text-xs font-bold text-slate-600 mb-1 block">
                       {scheduleMethod === 'whatsapp' ? t('রিসিভারের WhatsApp নম্বর', 'Recipient WhatsApp number') : t('রিসিভারের ফোন নম্বর', 'Recipient phone number')}
                     </label>
-                    <input type="tel" value={scheduleContact} onChange={e => setScheduleContact(e.target.value)} placeholder="যেমন: +8801..." className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-purple-300" />
+                    <input type="tel" value={scheduleContact} onChange={e => setScheduleContact(e.target.value)} placeholder="যেমন: 017..." className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 bg-white" />
                   </div>
-                  <div className="flex gap-2 mt-4">
-                    <button onClick={() => handleSaveWish('send', true)} className="flex-1 bg-white hover:bg-slate-50 text-purple-700 border border-purple-200 rounded-lg py-2.5 text-sm font-bold transition shadow-sm">{t('এখুনি পাঠান', 'Send Now')}</button>
-                    <button onClick={() => handleSaveWish('schedule', true)} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2.5 text-sm font-bold transition shadow-sm">{t('শিডিউল করুন', 'Schedule')}</button>
+                  <div className="flex gap-2 mt-4 pt-1">
+                    <button type="button" onClick={() => handleSaveWish('send', true)} className="flex-1 bg-white hover:bg-slate-50 text-emerald-700 border border-emerald-300 rounded-xl py-2.5 text-xs font-bold transition shadow-xs active:scale-95">{t('এখুনি পাঠান', 'Send Now')}</button>
+                    <button type="button" onClick={() => handleSaveWish('schedule', true)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2.5 text-xs font-bold transition shadow-xs active:scale-95">{t('শিডিউল করুন', 'Schedule')}</button>
                   </div>
                 </div>
               </div>
@@ -1210,7 +1353,7 @@ export default function Wishes() {
 
         {/* Tab 4: Scheduled Wishes List */}
         {activeTab === 'list' && (
-          <div className="bg-white rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 mb-6">
+          <div className="bg-white rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 mb-28 pb-6 md:mb-6">
             <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
               <div>
                 <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center">
@@ -1231,18 +1374,27 @@ export default function Wishes() {
             </div>
 
             {/* Status Filter Tabs */}
-            <div className="flex gap-1.5 mb-4 overflow-x-auto no-scrollbar">
+            <div className="flex gap-1.5 mb-4 overflow-x-auto no-scrollbar pb-0.5">
               {[
-                { id: 'all', label: t('সব', 'All') },
-                { id: 'scheduled', label: t('⏳ শিডিউলড / অপেক্ষমাণ', 'Scheduled') },
-                { id: 'sent', label: t('✅ পাঠানো হয়েছে', 'Sent') }
+                { id: 'all', label: t('সব', 'All'), count: scheduledWishes.length },
+                { id: 'scheduled', label: t('অপেক্ষমাণ', 'Scheduled'), count: scheduledWishes.filter(w => w.status === 'Scheduled' || w.status === 'Pending').length },
+                { id: 'sent', label: t('পাঠানো হয়েছে', 'Sent'), count: scheduledWishes.filter(w => w.status === 'Sent').length }
               ].map(f => (
                 <button
                   key={f.id}
                   onClick={() => setWishFilter(f.id as any)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm whitespace-nowrap ${wishFilter === f.id ? 'bg-[#0A7756] text-white' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap active:scale-95 ${
+                    wishFilter === f.id 
+                      ? 'bg-emerald-700 text-white shadow-xs' 
+                      : 'bg-slate-50 text-slate-600 border border-slate-200/80 hover:bg-slate-100'
+                  }`}
                 >
-                  {f.label}
+                  <span>{f.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    wishFilter === f.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {f.count}
+                  </span>
                 </button>
               ))}
             </div>
@@ -1252,11 +1404,17 @@ export default function Wishes() {
                 {t('উইশ তালিকা লোড হচ্ছে...', 'Loading wishes...')}
               </div>
             ) : (() => {
-              const filtered = wishFilter === 'all' 
+              const baseFiltered = wishFilter === 'all' 
                 ? scheduledWishes 
                 : wishFilter === 'scheduled' 
                 ? scheduledWishes.filter(w => w.status === 'Scheduled' || w.status === 'Pending')
                 : scheduledWishes.filter(w => w.status === 'Sent');
+
+              const filtered = [...baseFiltered].sort((a, b) => {
+                const timeA = new Date(a.createdAt || a.scheduledAt || 0).getTime();
+                const timeB = new Date(b.createdAt || b.scheduledAt || 0).getTime();
+                return timeB - timeA;
+              });
 
               if (filtered.length === 0) {
                 return (
@@ -1279,89 +1437,212 @@ export default function Wishes() {
               }
 
               return (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {filtered.map((w) => {
+                    const isSent = w.status === 'Sent';
+                    const isCancelled = w.status === 'Cancelled';
+                    const isPending = !isSent && !isCancelled;
                     const scheduledDate = new Date(w.scheduledAt || w.createdAt);
                     const dateFormatted = scheduledDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' });
                     const timeFormatted = scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
                     return (
-                      <div key={w._id} className="bg-gradient-to-br from-white to-slate-50/50 rounded-2xl p-4 border border-slate-200/80 shadow-sm relative overflow-hidden flex flex-col gap-2">
-                        {/* Top Row: Occasion & Status */}
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-pink-50 text-pink-700 border border-pink-100 flex items-center">
-                            {getOccasionBadge(w.occasion)}
-                          </span>
-
-                          <div className="flex items-center gap-2">
-                            {w.status === 'Sent' ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center">
-                                <CheckCircle2 className="w-3 h-3 mr-1 inline" /> {t('পাঠানো হয়েছে', 'Sent')}
+                      <div 
+                        key={w._id} 
+                        className={`bg-white rounded-2xl p-4 border transition-all duration-200 shadow-xs hover:shadow-md flex flex-col gap-3 relative ${
+                          isSent 
+                            ? 'border-emerald-200/90 border-l-4 border-l-emerald-500' 
+                            : isPending 
+                            ? 'border-amber-200/90 border-l-4 border-l-amber-500' 
+                            : 'border-slate-200 border-l-4 border-l-slate-400'
+                        }`}
+                      >
+                        {/* Top Bar: Occasion & Status & Actions */}
+                        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-100 flex items-center shadow-2xs">
+                              {getOccasionBadge(w.occasion)}
+                            </span>
+                            {w.isSmartCard && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-purple-600" />
+                                {t('ডিজিটাল কার্ড', 'Digital Card')}
                               </span>
-                            ) : w.status === 'Cancelled' ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isSent ? (
+                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shadow-2xs">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>{t('পাঠানো হয়েছে', 'Sent')}</span>
+                              </span>
+                            ) : isCancelled ? (
+                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
                                 {t('বাতিল', 'Cancelled')}
                               </span>
                             ) : (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center">
-                                <Clock className="w-3 h-3 mr-1 inline" /> {t('অপেক্ষমাণ (শিডিউলড)', 'Scheduled')}
+                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shadow-2xs">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                <span>{t('অপেক্ষমাণ', 'Scheduled')}</span>
                               </span>
                             )}
 
                             <button
+                              type="button"
                               onClick={() => handleDeleteWish(w._id)}
-                              className="text-slate-300 hover:text-red-500 transition p-1"
+                              className="w-7 h-7 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition active:scale-90"
                               title={t('মুছে ফেলুন', 'Delete')}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
 
-                        {/* Middle Row: Recipient & Time */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
-                          <div>
-                            <span className="text-[10px] font-bold text-slate-400 block uppercase">{t('প্রাপক', 'Recipient')}</span>
-                            <span className="font-bold text-slate-800 text-sm">
-                              {w.recipientName || 'প্রিয়জন'}
-                            </span>
-                            {w.recipientContact && (
-                              <span className="text-[11px] font-semibold text-teal-700 block mt-0.5 flex items-center">
-                                <Phone className="w-3 h-3 mr-1 inline" /> {w.recipientContact}
+                        {/* Recipient Details & Channel Pill */}
+                        <div className="flex items-center justify-between gap-3 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-800 font-extrabold text-sm flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-2xs">
+                              {(w.recipientName || 'প্র')[0]}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block leading-none mb-0.5">
+                                {t('প্রাপক', 'Recipient')}
+                              </span>
+                              <h4 className="font-bold text-slate-900 text-sm truncate leading-snug">
+                                {w.recipientName || t('প্রিয়জন', 'Loved One')}
+                              </h4>
+                              {w.recipientContact && (
+                                <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1 mt-0.5 font-mono">
+                                  <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span>{w.recipientContact}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Delivery Channel Badge */}
+                          <div className="shrink-0">
+                            {w.deliveryMethod?.includes('WhatsApp') ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-2xs">
+                                <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                WhatsApp
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg shadow-2xs">
+                                SMS
                               </span>
                             )}
                           </div>
-                          <div>
-                            <span className="text-[10px] font-bold text-slate-400 block uppercase">{t('পাঠানোর তারিখ ও সময়', 'Scheduled At')}</span>
-                            <span className="font-bold text-slate-700">
-                              📅 {dateFormatted}
-                            </span>
-                            <span className="text-[11px] font-bold text-indigo-600 block mt-0.5">
-                              ⏰ {timeFormatted}
-                            </span>
-                          </div>
                         </div>
 
-                        {/* Message Preview */}
-                        {w.message && (
-                          <div className="bg-white p-3 rounded-xl border border-slate-100 text-xs text-slate-700 italic relative">
-                            "{w.message}"
+                        {/* Schedule & Sender Metadata */}
+                        <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-slate-600 px-1">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="flex items-center gap-1 font-semibold text-slate-700">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>{dateFormatted}</span>
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="flex items-center gap-1 font-bold text-emerald-700">
+                              <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>{timeFormatted}</span>
+                            </span>
                           </div>
+
+                          {w.cardData?.senderName && (
+                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                              <span>{t('প্রেরক:', 'From:')}</span>
+                              <strong className="font-bold text-slate-800">{w.cardData.senderName}</strong>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Smart Card Preview Box with 3-button Actions */}
+                        {(w.isSmartCard || w.smartCardId) ? (
+                          <div className="bg-gradient-to-br from-purple-50/70 via-pink-50/30 to-white rounded-2xl p-3 border border-purple-100 space-y-2.5 shadow-2xs">
+                            <div className="flex items-start gap-3">
+                              {w.cardData?.image ? (
+                                <img 
+                                  src={w.cardData.image} 
+                                  alt="Card" 
+                                  className="w-12 h-12 rounded-xl object-cover border border-purple-200 shrink-0 shadow-2xs" 
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200">
+                                  <Gift className="w-5 h-5" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <h5 className="text-xs md:text-sm font-bold text-slate-800 line-clamp-1 leading-snug">
+                                  {w.cardData?.title || t('ডিজিটাল গ্রিটিং কার্ড', 'Digital Greeting Card')}
+                                </h5>
+                                {w.message && (
+                                  <p className="text-[11px] text-slate-500 line-clamp-2 italic mt-0.5 leading-relaxed">
+                                    "{w.message}"
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons: 3 Columns Grid */}
+                            <div className="grid grid-cols-3 gap-2 pt-1 border-t border-purple-100/70">
+                              <Link
+                                to={`/wish/${w.smartCardId || w._id}`}
+                                target="_blank"
+                                className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition shadow-2xs active:scale-95"
+                              >
+                                <Eye className="w-3.5 h-3.5 shrink-0" />
+                                <span>{t('প্রিভিউ', 'Preview')}</span>
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cardUrl = `${window.location.origin}/w/${w.smartCardId || w._id}`;
+                                  navigator.clipboard.writeText(cardUrl);
+                                  toast.success(t('কার্ড লিংক কপি হয়েছে!', 'Card link copied!'));
+                                }}
+                                className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition shadow-2xs active:scale-95"
+                              >
+                                <Copy className="w-3.5 h-3.5 shrink-0" />
+                                <span>{t('কপি', 'Copy')}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cardUrl = `${window.location.origin}/w/${w.smartCardId || w._id}`;
+                                  const text = encodeURIComponent(`🎉 আপনার জন্য একটি সুন্দর শুভেচ্ছা কার্ড পাঠানো হয়েছে! দেখতে লিংকে ট্যাপ করুন:\n${cardUrl}`);
+                                  window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+                                }}
+                                className="flex items-center justify-center gap-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-2xs active:scale-95"
+                              >
+                                <Share2 className="w-3.5 h-3.5 shrink-0" />
+                                <span>{t('শেয়ার', 'Share')}</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          w.message && (
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-700 italic leading-relaxed font-sans">
+                              "{w.message}"
+                            </div>
+                          )
                         )}
 
-                        {/* Smart Card Preview Link */}
-                        {(w.isSmartCard || w.smartCardId) && (
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
-                              ✨ ডিজিটাল স্মার্ট কার্ড
-                            </span>
-                            <Link
-                              to={`/wish/${w.smartCardId || w._id}`}
-                              target="_blank"
-                              className="text-xs font-bold text-primary hover:underline flex items-center"
+                        {/* Plain Message Share if applicable */}
+                        {(!w.isSmartCard && !w.smartCardId && w.message) && (
+                          <div className="flex items-center justify-end text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const text = encodeURIComponent(w.message || '');
+                                window.open(`https://api.whatsapp.com/send?phone=${w.recipientContact || ''}&text=${text}`, '_blank');
+                              }}
+                              className="text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 text-xs active:scale-95 transition"
                             >
-                              <Eye className="w-3.5 h-3.5 mr-1 inline" /> {t('কার্ড প্রিভিউ দেখুন', 'Preview Card')}
-                            </Link>
+                              <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>{t('হোয়াটসঅ্যাপে পাঠান', 'Send to WhatsApp')}</span>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1392,12 +1673,24 @@ export default function Wishes() {
                 : t('আপনার মেসেজটি সফলভাবে রিসিভারের কাছে পাঠানো হয়েছে।', 'Your message was sent successfully to the recipient.')}
             </p>
             
-            <button 
-              onClick={() => setSuccessPopup({show: false, type: 'send'})}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition"
-            >
-              {t('বন্ধ করুন', 'Close')}
-            </button>
+            <div className="flex gap-2 w-full">
+              <button 
+                onClick={() => {
+                  setSuccessPopup({show: false, type: 'send'});
+                  setActiveTab('list');
+                  fetchWishes();
+                }}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-xs"
+              >
+                {t('শিডিউল তালিকা দেখুন', 'View Schedule')}
+              </button>
+              <button 
+                onClick={() => setSuccessPopup({show: false, type: 'send'})}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold py-2.5 rounded-xl transition text-xs"
+              >
+                {t('নতুন তৈরি করুন', 'Create New')}
+              </button>
+            </div>
           </div>
         </div>
       )}
