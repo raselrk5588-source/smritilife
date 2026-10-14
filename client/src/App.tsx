@@ -37,6 +37,7 @@ function App() {
 
         {/* Digital Greeting Card Route (Public) */}
         <Route path="/w/:id" element={<ViewWish />} />
+        <Route path="/wish/:id" element={<ViewWish />} />
         
         {/* Subscription Paywall (Public) */}
         <Route path="/paywall" element={<Paywall />} />

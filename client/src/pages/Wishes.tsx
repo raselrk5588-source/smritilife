@@ -1588,7 +1588,7 @@ export default function Wishes() {
                             {/* Action Buttons: 3 Columns Grid */}
                             <div className="grid grid-cols-3 gap-2 pt-1 border-t border-purple-100/70">
                               <Link
-                                to={`/wish/${w.smartCardId || w._id}`}
+                                to={`/w/${w.smartCardId || w._id}`}
                                 target="_blank"
                                 className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition shadow-2xs active:scale-95"
                               >
