@@ -733,7 +733,28 @@ Possible actions:
    Fields in "data":
    - "searchQuery": string
 
-13. general_reply (for greetings, conversational questions, or help)
+13. save_location:
+   When the user wants to save a physical location, house, office, shop, landmark, address, or place they visited or want to remember!
+   Examples in Bengali/Banglish:
+   - "এই লোকেশনটা সেভ করে রাখো: গুলশান ১ বন্ধুর বাসা" -> action: "save_location", data: { title: "গুলশান ১ বন্ধুর বাসা", address: "গুলশান ১, ঢাকা" }
+   - "গুলশান ১ বাসার ঠিকানা সেভ করো: রোড ৫, বাড়ি ১২" -> action: "save_location", data: { title: "গুলশান ১ বাসা", address: "রোড ৫, বাড়ি ১২, গুলশান ১" }
+   - "আমার অফিসের লোকেশন সেভ করো: বনানী ১১, ঢাকা" -> action: "save_location", data: { title: "অফিসের লোকেশন", address: "বনানী ১১, ঢাকা" }
+   - "ধানমন্ডি ২৭ ডাক্তারের চেম্বারের লোকেশন মনে রেখো" -> action: "save_location", data: { title: "ডাক্তারের চেম্বার", address: "ধানমন্ডি ২৭, ঢাকা" }
+   - "save location: Gulshan 1, Road 10" -> action: "save_location", data: { title: "গুলশান ১", address: "Road 10, Gulshan 1" }
+   Fields in "data":
+   - "title": string (Specific place/house name)
+   - "address": string (The road, house, area, or description)
+
+14. get_location:
+   When the user asks for a saved location, address, Google Maps link, or asks to see their saved locations.
+   Examples in Bengali/Banglish:
+   - "গুলশান ১ এর বাসার লোকেশনটা দাও" বা "গুলশান ১ বাসার এড্রেস কি" বা "gulshan 1 basar location dao" -> action: "get_location", data: { searchQuery: "গুলশান ১" }
+   - "আমার অফিসের লোকেশন কোথায়?" বা "office address ta dao" বা "অফিসের ঠিকানা দাও" -> action: "get_location", data: { searchQuery: "অফিস" }
+   - "আমার সেভ করা লোকেশনগুলো দেখাও" বা "সব লোকেশন দেখাও" বা "লোকেশন লিস্ট দাও" -> action: "get_location", data: { searchQuery: "সব" }
+   Fields in "data":
+   - "searchQuery": string (Place name or "সব" to list all saved locations)
+
+15. general_reply (for greetings, conversational questions, or help)
 
 Example Response for Wish:
 {
@@ -777,8 +798,51 @@ OR for reminder:
 Only return the JSON. No markdown formatting like \`\`\`json.
 `;
 
+// In-memory cache for dynamic AI training rules (2-minute TTL to prevent DB hits on every message)
+let cachedRulesPrompt: { prompt: string; expiresAt: number } | null = null;
+
+export const invalidateRulesCache = () => {
+  cachedRulesPrompt = null;
+};
+
 export const analyzeMessage = async (whatsappNumber: string, userMessage: string, userHonorific?: string) => {
   try {
+    const cleanMsg = (userMessage || '').trim();
+    const salutationPrefix = userHonorific ? ` ${userHonorific}` : '';
+
+    // FAST-PATH 1: Ultra-fast local replies for simple conversational greetings (<10ms response time)
+    const isPureGreeting = /^(?:hi|hello|hlw|hey|heyy|সালাম|হ্যালো|হাই|assalamu\s*alaikum|as[\-\s]*salamu\s*alaikum|slaam|salam|assalam|শুভ\s*সকাল|শুভ\s*রাত্রি|good\s*morning|good\s*night)[!.\s]*$/i.test(cleanMsg);
+    if (isPureGreeting) {
+      return {
+        action: 'general_reply',
+        replyText: `ওয়ালাইকুম আসসালাম${salutationPrefix}! আমি স্মৃতি লাইফ (Smriti Life), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আজ আপনাকে কীভাবে সাহায্য করতে পারি বলুন?`
+      };
+    }
+
+    const isPureHowAreYou = /^(?:কেমন\s*আছো|কেমন\s*আছেন|kemon\s*acho|kemon\s*asen|kemon\s*achen|how\s*are\s*you)[?!\s]*$/i.test(cleanMsg);
+    if (isPureHowAreYou) {
+      return {
+        action: 'general_reply',
+        replyText: `আলহামদুলিল্লাহ${salutationPrefix}, আমি বেশ ভালো আছি! আশা করি আপনিও ভালো আছেন। 😊 বলুন, কী মনে করিয়ে দিতে হবে বা কীভাবে সাহায্য করতে পারি?`
+      };
+    }
+
+    const isPureThanks = /^(?:ধন্যবাদ|ধন্যবাদ\s*আপনাকে|thanks|thank\s*you|thx|অনেক\s*ধন্যবাদ|tnx|shukriya|shukran)[!.\s]*$/i.test(cleanMsg);
+    if (isPureThanks) {
+      return {
+        action: 'general_reply',
+        replyText: `আপনাকেও অনেক অনেক ধন্যবাদ${salutationPrefix}! 🌸 যেকোনো প্রয়োজনে আমাকে নিশ্চিন্তে জানাতে পারেন।`
+      };
+    }
+
+    const isPureCapabilities = /^(?:তুমি\s*কি\s*করতে\s*পারো|কী\s*করতে\s*পারো|ki\s*korte\s*paro|what\s*can\s*you\s*do|তুমি\s*কি\s*করো|help|সাহায্য)[?!\s]*$/i.test(cleanMsg);
+    if (isPureCapabilities) {
+      return {
+        action: 'general_reply',
+        replyText: `আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট "স্মৃতি লাইফ" (Smriti Life)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া (লিখে বা ভয়েস পাঠিয়ে)\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় হোয়াটসঅ্যাপ বার্তা পাঠানো\n• প্রিয়জনকে আকর্ষণীয় অ্যানিমেটেড উইশ কার্ড পাঠিয়ে দেওয়া\n• জরুরি লোকেশন ও ঠিকানা সংরক্ষণ করে গুগল ম্যাপসে দেখানো\n• কেনাকাটা ও কাজের টু-ডু বা চেকলিস্ট পরিচালনা করা\n\nবলুন${salutationPrefix}, আজকে কী করতে চান?`
+      };
+    }
+
     // Fetch settings to get API key
     let apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -798,18 +862,23 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Fetch dynamic custom training rules trained by Admin via WhatsApp or Dashboard
+    // Fetch dynamic custom training rules with in-memory cache
     let dynamicRulesPrompt = '';
     try {
-      const activeRules = await AITrainingRule.find({ isActive: true }).sort({ createdAt: -1 }).limit(25);
-      if (activeRules.length > 0) {
-        const rulesList = activeRules.map((r, i) => {
-          let text = `${i + 1}. ${r.rule}`;
-          if (r.exampleInput) text += ` (User example: "${r.exampleInput}")`;
-          if (r.exampleOutput) text += ` (Expected Output: ${r.exampleOutput})`;
-          return text;
-        }).join('\n');
-        dynamicRulesPrompt = `\n\n### ADMIN CUSTOM TRAINING RULES (MANDATORY TO FOLLOW):\n${rulesList}\n`;
+      if (cachedRulesPrompt && cachedRulesPrompt.expiresAt > Date.now()) {
+        dynamicRulesPrompt = cachedRulesPrompt.prompt;
+      } else {
+        const activeRules = await AITrainingRule.find({ isActive: true }).sort({ createdAt: -1 }).limit(25);
+        if (activeRules.length > 0) {
+          const rulesList = activeRules.map((r, i) => {
+            let text = `${i + 1}. ${r.rule}`;
+            if (r.exampleInput) text += ` (User example: "${r.exampleInput}")`;
+            if (r.exampleOutput) text += ` (Expected Output: ${r.exampleOutput})`;
+            return text;
+          }).join('\n');
+          dynamicRulesPrompt = `\n\n### ADMIN CUSTOM TRAINING RULES (MANDATORY TO FOLLOW):\n${rulesList}\n`;
+        }
+        cachedRulesPrompt = { prompt: dynamicRulesPrompt, expiresAt: Date.now() + 2 * 60 * 1000 };
       }
     } catch (dbErr) {
       console.warn("Could not load dynamic AI training rules:", dbErr);
@@ -848,15 +917,13 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${liveClockPrompt}\n${dynamicRulesPrompt}\n${honorificPrompt}`;
 
-    // Candidate models in order of stability and quota availability
+    // Candidate models: Start with the lowest-latency, highest-stability models (~1.4s response)
     const candidateModels = [
-      'gemini-3.5-flash',
-      'gemini-3.5-flash-lite',
-      'gemini-flash-latest',
-      'gemini-flash-lite-latest',
       'gemini-3.1-flash-lite',
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-flash'
+      'gemini-3.5-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest',
+      'gemini-3.5-flash'
     ];
     let parsedResponse: any = null;
 
@@ -873,7 +940,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         });
         const chat = model.startChat({ history });
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 7000)
+          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 5000)
         );
         const result: any = await Promise.race([
           chat.sendMessage(userMessage),
@@ -1482,20 +1549,18 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const candidateModels = [
-      'gemini-3.5-flash',
-      'gemini-3.5-flash-lite',
-      'gemini-flash-latest',
-      'gemini-flash-lite-latest',
       'gemini-3.1-flash-lite',
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-flash'
+      'gemini-3.5-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest',
+      'gemini-3.5-flash'
     ];
 
     const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
-Analyze what task, reminder, action (create_reminder, list_reminders, modify_reminder, delete_all_reminders, delete_reminder, cancel_reminder, create_wish, save_note, get_note, save_contact, get_contact, manage_todolist, general_reply) the user wants to perform, and return EXACTLY the JSON action format specified in system instructions.
+Analyze what task, reminder, action (create_reminder, list_reminders, modify_reminder, delete_all_reminders, delete_reminder, cancel_reminder, create_wish, save_note, get_note, save_location, get_location, save_contact, get_contact, manage_todolist, general_reply) the user wants to perform, and return EXACTLY the JSON action format specified in system instructions.
 Today's date in Bangladesh is ${dhakaDate}. If the user says 'কাল' or 'tomorrow', set tomorrow's date.
 Remember to return ONLY the raw JSON object.`;
 
@@ -1519,7 +1584,13 @@ Remember to return ONLY the raw JSON object.`;
           model: modelName,
           systemInstruction: fullSystemInstruction
         });
-        const result = await model.generateContent([prompt, audioPart]);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 6000)
+        );
+        const result: any = await Promise.race([
+          model.generateContent([prompt, audioPart]),
+          timeoutPromise
+        ]);
         const responseText = result.response.text().trim();
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         const cleanJson = jsonMatch ? jsonMatch[0] : responseText.replace(/```json/gi, '').replace(/```/g, '').trim();

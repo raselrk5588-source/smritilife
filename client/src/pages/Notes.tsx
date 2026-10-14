@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Star, Heart, GraduationCap, Briefcase, ShoppingCart, FileText, X, Bell, Trash2, Edit } from 'lucide-react';
+import { Search, Plus, Star, Heart, GraduationCap, Briefcase, ShoppingCart, FileText, X, Bell, Trash2, Edit, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchWithAuth } from '../utils/api';
@@ -7,7 +7,7 @@ import { fetchWithAuth } from '../utils/api';
 export default function Notes() {
   const { t } = useSettings();
   const [activeTab, setActiveTab] = useState(t('সব', 'All'));
-  const tabs = [t('সব', 'All'), t('ব্যক্তিগত', 'Personal'), t('কাজ', 'Work'), t('পড়াশোনা', 'Study')];
+  const tabs = [t('সব', 'All'), t('লোকেশন', 'Locations'), t('ব্যক্তিগত', 'Personal'), t('কাজ', 'Work'), t('পড়াশোনা', 'Study')];
 
   const [notes, setNotes] = useState<any[]>([]);
   const [isAddingNote, setIsAddingNote] = useState(false);
@@ -21,18 +21,22 @@ export default function Notes() {
       const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/notes`);
       if (res.ok) {
         const data = await res.json();
-        const formatted = data.map((item: any) => ({
-          id: item._id,
-          title: item.title,
-          date: new Date(item.createdAt).toLocaleDateString(),
-          time: new Date(item.createdAt).toLocaleTimeString(),
-          category: item.category,
-          icon: FileText,
-          color: 'bg-emerald-50',
-          headerColor: 'bg-emerald-100/50 text-emerald-700',
-          text: item.content,
-          starred: item.favorite
-        }));
+        const formatted = data.map((item: any) => {
+          const isLoc = item.category === 'Location' || item.category === 'Address';
+          return {
+            id: item._id,
+            title: item.title,
+            date: new Date(item.createdAt).toLocaleDateString(),
+            time: new Date(item.createdAt).toLocaleTimeString(),
+            category: item.category,
+            location: item.location,
+            icon: isLoc ? MapPin : FileText,
+            color: isLoc ? 'bg-amber-50/60' : 'bg-emerald-50',
+            headerColor: isLoc ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100/50 text-emerald-700',
+            text: item.content,
+            starred: item.favorite
+          };
+        });
         setNotes(formatted);
       }
     } catch (e) {
@@ -101,6 +105,15 @@ export default function Notes() {
     }
   };
 
+  const filteredNotes = notes.filter(note => {
+    if (activeTab === t('সব', 'All')) return true;
+    if (activeTab === t('লোকেশন', 'Locations')) return note.category === 'Location' || note.category === 'Address';
+    if (activeTab === t('ব্যক্তিগত', 'Personal')) return note.category === 'Personal';
+    if (activeTab === t('কাজ', 'Work')) return note.category === 'Work';
+    if (activeTab === t('পড়াশোনা', 'Study')) return note.category === 'Study';
+    return true;
+  });
+
   return (
     <div className="bg-white min-h-screen">
       {/* Top Header Banner */}
@@ -163,7 +176,7 @@ export default function Notes() {
 
         {/* Notes List */}
         <div className="space-y-2">
-          {notes.length === 0 ? (
+          {filteredNotes.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 mt-8 shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[250px] text-center">
               <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-4">
                 <FileText className="w-8 h-8" />
@@ -180,7 +193,9 @@ export default function Notes() {
               </button>
             </div>
           ) : (
-            notes.map(note => (
+            filteredNotes.map(note => {
+              const mapUrl = note.location?.mapUrl || (note.text?.match(/https?:\/\/[^\s]+/)?.[0]);
+              return (
               <div key={note.id} className={`${note.color} rounded-xl p-3 shadow-sm relative overflow-hidden group cursor-pointer border border-transparent hover:border-black/5 transition-all`}>
                 
                 {/* Left Color Strip */}
@@ -230,9 +245,25 @@ export default function Notes() {
                       ))}
                     </ul>
                   )}
+
+                  {mapUrl && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-200/50 flex">
+                      <a 
+                        href={mapUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 text-xs font-bold transition border border-amber-300/40"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-amber-700" />
+                        {t('গুগল ম্যাপসে রুট দেখুন 🗺️', 'Open in Google Maps 🗺️')}
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
-            ))
+            );
+            })
           )}
         </div>
       </div>

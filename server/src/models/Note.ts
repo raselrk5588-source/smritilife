@@ -6,6 +6,12 @@ export interface INote extends Document {
   content: string;
   type: string;
   category: string;
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    mapUrl?: string;
+  };
   tags: string[];
   pinned: boolean;
   favorite: boolean;
@@ -21,6 +27,12 @@ const NoteSchema: Schema = new Schema(
     content: { type: String, required: true },
     type: { type: String, default: 'General' },
     category: { type: String, default: 'Uncategorized' },
+    location: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+      address: { type: String },
+      mapUrl: { type: String }
+    },
     tags: [{ type: String }],
     pinned: { type: Boolean, default: false },
     favorite: { type: Boolean, default: false },

@@ -6,7 +6,7 @@ import TodoList from '../models/TodoList';
 import Note from '../models/Note';
 import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
-import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, cleanPersonName } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 
 export interface ReminderActionState {
@@ -476,7 +476,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           audioMimeType = message.audio?.mime_type || message.voice?.mime_type || 'audio/ogg';
         }
 
-        if (!fromNumber || (!userMessage && !isAudio && !buttonId && message.type !== 'contacts')) return;
+        if (!fromNumber || (!userMessage && !isAudio && !buttonId && message.type !== 'contacts' && message.type !== 'location')) return;
 
         // Show native WhatsApp "typing..." status & read receipt while AI processes the request
         if (message.id) {
@@ -517,12 +517,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // Update user activity timestamp and ensure whatsapp number is set
+        // Update user activity timestamp (non-blocking for returning users)
         user.lastActiveAt = new Date();
         if (!user.whatsapp) {
           user.whatsapp = fromNumber;
+          await user.save();
+        } else {
+          User.updateOne({ _id: user._id }, { $set: { lastActiveAt: new Date() } }).catch(() => {});
         }
-        await user.save();
 
         // --- STEP 0A: Handle WhatsApp Shared Contact Card (vCard) ---
         if (message.type === 'contacts' && message.contacts && message.contacts.length > 0) {
@@ -569,6 +571,59 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        // --- STEP 0B: Handle WhatsApp Native Shared Location Pin (message.type === 'location') ---
+        if (message.type === 'location' && message.location) {
+          const loc = message.location;
+          const lat = loc.latitude;
+          const lng = loc.longitude;
+          const locName = (loc.name || '').trim();
+          const locAddress = (loc.address || '').trim();
+          const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+
+          const title = locName || (locAddress ? locAddress.split(',')[0].trim() : 'সংরক্ষিত লোকেশন');
+          const addressText = locAddress || `${lat}, ${lng}`;
+
+          const cleanTitleRegex = new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+          let note = await Note.findOne({ userId: user._id, title: cleanTitleRegex });
+
+          if (note) {
+            note.content = `${title}\n${addressText}\n📍 Google Maps: ${googleMapsUrl}`;
+            note.category = 'Location';
+            note.type = 'Location';
+            note.location = { latitude: lat, longitude: lng, address: addressText, mapUrl: googleMapsUrl };
+            await note.save();
+          } else {
+            await Note.create({
+              userId: user._id,
+              title,
+              content: `${title}\n${addressText}\n📍 Google Maps: ${googleMapsUrl}`,
+              category: 'Location',
+              type: 'Location',
+              location: { latitude: lat, longitude: lng, address: addressText, mapUrl: googleMapsUrl }
+            });
+          }
+
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
+          const cardBody = `📍 আসসালামু আলাইকুম${salutation}!\nআপনার শেয়ার করা লোকেশন পিন সফলভাবে স্মৃতিতে সংরক্ষণ করে রেখেছি:\n\n📌 নাম: *${title}*${locAddress ? `\n🗺️ ঠিকানা: ${locAddress}` : ''}\n\n💡 পরবর্তীতে এই লোকেশন বা ম্যাপ পেতে লিখুন:\n"${title} দাও" বা "সব লোকেশন দেখাও"`;
+
+          const sent = await sendMetaWhatsAppCtaUrl(
+            fromNumber,
+            cardBody,
+            'ম্যাপ ওপেন করুন 🗺️',
+            googleMapsUrl,
+            `📍 ${title.substring(0, 50)}`,
+            'ট্যাপ করে সরাসরি গুগল ম্যাপসে রুট দেখুন'
+          );
+
+          if (!sent) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `${cardBody}\n\n🔗 গুগল ম্যাপস লিঙ্ক:\n${googleMapsUrl}`
+            );
+          }
+          return;
+        }
+
         const cleanText = (userMessage || '').trim();
 
         // --- STEP 0: Handle WhatsApp Chat AI Training (/teach, /train, /rules, /unlearn) ---
@@ -610,6 +665,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             addedBy: fromNumber,
             isActive: true
           });
+          invalidateRulesCache();
 
           await sendMetaWhatsAppMessage(
             fromNumber,
@@ -645,6 +701,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           });
 
           if (deleted) {
+            invalidateRulesCache();
             await sendMetaWhatsAppMessage(
               fromNumber,
               `🗑️ নিয়মটি সফলভাবে স্মৃতি থেকে মুছে ফেলা হয়েছে:\n"${deleted.rule}"`
@@ -1790,6 +1847,57 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             break;
           }
 
+          case 'save_location': {
+            const data = aiResponse.data || {};
+            let title = (data.title || 'সংরক্ষিত লোকেশন').trim();
+            let address = (data.address || title).trim();
+
+            const mapQuery = address.toLowerCase().includes('dhaka') || address.includes('ঢাকা') || address.toLowerCase().includes('bangladesh')
+              ? address
+              : `${address}, Dhaka, Bangladesh`;
+            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`;
+
+            const cleanTitleRegex = new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+            let note = await Note.findOne({ userId: user._id, title: cleanTitleRegex });
+
+            if (note) {
+              note.content = `${title}\n${address}\n📍 Google Maps: ${googleMapsUrl}`;
+              note.category = 'Location';
+              note.type = 'Location';
+              note.location = { address, mapUrl: googleMapsUrl };
+              await note.save();
+            } else {
+              note = await Note.create({
+                userId: user._id,
+                title,
+                content: `${title}\n${address}\n📍 Google Maps: ${googleMapsUrl}`,
+                category: 'Location',
+                type: 'Location',
+                location: { address, mapUrl: googleMapsUrl }
+              });
+            }
+
+            const salutation = user.honorific ? ` ${user.honorific}` : '';
+            const cardBody = `📍 আসসালামু আলাইকুম${salutation}!\nআপনার "${title}" লোকেশনটি সফলভাবে স্মৃতিতে সংরক্ষণ করে রেখেছি।\n\n🗺️ ঠিকানা: ${address}\n\n💡 পরবর্তীতে এই লোকেশন বা ম্যাপ পেতে লিখুন:\n"${title} দাও" বা "সব লোকেশন দেখাও"`;
+
+            const sent = await sendMetaWhatsAppCtaUrl(
+              fromNumber,
+              cardBody,
+              'ম্যাপ ওপেন করুন 🗺️',
+              googleMapsUrl,
+              `📍 ${title.substring(0, 50)}`,
+              'ট্যাপ করে সরাসরি গুগল ম্যাপসে রুট দেখুন'
+            );
+
+            if (!sent) {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `${cardBody}\n\n🔗 গুগল ম্যাপস লিঙ্ক:\n${googleMapsUrl}`
+              );
+            }
+            break;
+          }
+
           case 'save_note': {
             const data = aiResponse.data || {};
             let title = (data.title || 'ব্যক্তিগত তথ্য').trim();
@@ -1916,14 +2024,116 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             }
 
             if (matchedNote) {
-              await sendMetaWhatsAppMessage(
-                fromNumber,
-                `📌 আপনার সংরক্ষিত *${matchedNote.title}*:\n\n📍 ${matchedNote.content}`
-              );
+              const mapUrl = matchedNote.location?.mapUrl || matchedNote.content.match(/https?:\/\/[^\s]+/)?.[0];
+              if (mapUrl && (matchedNote.category === 'Location' || matchedNote.category === 'Address')) {
+                const addr = matchedNote.location?.address || matchedNote.content.replace(/📍\s*Google Maps:.*$/s, '').trim();
+                const cardBody = `📌 *${matchedNote.title}*\n\n🗺️ ঠিকানা: ${addr}`;
+                const sent = await sendMetaWhatsAppCtaUrl(
+                  fromNumber,
+                  cardBody,
+                  'ম্যাপ ওপেন করুন 🗺️',
+                  mapUrl,
+                  `📍 ${matchedNote.title.substring(0, 50)}`,
+                  'ট্যাপ করে সরাসরি গুগল ম্যাপসে রুট দেখুন'
+                );
+                if (!sent) {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `📌 আপনার সংরক্ষিত *${matchedNote.title}*:\n\n📍 ${matchedNote.content}`
+                  );
+                }
+              } else {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `📌 আপনার সংরক্ষিত *${matchedNote.title}*:\n\n📍 ${matchedNote.content}`
+                );
+              }
             } else {
               await sendMetaWhatsAppMessage(
                 fromNumber,
                 `দুঃখিত, আপনার "${query}" সম্পর্কিত কোনো তথ্য স্মৃতিতে সেভ করা নেই।\n\n💡 এটি সেভ করতে লিখুন: "${query}: [আপনার তথ্য]"`
+              );
+            }
+            break;
+          }
+
+          case 'get_location': {
+            const data = aiResponse.data || {};
+            let query = (data.searchQuery || '').trim();
+
+            if (!query || query === 'সব' || /সব|সকল|all|লিস্ট|list|লোকেশনগুলো|লোকেশনগুলা/i.test(query)) {
+              const locations = await Note.find({
+                userId: user._id,
+                $or: [{ category: 'Location' }, { category: 'Address' }]
+              }).sort({ updatedAt: -1 });
+
+              if (locations.length === 0) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  '📍 আপনার কোনো সংরক্ষিত লোকেশন নেই।\n\nনতুন লোকেশন সেভ করতে লিখুন:\n"এই লোকেশনটা সেভ করো: গুলশান ১ বন্ধুর বাসা"\nঅথবা সরাসরি হোয়াটসঅ্যাপে লোকেশন পিন শেয়ার করুন।'
+                );
+              } else {
+                let msg = `📍 আপনার সংরক্ষিত লোকেশনসমূহ (${locations.length}টি):\n\n`;
+                locations.forEach((loc, idx) => {
+                  const addr = loc.location?.address || loc.content.split('\n')[1] || loc.content.replace(/📍\s*Google Maps:.*$/s, '').trim();
+                  msg += `${idx + 1}. 📌 *${loc.title}*\n   🗺️ ${addr.substring(0, 60)}\n\n`;
+                });
+                msg += `💡 নির্দিষ্ট কোনো লোকেশন বা ম্যাপ বাটন পেতে লিখুন: "[জায়গার নাম] দাও" (যেমন: "গুলশান ১ দাও")`;
+                await sendMetaWhatsAppMessage(fromNumber, msg.trim());
+              }
+              break;
+            }
+
+            // Search for specific location
+            const coreQuery = query
+              .replace(/(?:আমার|amr|amar|এর|র|er|ar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কোথায়|kothay|খুঁজে|লোকেশন|ঠিকানা|এড্রেস|address|location|daw|dao|ki|bolo)/gi, '')
+              .trim();
+
+            const searchRegex = new RegExp((coreQuery || query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+            let matchedLoc = await Note.findOne({
+              userId: user._id,
+              $or: [
+                { title: searchRegex },
+                { content: searchRegex },
+                { 'location.address': searchRegex }
+              ]
+            });
+
+            if (!matchedLoc) {
+              matchedLoc = await Note.findOne({
+                userId: user._id,
+                $or: [{ category: 'Location' }, { category: 'Address' }]
+              }).sort({ updatedAt: -1 });
+            }
+
+            if (matchedLoc) {
+              const addr = matchedLoc.location?.address || matchedLoc.content.replace(/📍\s*Google Maps:.*$/s, '').trim();
+              const mapUrl = matchedLoc.location?.mapUrl ||
+                matchedLoc.content.match(/https?:\/\/[^\s]+/)?.[0] ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr + ', Dhaka, Bangladesh')}`;
+
+              const cardBody = `📌 *${matchedLoc.title}*\n\n🗺️ ঠিকানা: ${addr}`;
+
+              const sent = await sendMetaWhatsAppCtaUrl(
+                fromNumber,
+                cardBody,
+                'ম্যাপ ওপেন করুন 🗺️',
+                mapUrl,
+                `📍 ${matchedLoc.title.substring(0, 50)}`,
+                'ট্যাপ করে সরাসরি গুগল ম্যাপসে রুট দেখুন'
+              );
+
+              if (!sent) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `📍 *${matchedLoc.title}*\n🗺️ ${addr}\n\n🔗 গুগল ম্যাপস লিঙ্ক:\n${mapUrl}`
+                );
+              }
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `দুঃখিত, "${query}" সম্পর্কিত কোনো সংরক্ষিত লোকেশন খুঁজে পাওয়া যায়নি।\n\nনতুন লোকেশন সেভ করতে লিখুন:\n"লোকেশন সেভ করো: [জায়গার নাম ও ঠিকানা]"`
               );
             }
             break;
