@@ -10,7 +10,7 @@ import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
-import { parseExpenseInput, recordExpense, getExpenseSummary, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
+import { parseExpenseInput, recordExpense, getExpenseSummary, getExpenseSummaryForDate, getExpenseSummaryForMonth, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -1249,25 +1249,67 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // --- STEP 2.9: Daily Expense Tracker Fast-Path (0 Cost, Instant Response) ---
-        const isReminderContext = /মনে|রিমাইন্ডার|reminder|লিস্ট|ডাক|তুলে|alarm|অ্যালার্ম|কাল|আগামীকাল|tomorrow|pm|am|সকাল|বিকাল|রাত|ফজর|মাগরিব/i.test(cleanText);
-        if (!isReminderContext) {
+        // Allow expense commands and queries (yesterday, day before yesterday, specific dates like '10 oct', months)
+        const isReminderAction = /মনে\s*করিয়ে|ডাকবে|তুলে\s*দিও|wake\s*me|অ্যালার্ম|alarm/i.test(cleanText);
+        if (!isReminderAction) {
           const parsedExpense = parseExpenseInput(cleanText);
           if (parsedExpense) {
             if (parsedExpense.isQuery) {
-              const summary = await getExpenseSummary(user._id);
-              if (parsedExpense.isMonthly) {
-                const reply = buildMonthlyExpenseQueryMessage(summary.monthTotal, summary.monthCount, summary.categoryBreakdown);
-                await sendMetaWhatsAppMessage(fromNumber, reply);
+              if (parsedExpense.queryType === 'monthly') {
+                if (parsedExpense.monthYear) {
+                  const mSummary = await getExpenseSummaryForMonth(
+                    user._id,
+                    parsedExpense.monthYear.year,
+                    parsedExpense.monthYear.month,
+                    parsedExpense.monthYear.monthLabelBn
+                  );
+                  const reply = buildMonthlyExpenseQueryMessage(
+                    mSummary.monthTotal,
+                    mSummary.monthCount,
+                    mSummary.categoryBreakdown,
+                    mSummary.monthLabelBn
+                  );
+                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                } else {
+                  const summary = await getExpenseSummary(user._id);
+                  const reply = buildMonthlyExpenseQueryMessage(
+                    summary.monthTotal,
+                    summary.monthCount,
+                    summary.categoryBreakdown,
+                    'চলতি মাসের'
+                  );
+                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                }
               } else {
-                const reply = buildDailyExpenseQueryMessage(summary.todayExpenses, summary.todayTotal, summary.monthTotal);
+                // Daily query (Today, Yesterday, Day before yesterday, Specific Date like 10 Oct)
+                const targetDate = parsedExpense.targetDate || new Date();
+                const dSummary = await getExpenseSummaryForDate(
+                  user._id,
+                  targetDate,
+                  parsedExpense.dateLabelBn || 'আজকের'
+                );
+                const reply = buildDailyExpenseQueryMessage(
+                  dSummary.dateExpenses,
+                  dSummary.dateTotal,
+                  dSummary.monthTotal,
+                  dSummary.dateLabelBn
+                );
                 await sendMetaWhatsAppMessage(fromNumber, reply);
               }
               return;
             } else if (parsedExpense.title && parsedExpense.amount) {
-              await recordExpense(user._id, parsedExpense.title, parsedExpense.amount, parsedExpense.paymentMethod);
-              const summary = await getExpenseSummary(user._id);
+              const expDate = parsedExpense.expenseDate || new Date();
+              await recordExpense(user._id, parsedExpense.title, parsedExpense.amount, parsedExpense.paymentMethod, expDate);
+              const dSummary = await getExpenseSummaryForDate(user._id, expDate, parsedExpense.dateLabelBn || 'আজকের');
               const cat = detectExpenseCategory(parsedExpense.title);
-              const reply = buildExpenseLoggedMessage(parsedExpense.title, parsedExpense.amount, cat, summary.todayTotal, summary.monthTotal);
+              const reply = buildExpenseLoggedMessage(
+                parsedExpense.title,
+                parsedExpense.amount,
+                cat,
+                dSummary.dateTotal,
+                dSummary.monthTotal,
+                parsedExpense.dateLabelBn
+              );
               await sendMetaWhatsAppMessage(fromNumber, reply);
               return;
             }

@@ -74,7 +74,8 @@ export default function Expenses() {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [summary, setSummary] = useState<ExpenseSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'today' | 'month'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'today' | 'yesterday' | 'month' | 'custom'>('all');
+  const [customDate, setCustomDate] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -86,6 +87,7 @@ export default function Expenses() {
   const [newCategory, setNewCategory] = useState('food');
   const [newPaymentMethod, setNewPaymentMethod] = useState('cash');
   const [newNotes, setNewNotes] = useState('');
+  const [newDate, setNewDate] = useState('');
 
   const fetchExpenses = async () => {
     try {
@@ -132,7 +134,8 @@ export default function Expenses() {
           amount: parseFloat(newAmount),
           category: newCategory,
           paymentMethod: newPaymentMethod,
-          notes: newNotes.trim()
+          notes: newNotes.trim(),
+          date: newDate ? new Date(`${newDate}T12:00:00.000+06:00`) : undefined
         })
       });
 
@@ -141,6 +144,7 @@ export default function Expenses() {
         setNewTitle('');
         setNewAmount('');
         setNewNotes('');
+        setNewDate('');
         setIsAddModalOpen(false);
         fetchExpenses();
       } else {
@@ -189,10 +193,23 @@ export default function Expenses() {
       return todayStr === itemDateStr;
     }
 
+    if (activeFilter === 'yesterday') {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const itemDateStr = new Date(item.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      return yesterdayStr === itemDateStr;
+    }
+
     if (activeFilter === 'month') {
       const now = new Date();
       const itemDate = new Date(item.date);
       return now.getFullYear() === itemDate.getFullYear() && now.getMonth() === itemDate.getMonth();
+    }
+
+    if (activeFilter === 'custom' && customDate) {
+      const itemDateStr = new Date(item.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      return customDate === itemDateStr;
     }
 
     return true;
@@ -358,25 +375,43 @@ export default function Expenses() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             
             {/* Filter Tabs */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-full text-xs font-semibold">
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-2xl text-xs font-semibold">
               <button
-                onClick={() => setActiveFilter('all')}
+                onClick={() => { setActiveFilter('all'); setCustomDate(''); }}
                 className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'all' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 সব খরচ
               </button>
               <button
-                onClick={() => setActiveFilter('today')}
+                onClick={() => { setActiveFilter('today'); setCustomDate(''); }}
                 className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'today' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 আজকে ({summary?.todayCount || 0})
               </button>
               <button
-                onClick={() => setActiveFilter('month')}
+                onClick={() => { setActiveFilter('yesterday'); setCustomDate(''); }}
+                className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'yesterday' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                গতকালকে
+              </button>
+              <button
+                onClick={() => { setActiveFilter('month'); setCustomDate(''); }}
                 className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'month' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 এই মাস ({summary?.monthCount || 0})
               </button>
+              <div className="flex items-center gap-1 pl-1">
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={(e) => {
+                    setCustomDate(e.target.value);
+                    if (e.target.value) setActiveFilter('custom');
+                  }}
+                  title="নির্দিষ্ট তারিখ বাছাই করুন (যেমন: ১০ অক্টোবর)"
+                  className="bg-white border border-slate-200 text-slate-700 text-xs px-2 py-1 rounded-xl outline-none cursor-pointer"
+                />
+              </div>
             </div>
 
             {/* Category Dropdown & Search */}
@@ -554,6 +589,18 @@ export default function Expenses() {
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-[#0A7756]/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  তারিখ (ঐচ্ছিক - পেছনের দিনের খরচ হলে তারিখ দিন, না দিলে আজকের তারিখ হবে)
+                </label>
+                <input
+                  type="date"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A7756]/30"
                 />
               </div>
 
