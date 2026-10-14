@@ -35,7 +35,8 @@ export const userWishState = new Map<string, WishPendingState>();
 export const sendMetaWhatsAppButtons = async (
   to: string,
   bodyText: string,
-  buttons: Array<{ id: string; title: string }>
+  buttons: Array<{ id: string; title: string }>,
+  footerText?: string
 ): Promise<boolean> => {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -62,6 +63,7 @@ export const sendMetaWhatsAppButtons = async (
           interactive: {
             type: 'button',
             body: { text: bodyText },
+            ...(footerText ? { footer: { text: footerText.substring(0, 60) } } : {}),
             action: {
               buttons: buttons.slice(0, 3).map(b => ({
                 type: 'reply',
@@ -93,6 +95,37 @@ export const sendMetaWhatsAppButtons = async (
   }
 
   return false;
+};
+
+/**
+ * Helper to detect user honorific/salutation choice in Bengali or English
+ */
+export const extractHonorificChoice = (text: string): string | null => {
+  if (!text) return null;
+  const clean = text.trim();
+  const cmdMatch = clean.match(/^(?:\/title|\/honorific|\/callme|\/সম্বোধন)\s+(.+)$/i);
+  const target = (cmdMatch ? cmdMatch[1] : clean).trim().toLowerCase();
+
+  const phraseMatch = target.match(/(?:আমাকে\s+(?:এখন\s+থেকে\s+)?|আমায়\s+)?(চিফ|chief|স্যার|sir|বস|boss|ভাই|ভাইয়া|bhai|bhaiya|আপু|আপি|apu|api|ম্যাডাম|madam)(?:\s*(?:বলে|হিসেবে))?\s*(?:ডাকবেন|সম্বোধন\s*করবেন|বলবেন|ডাকো|বলো)?/i);
+  const exactMatch = target.match(/^(?:চিফ|chief|স্যার|sir|বস|boss|ভাই|ভাইয়া|bhai|bhaiya|আপু|আপি|apu|api|ম্যাডাম|madam)[\s🎖️👔👑❤️]*$/i);
+
+  let raw = '';
+  if (exactMatch) {
+    raw = exactMatch[0];
+  } else if (phraseMatch && (phraseMatch[0].length >= target.length * 0.7 || phraseMatch[0].includes('ডাক') || phraseMatch[0].includes('সম্বোধন') || phraseMatch[0].includes('বলবেন') || phraseMatch[0].includes('ডাকো') || phraseMatch[0].includes('বলো') || cmdMatch)) {
+    raw = phraseMatch[1];
+  }
+
+  if (raw) {
+    const l = raw.toLowerCase();
+    if (l.includes('চিফ') || l.includes('chief')) return 'চিফ';
+    if (l.includes('স্যার') || l.includes('sir')) return 'স্যার';
+    if (l.includes('বস') || l.includes('boss')) return 'বস';
+    if (l.includes('ভাই') || l.includes('bhai')) return 'ভাই';
+    if (l.includes('আপু') || l.includes('আপি') || l.includes('apu') || l.includes('api')) return 'আপু';
+    if (l.includes('ম্যাডাম') || l.includes('madam')) return 'ম্যাডাম';
+  }
+  return null;
 };
 
 // Function to send an interactive CTA URL button via Meta API (opens website link in browser)
@@ -466,11 +499,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // If user whatsapp was not set, link it now
+        // Update user activity timestamp and ensure whatsapp number is set
+        user.lastActiveAt = new Date();
         if (!user.whatsapp) {
           user.whatsapp = fromNumber;
-          await user.save();
         }
+        await user.save();
 
         // --- STEP 0A: Handle WhatsApp Shared Contact Card (vCard) ---
         if (message.type === 'contacts' && message.contacts && message.contacts.length > 0) {
@@ -607,6 +641,26 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // --- STEP 1: Handle Interactive Button / List Menu Clicks ---
+        if (buttonId.startsWith('honorific_')) {
+          let chosen = '';
+          if (buttonId === 'honorific_chief') chosen = 'চিফ';
+          else if (buttonId === 'honorific_sir') chosen = 'স্যার';
+          else if (buttonId === 'honorific_boss') chosen = 'বস';
+          else if (buttonId === 'honorific_bhai') chosen = 'ভাই';
+          else if (buttonId === 'honorific_apu') chosen = 'আপু';
+          else if (buttonId === 'honorific_madam') chosen = 'ম্যাডাম';
+
+          if (chosen) {
+            user.honorific = chosen;
+            await user.save();
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🎉 অনেক ধন্যবাদ ${chosen}! এখন থেকে আমি আপনাকে সবসময় "${chosen}" বলেই সম্বোধন করব। 🤝\n\nবলুন ${chosen}, আজকে আপনাকে কীভাবে সাহায্য করতে পারি? যেমন:\n• রিমাইন্ডার বা অ্যালার্ম সেট করতে (লিখে বা ভয়েস পাঠিয়ে)\n• জন্মদিনের শুভেচ্ছা বা উইশ কার্ড পাঠাতে\n• কেনাকাটার তালিকা বা নোট সেভ করতে`
+            );
+            return;
+          }
+        }
+
         if (buttonId.startsWith('todo_toggle_')) {
           // Format: todo_toggle_{listId}_{itemId}
           const parts = buttonId.replace('todo_toggle_', '').split('_');
@@ -689,14 +743,33 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
+        if (buttonId === 'followup_set_reminder') {
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `📝 জি${salutation}, বলুন! কাল কয়টায় কী মনে করিয়ে দিতে হবে? যেমন: "কাল সকাল ৯টায় মিটিং" বা "রাত ১০টায় ওষুধ খাওয়া"। আপনি লিখে বা অডিও পাঠিয়ে দিতে পারেন।`
+          );
+          return;
+        }
+
+        if (buttonId === 'followup_not_today') {
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🌙 চমৎকার${salutation}! কোনো প্রয়োজন হলে যেকোনো সময় জানাবেন। শুভ রাত্রি, ভালো থাকবেন! 🌟`
+          );
+          return;
+        }
+
         if (buttonId.startsWith('rem_done_')) {
           const remId = buttonId.replace('rem_done_', '');
           const reminder = await Reminder.findByIdAndUpdate(remId, { status: 'Completed' }, { new: true });
           userReminderState.delete(user._id.toString());
           const title = reminder?.title || 'কাজটি';
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
           await sendMetaWhatsAppMessage(
             fromNumber,
-            `🎉 দারুণ! "${title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো। আপনার দিনটি শুভ হোক!`
+            `🎉 দারুণ${salutation}! "${title}" সফলভাবে সম্পন্ন হিসেবে মার্ক করা হলো। আপনার দিনটি শুভ হোক!`
           );
           return;
         }
@@ -714,6 +787,39 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             fromNumber,
             `⏰ কোনো সমস্যা নেই! আপনি কখন বা কোন সময়ে এটি পুনঃনির্ধারণ করতে চান বলুন (যেমন: "আজ বিকাল ৫টায়" বা "কাল সকাল ১০টায়")।`
           );
+          return;
+        }
+
+        // --- STEP 1.5: Handle User Honorific/Salutation (Selection or Onboarding) ---
+        const selectedTitle = extractHonorificChoice(cleanText);
+        if (selectedTitle) {
+          user.honorific = selectedTitle;
+          await user.save();
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🎉 অনেক ধন্যবাদ ${selectedTitle}! এখন থেকে আমি আপনাকে সবসময় "${selectedTitle}" বলেই সম্বোধন করব। 🤝\n\nবলুন ${selectedTitle}, আজকে আপনাকে কীভাবে সাহায্য করতে পারি? যেমন:\n• রিমাইন্ডার বা অ্যালার্ম সেট করতে (লিখে বা ভয়েস পাঠিয়ে)\n• জন্মদিনের শুভেচ্ছা বা উইশ কার্ড পাঠাতে\n• কেনাকাটার তালিকা বা নোট সেভ করতে`
+          );
+          return;
+        }
+
+        // If user has not chosen an honorific yet, greet them with Salam and ask how to address them
+        if (!user.honorific && !buttonId) {
+          const onboardingPrompt = `আসসালামু আলাইকুম! স্মৃতি লাইফে (Smriti Life) আপনাকে স্বাগতম। 🌸\n\nআমি আপনার সার্বক্ষণিক এআই পার্সোনাল অ্যাসিস্ট্যান্ট। আমি আপনাকে কীভাবে সম্বোধন করব? অনুগ্রহ করে নিচের যেকোনো একটি সিলেক্ট করুন বা লিখে জানান:`;
+          const buttons = [
+            { id: 'honorific_chief', title: 'চিফ (Chief) 🎖️' },
+            { id: 'honorific_sir', title: 'স্যার (Sir) 👔' },
+            { id: 'honorific_boss', title: 'বস (Boss) 👑' }
+          ];
+          const buttonsSent = await sendMetaWhatsAppButtons(
+            fromNumber,
+            onboardingPrompt,
+            buttons,
+            'অথবা ভাই / আপু লিখে জানান'
+          );
+          if (!buttonsSent) {
+            const fallbackText = `${onboardingPrompt}\n\n• চিফ (Chief)\n• স্যার (Sir)\n• বস (Boss)\n• ভাই (Bhai)\n• আপু (Apu)\n\n👉 যেকোনো একটি লিখে রিপ্লাই দিন।`;
+            await sendMetaWhatsAppMessage(fromNumber, fallbackText);
+          }
           return;
         }
 
@@ -877,14 +983,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           console.log(`🎤 Received WhatsApp Voice Note from ${fromNumber}. Downloading audio...`);
           const audioData = await downloadMetaAudio(audioMediaId);
           if (audioData) {
-            aiResponse = await analyzeAudioMessage(fromNumber, audioData.buffer, audioData.mimeType);
+            aiResponse = await analyzeAudioMessage(fromNumber, audioData.buffer, audioData.mimeType, user.honorific);
           } else {
             await sendMetaWhatsAppMessage(fromNumber, 'দুঃখিত, আপনার ভয়েস মেসেজটি ডাউনলোড করা যায়নি। দয়া করে আবার চেষ্টা করুন।');
             return;
           }
         } else {
           console.log(`📩 Received WhatsApp Message from ${fromNumber}: "${userMessage}"`);
-          aiResponse = await analyzeMessage(fromNumber, userMessage);
+          aiResponse = await analyzeMessage(fromNumber, userMessage, user.honorific);
         }
 
         switch (aiResponse.action) {
@@ -1205,10 +1311,48 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 const senderName = user.name || 'আপনার পরিচিত জন';
                 const senderNumber = user.whatsapp || user.mobile || '';
 
+                // Check if message content qualifies as an allowed formal category for unregistered numbers
+                const combinedText = `${cleanTitle || ''} ${customMsg || ''} ${cleanText || ''}`.toLowerCase();
+                const isAllowedForUnregistered = /মিটিং|meeting|অ্যাপয়েন্টমেন্ট|appointment|অনুষ্ঠান|event|দাওয়াত|dawat|ইনভাইটেশন|invitation|কনফারেন্স|conference|বিয়ে|biye|সেমিনার|seminar|শুভেচ্ছা|wish|শুভ|ঈদ|eid|birthday|জন্মদিন/.test(combinedText);
+
+                const allowedRecipients: Array<{ name: string; phone: string; isRegistered: boolean }> = [];
+                const blockedRecipients: Array<{ name: string; phone: string }> = [];
+
                 for (const target of resolvedRecipients) {
+                  const cleanTargetPhone = target.phone.replace(/\D/g, '');
+                  const shortTargetPhone = cleanTargetPhone.length > 10 ? cleanTargetPhone.slice(-10) : cleanTargetPhone;
+                  const recipientUser = await User.findOne({
+                    $or: [
+                      { whatsapp: { $regex: new RegExp(shortTargetPhone + '$') } },
+                      { mobile: { $regex: new RegExp(shortTargetPhone + '$') } }
+                    ]
+                  });
+
+                  if (!recipientUser && !isAllowedForUnregistered) {
+                    blockedRecipients.push(target);
+                  } else {
+                    allowedRecipients.push({ ...target, isRegistered: !!recipientUser });
+                  }
+                }
+
+                // If all recipients are unregistered and message is NOT an allowed category (meeting/wish/event):
+                if (allowedRecipients.length === 0 && blockedRecipients.length > 0) {
+                  const blockedList = blockedRecipients.map(b => `*${b.name}* (${b.phone})`).join(', ');
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `⚠️ দুঃখিত! ${blockedList} নম্বরটি স্মৃতি লাইফে এখনও নিবন্ধিত (Registered) নয়।\n\nনিরাপত্তা ও অ্যান্টি-স্প্যাম পলিসি অনুযায়ী, অনিবন্ধিত নম্বরে শুধুমাত্র নির্ধারিত বার্তা (যেমন: মিটিং রিমাইন্ডার, শুভেচ্ছা বার্তা/উইশ বা অনুষ্ঠান) পাঠানো সম্ভব।\n\n💡 তাকে স্মৃতি লাইফে রেজিস্ট্রেশন করতে বলতে পারেন:\nhttps://smritilife.com/auth`
+                  );
+                  break;
+                }
+
+                for (const target of allowedRecipients) {
                   // If sendNow is true, dispatch message immediately via WhatsApp
                   if (sendNow && customMsg) {
-                    const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${customMsg}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)`;
+                    let promoSection = '';
+                    if (!target.isRegistered) {
+                      promoSection = `\n\n✨ আপনিও কি স্মৃতি লাইফ (Smriti Life) ব্যবহার করে স্বয়ংক্রিয় রিমাইন্ডার ও বার্তা পাঠাতে চান?\nরেজিস্ট্রেশন করুন: https://smritilife.com/auth`;
+                    }
+                    const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${customMsg}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
                     await sendMetaWhatsAppMessage(target.phone, thirdPartyAlert);
                   }
 
@@ -1221,14 +1365,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     date: reminderDate,
                     time: reminderTime,
                     priority: 'Medium',
-                    category: 'message',
+                    category: isAllowedForUnregistered ? 'meeting' : 'message',
                     repeat: 'Once',
                     status: sendNow ? 'Completed' : 'Pending'
                   });
                 }
 
                 // Compose confirmation message to sender
-                const count = resolvedRecipients.length;
+                const count = allowedRecipients.length;
                 let replyMsg = '';
                 if (sendNow) {
                   replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে এখনই বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n\n`;
@@ -1236,12 +1380,17 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে সময় ${formattedTime}-এ বার্তা পাঠানোর শিডিউল সেট করা হয়েছে:\n\n`;
                 }
 
-                resolvedRecipients.forEach((r, idx) => {
-                  replyMsg += `${idx + 1}. 👤 *${r.name}* (${r.phone})\n`;
+                allowedRecipients.forEach((r, idx) => {
+                  replyMsg += `${idx + 1}. 👤 *${r.name}* (${r.phone})${r.isRegistered ? ' [স্মৃতি ইউজার]' : ''}\n`;
                 });
 
                 if (customMsg) {
                   replyMsg += `\n💬 বার্তা: "${customMsg}"`;
+                }
+
+                if (blockedRecipients.length > 0) {
+                  const blockedNames = blockedRecipients.map(b => `${b.name} (${b.phone})`).join(', ');
+                  replyMsg += `\n\n⚠️ দ্রষ্টব্য: ${blockedNames} নম্বরটি স্মৃতি লাইফে নিবন্ধিত না থাকায় বার্তা পাঠানো যায়নি (অনিবন্ধিত নম্বরে শুধুমাত্র মিটিং ও শুভেচ্ছা বার্তা অনুমোদিত)।`;
                 }
 
                 if (notFoundNames.length > 0) {
@@ -1251,6 +1400,18 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 await sendMetaWhatsAppMessage(fromNumber, replyMsg.trim());
               } else {
                 // 4. Regular self-reminder
+                const isMedicine = aiResponse.data.category === 'medicine' || 
+                                   /ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|নাপা|গ্যাস্ট্রিক|প্যারাসিটামল|প্রেসার|ডায়াবেটিস/i.test(cleanTitle) ||
+                                   /ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|নাপা|গ্যাস্ট্রিক|প্যারাসিটামল|প্রেসার|ডায়াবেটিস/i.test(customMsg || '') ||
+                                   /ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|নাপা|গ্যাস্ট্রিক|প্যারাসিটামল|প্রেসার|ডায়াবেটিস/i.test(cleanText);
+
+                const isDaily = isMedicine || 
+                                /প্রতিদিন|দৈনিক|রোজ|রোজই|daily|everyday|every\s*day|protidin|roj/i.test(cleanText) ||
+                                aiResponse.data.repeat === 'Daily';
+
+                const finalCategory = isMedicine ? 'medicine' : (aiResponse.data.category || 'General');
+                const finalRepeat = isDaily ? 'Daily' : (aiResponse.data.repeat || 'Once');
+
                 await Reminder.create({
                   userId: user._id,
                   title: cleanTitle,
@@ -1258,15 +1419,19 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   date: reminderDate,
                   time: reminderTime,
                   priority: 'Medium',
-                  category: aiResponse.data.category || 'General',
-                  repeat: 'Once',
+                  category: finalCategory,
+                  repeat: finalRepeat,
                   status: 'Pending'
                 });
 
-                await sendMetaWhatsAppMessage(
-                  fromNumber,
-                  aiResponse.replyText || `আপনার রিমাইন্ডার "${cleanTitle}" সময় ${formattedTime}-এ সেট করা হয়েছে!`
-                );
+                let reply = aiResponse.replyText;
+                if (!reply || reply.includes('সেট করা হয়েছে')) {
+                  const icon = isMedicine ? '💊' : '⏰';
+                  const repeatStr = finalRepeat === 'Daily' ? 'প্রতিদিন ' : '';
+                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : ''}রিমাইন্ডার "${cleanTitle}" ${repeatStr}সময় ${formattedTime}-এ সফলভাবে সেট করা হয়েছে!`;
+                }
+
+                await sendMetaWhatsAppMessage(fromNumber, reply);
               }
             }
             break;

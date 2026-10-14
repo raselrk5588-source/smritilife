@@ -113,6 +113,17 @@ export const startReminderScheduler = () => {
               ]
             });
 
+            const combinedText = `${reminder.title || ''} ${reminder.description || ''} ${reminder.category || ''}`.toLowerCase();
+            const isAllowedForUnregistered = /মিটিং|meeting|অ্যাপয়েন্টমেন্ট|appointment|অনুষ্ঠান|event|দাওয়াত|dawat|ইনভাইটেশন|invitation|কনফারেন্স|conference|বিয়ে|biye|সেমিনার|seminar|শুভেচ্ছা|wish|শুভ|ঈদ|eid|birthday|জন্মদিন/.test(combinedText);
+
+            if (!recipientUser && !isAllowedForUnregistered) {
+              console.warn(`[ReminderScheduler] Blocked third-party message to unregistered number ${reminder.recipientPhone} (not an allowed meeting/wish/event category).`);
+              if (senderNumber) {
+                await sendWhatsAppAlert(senderNumber, `⚠️ আপনার নির্ধারিত বার্তাটি (${reminder.recipientPhone}) নম্বরে পাঠানো যায়নি, কারণ নম্বরটি স্মৃতি লাইফে নিবন্ধিত নয়। অনিবন্ধিত নম্বরে শুধুমাত্র মিটিং ও শুভেচ্ছা বার্তা অনুমোদিত।`);
+              }
+              continue;
+            }
+
             let promoSection = '';
             if (!recipientUser) {
               promoSection = `\n\n✨ আপনিও কি স্মৃতি লাইফ (Smriti Life) প্ল্যাটফর্ম ব্যবহার করে স্বয়ংক্রিয় রিমাইন্ডার ও বার্তা পাঠাতে চান?\nএখনই রেজিস্ট্রেশন করুন: https://smritilife.com/auth`;
@@ -132,7 +143,18 @@ export const startReminderScheduler = () => {
           } else {
             if (senderNumber) {
               const displayTime = formatTime12Hour(reminder.time);
-              const alertBody = `🔔 আসসালামু আলাইকুম! এটি আপনার স্মৃতির রিমাইন্ডার:\n\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
+              const categoryMap: Record<string, string> = {
+                medicine: '💊 ওষুধ',
+                work: '💼 কাজ/মিটিং',
+                shopping: '🛒 শপিং/বাজার',
+                bill: '💳 বিল পেমেন্ট',
+                event: '🎁 অনুষ্ঠান',
+                other: '📌 অন্যান্য'
+              };
+              const catLabel = categoryMap[reminder.category] || '';
+              const catText = catLabel ? `\n🏷️ ক্যাটাগরি: ${catLabel}` : '';
+              const salutation = user?.honorific ? ` ${user.honorific}` : (user?.name ? ` ${user.name.split(' ')[0]}` : '');
+              const alertBody = `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
 
               // Track in active state for tracking response
               userReminderState.set(reminder.userId.toString(), {
@@ -155,6 +177,17 @@ export const startReminderScheduler = () => {
               }
               console.log(`[ReminderScheduler] Interactive prompt sent for "${reminder.title}" to ${senderNumber}`);
             }
+          }
+
+          // If recurring (Daily or medicine), advance date to tomorrow and set status back to Pending
+          if (reminder.repeat === 'Daily' || reminder.category === 'medicine') {
+            const nextDate = new Date(reminder.date || new Date());
+            nextDate.setDate(nextDate.getDate() + 1);
+            await Reminder.findByIdAndUpdate(reminder._id, {
+              date: nextDate,
+              status: 'Pending'
+            });
+            console.log(`🔄 [ReminderScheduler] Recurring reminder "${reminder.title}" advanced to next day: ${nextDate.toISOString().split('T')[0]}`);
           }
         }
       }
@@ -193,9 +226,89 @@ export const startReminderScheduler = () => {
     }
   };
 
+  // Proactive Nightly Follow-up Check-in (Between 20:30 and 21:30 Bangladesh Time)
+  const checkAndSendNightlyFollowUp = async () => {
+    if (mongoose.connection.readyState !== 1) return;
+
+    try {
+      const now = new Date();
+      const dhakaHour = parseInt(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', hour12: false }), 10);
+      const dhakaMinute = parseInt(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', minute: '2-digit', hour12: false }), 10);
+      const dhakaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }); // "YYYY-MM-DD"
+
+      // Strictly run between 20:30 (8:30 PM) and 21:30 (9:30 PM) Bangladesh time
+      const isNightlyWindow = (dhakaHour === 20 && dhakaMinute >= 30) || (dhakaHour === 21 && dhakaMinute <= 30);
+      if (!isNightlyWindow) return;
+
+      const todayStart = new Date(`${dhakaDateStr}T00:00:00.000Z`);
+      const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999Z`);
+
+      const eligibleUsers = await User.find({
+        isSubscribed: true,
+        lastFollowUpDate: { $ne: dhakaDateStr },
+        $or: [
+          { whatsapp: { $exists: true, $ne: '' } },
+          { mobile: { $exists: true, $ne: '' } }
+        ]
+      });
+
+      for (const user of eligibleUsers) {
+        const targetNumber = user.whatsapp || user.mobile;
+        if (!targetNumber) continue;
+
+        // 1. Check if user already interacted today
+        if (user.lastActiveAt) {
+          const lastActiveDateStr = new Date(user.lastActiveAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+          if (lastActiveDateStr === dhakaDateStr) {
+            await User.findByIdAndUpdate(user._id, { lastFollowUpDate: dhakaDateStr });
+            continue;
+          }
+        }
+
+        // 2. Check if user had any reminder activities today
+        const todayRemindersCount = await Reminder.countDocuments({
+          userId: user._id,
+          $or: [
+            { createdAt: { $gte: todayStart, $lte: todayEnd } },
+            { date: { $gte: todayStart, $lte: todayEnd } }
+          ]
+        });
+
+        if (todayRemindersCount > 0) {
+          await User.findByIdAndUpdate(user._id, { lastFollowUpDate: dhakaDateStr });
+          continue;
+        }
+
+        // Mark as sent today
+        await User.findByIdAndUpdate(user._id, { lastFollowUpDate: dhakaDateStr });
+
+        const salutation = user.honorific || (user.name ? user.name.split(' ')[0] : 'সুপ্রিয় গ্রাহক');
+        const promptBody = `🌙 আসসালামু আলাইকুম ${salutation}!\nআশা করি আপনার আজকের দিনটি সুন্দর কেটেছে। 😊\n\nকালকের জন্য কি কোনো জরুরি কাজ, মিটিং বা ওষুধের রিমাইন্ডার সেট করে রাখতে চান? আমাকে শুধু লিখে বা মুখে বলে দিন, আমি মনে করিয়ে দেব!`;
+
+        const buttons = [
+          { id: 'followup_set_reminder', title: 'রিমাইন্ডার দেব ⏰' },
+          { id: 'followup_not_today', title: 'আজকে লাগবে না 👍' }
+        ];
+
+        const buttonsSent = await sendMetaWhatsAppButtons(targetNumber, promptBody, buttons);
+        if (!buttonsSent) {
+          const fallbackText = `${promptBody}\n\n👉 রিমাইন্ডার দিতে লিখুন: যেমন "কাল সকাল ৯টায় মিটিং"\n👉 আজ কিছু না থাকলে লিখুন: "না" বা "লাগবে না"`;
+          await sendWhatsAppAlert(targetNumber, fallbackText);
+        }
+
+        console.log(`🌙 [NightlyFollowUp] Proactive check-in dispatched to ${targetNumber} (${user.name})`);
+      }
+    } catch (err) {
+      console.error('[NightlyFollowUp] Error running nightly follow-up:', err);
+    }
+  };
+
   // Run on startup
   setTimeout(checkAndDispatchReminders, 5000);
+  setTimeout(checkAndSendNightlyFollowUp, 15000);
 
-  // Poll every 30 seconds for precision
+  // Poll every 30 seconds for reminders
   setInterval(checkAndDispatchReminders, 30000);
+  // Check nightly follow-up every 2 minutes
+  setInterval(checkAndSendNightlyFollowUp, 120000);
 };

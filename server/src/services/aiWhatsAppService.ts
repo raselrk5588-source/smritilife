@@ -777,7 +777,7 @@ OR for reminder:
 Only return the JSON. No markdown formatting like \`\`\`json.
 `;
 
-export const analyzeMessage = async (whatsappNumber: string, userMessage: string) => {
+export const analyzeMessage = async (whatsappNumber: string, userMessage: string, userHonorific?: string) => {
   try {
     // Fetch settings to get API key
     let apiKey = process.env.GEMINI_API_KEY;
@@ -842,7 +842,11 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 3. Date format must be strictly YYYY-MM-DD and time must be 24-hour HH:mm.
 `;
 
-    const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${liveClockPrompt}\n${dynamicRulesPrompt}`;
+    const honorificPrompt = userHonorific
+      ? `\n### USER PERSONAL SALUTATION (MANDATORY):\nThe user has chosen to be addressed as "${userHonorific}". Always respectfully and naturally address the user as "${userHonorific}" in your Bengali responses (e.g. "জি ${userHonorific}", "ঠিক আছে ${userHonorific}", "${userHonorific}, আপনার রিমাইন্ডার সেট করা হয়েছে")!\n`
+      : '';
+
+    const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${liveClockPrompt}\n${dynamicRulesPrompt}\n${honorificPrompt}`;
 
     // Candidate models in order of stability and quota availability
     const candidateModels = [
@@ -1459,7 +1463,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
   }
 };
 
-export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: Buffer, mimeType: string) => {
+export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: Buffer, mimeType: string, userHonorific?: string) => {
   try {
     let apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -1502,12 +1506,18 @@ Remember to return ONLY the raw JSON object.`;
       }
     };
 
+    const honorificPrompt = userHonorific
+      ? `\n### USER PERSONAL SALUTATION (MANDATORY):\nThe user has chosen to be addressed as "${userHonorific}". Always respectfully and naturally address the user as "${userHonorific}" in your Bengali responses (e.g. "জি ${userHonorific}", "ঠিক আছে ${userHonorific}", "${userHonorific}, আপনার রিমাইন্ডার সেট করা হয়েছে")!\n`
+      : '';
+
+    const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${honorificPrompt}`;
+
     let parsedResponse: any = null;
     for (const modelName of candidateModels) {
       try {
         const model = genAI.getGenerativeModel({
           model: modelName,
-          systemInstruction: SYSTEM_INSTRUCTION
+          systemInstruction: fullSystemInstruction
         });
         const result = await model.generateContent([prompt, audioPart]);
         const responseText = result.response.text().trim();

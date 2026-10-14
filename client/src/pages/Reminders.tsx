@@ -5,6 +5,21 @@ import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchWithAuth } from '../utils/api';
 
+const getCurrentDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getCurrentTime = () => {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
 export default function Reminders() {
   const { t } = useSettings();
   const [isAlertOn, setIsAlertOn] = useState(true);
@@ -15,8 +30,8 @@ export default function Reminders() {
   
   // States for work/other
   const [reminderTitle, setReminderTitle] = useState('');
-  const [reminderDate, setReminderDate] = useState('');
-  const [reminderTime, setReminderTime] = useState('');
+  const [reminderDate, setReminderDate] = useState(getCurrentDate());
+  const [reminderTime, setReminderTime] = useState(getCurrentTime());
 
   // States for WhatsApp Integration
   const [notifyWhatsApp, setNotifyWhatsApp] = useState(false);
@@ -132,8 +147,8 @@ export default function Reminders() {
         fetchReminders();
         setEditingReminderId(null);
         setReminderTitle('');
-        setReminderDate('');
-        setReminderTime('');
+        setReminderDate(getCurrentDate());
+        setReminderTime(getCurrentTime());
         toast.success(t('রিমাইন্ডার আপডেট হয়েছে!', 'Reminder updated!'));
       } catch (e) {
         toast.error('Failed to update');
@@ -149,22 +164,43 @@ export default function Reminders() {
       }
       
       try {
+        const routineTimes: Record<string, string> = {
+          'সকাল': '08:30',
+          'Morning': '08:30',
+          'দুপুর': '13:30',
+          'Afternoon': '13:30',
+          'রাত': '21:00',
+          'Night': '21:00'
+        };
+
         for (const med of validMeds) {
-          await fetchWithAuth(`${import.meta.env.VITE_API_URL}/reminders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: med.name,
-              category: 'medicine',
-              description: `${t('খাওয়ার সময়', 'Time')}: ${med.routine.join(', ')} - ${med.mealTiming === 'before' ? t('খাবারের আগে', 'Before food') : t('খাবারের পরে', 'After food')}`,
-              date: new Date().toISOString(), // medicine usually daily, so we just put today
-              time: '08:00', // default time for medicine
-              status: isAlertOn ? 'Pending' : 'Cancelled'
-            })
-          });
+          const mealTimingLabel = med.mealTiming === 'before' ? t('খাবারের আগে', 'Before food') : t('খাবারের পরে', 'After food');
+          
+          for (const routineItem of med.routine) {
+            // Use custom reminderTime if only one routine is selected and user provided a time, otherwise default routine time
+            const scheduledTime = (med.routine.length === 1 && reminderTime) ? reminderTime : (routineTimes[routineItem] || '09:00');
+            const scheduledDate = reminderDate ? new Date(reminderDate).toISOString() : new Date().toISOString();
+
+            await fetchWithAuth(`${import.meta.env.VITE_API_URL}/reminders`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: `${med.name} (${routineItem})`,
+                category: 'medicine',
+                description: `${t('খাওয়ার সময়', 'Time')}: ${routineItem} - ${mealTimingLabel}`,
+                date: scheduledDate,
+                time: scheduledTime,
+                repeat: 'Daily',
+                status: isAlertOn ? 'Pending' : 'Cancelled'
+              })
+            });
+          }
         }
         fetchReminders();
         setMedicines([{ id: Date.now(), name: '', routine: [], mealTiming: 'after' }]);
+        setReminderTitle('');
+        setReminderDate(getCurrentDate());
+        setReminderTime(getCurrentTime());
         toast.success(t('ওষুধের রিমাইন্ডার সেভ হয়েছে!', 'Medicine reminder saved!'));
       } catch (e) {
         toast.error('Failed to save');
@@ -189,8 +225,8 @@ export default function Reminders() {
         });
         fetchReminders();
         setReminderTitle('');
-        setReminderDate('');
-        setReminderTime('');
+        setReminderDate(getCurrentDate());
+        setReminderTime(getCurrentTime());
         toast.success(t('রিমাইন্ডার সেভ হয়েছে!', 'Reminder saved!'));
       } catch (e) {
         toast.error('Failed to save');
@@ -430,8 +466,8 @@ export default function Reminders() {
                 onClick={() => {
                   setEditingReminderId(null);
                   setReminderTitle('');
-                  setReminderDate('');
-                  setReminderTime('');
+                  setReminderDate(getCurrentDate());
+                  setReminderTime(getCurrentTime());
                 }}
                 className="w-full text-slate-500 font-bold py-2 rounded-xl transition-all text-sm hover:bg-slate-100 mt-2 border border-transparent hover:border-slate-200"
               >

@@ -15,6 +15,9 @@ export interface IUser extends Document {
   isSubscribed: boolean;
   isAdmin?: boolean;
   deviceIds: string[];
+  lastFollowUpDate?: string;
+  lastActiveAt?: Date;
+  honorific?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,7 +37,10 @@ const UserSchema: Schema = new Schema(
     },
     isSubscribed: { type: Boolean, default: true },
     isAdmin: { type: Boolean, default: false },
-    deviceIds: { type: [String], default: [] }
+    deviceIds: { type: [String], default: [] },
+    lastFollowUpDate: { type: String },
+    lastActiveAt: { type: Date },
+    honorific: { type: String }
   },
   { timestamps: true }
 );
