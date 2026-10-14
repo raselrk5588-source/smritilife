@@ -650,6 +650,10 @@ Possible actions:
 
 6. create_reminder:
    When user wants a task reminder for themselves or wants to send a message to one or multiple contacts:
+   - Wake-up & Nap Alarms (e.g. "5 mnt por amake uthi diow ghum theke", "20 mnt por deke diow", "ঘুম থেকে তুলে দিও"):
+     * "5 mnt por amake uthi diow ghum theke" -> action: "create_reminder", data: { "title": "ঘুম থেকে ওঠা (ওয়েক-আপ অ্যালার্ম)", "category": "wakeup", "isAlarm": true, "relativeMinutes": 5 }
+     * "20 mnt por deke diow" / "২০ মিনিট পর ডেকে দিও" -> action: "create_reminder", data: { "title": "ঘুম থেকে ওঠা (ওয়েক-আপ অ্যালার্ম)", "category": "wakeup", "isAlarm": true, "relativeMinutes": 20 }
+     * "কাল সকাল ৬টায় ডেকে দিও" / "kal sokal 6ta deke dio" -> action: "create_reminder", data: { "title": "সকাল ৬টায় ঘুম থেকে ওঠা", "category": "wakeup", "isAlarm": true, "time": "06:00" }
    - Direct message variations (MUST detect recipient and message text accurately, with sendNow: true):
      * "Rasel ke I love u pathao" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love u", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }
      * "I love you message daw rasel k" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love you", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }

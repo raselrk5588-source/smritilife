@@ -1051,25 +1051,32 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // If user has not chosen an honorific yet, greet them with Salam and ask how to address them
+        // If user has not chosen an honorific yet, check if they sent a direct command or just a greeting
         if (!user.honorific && !buttonId) {
-          const onboardingPrompt = `আসসালামু আলাইকুম! স্মৃতি লাইফে (Smriti Life) আপনাকে স্বাগতম। 🌸\n\nআমি আপনার সার্বক্ষণিক এআই পার্সোনাল অ্যাসিস্ট্যান্ট। আমি আপনাকে কীভাবে সম্বোধন করব? অনুগ্রহ করে নিচের যেকোনো একটি সিলেক্ট করুন বা লিখে জানান:`;
-          const buttons = [
-            { id: 'honorific_chief', title: 'চিফ (Chief) 🎖️' },
-            { id: 'honorific_sir', title: 'স্যার (Sir) 👔' },
-            { id: 'honorific_bhai', title: 'ভাই (Bhai) 🤝' }
-          ];
-          const buttonsSent = await sendMetaWhatsAppButtons(
-            fromNumber,
-            onboardingPrompt,
-            buttons,
-            'অথবা বস / আপু লিখে জানান'
-          );
-          if (!buttonsSent) {
-            const fallbackText = `${onboardingPrompt}\n\n• চিফ (Chief)\n• স্যার (Sir)\n• ভাই (Bhai)\n• বস (Boss)\n• আপু (Apu)\n\n👉 যেকোনো একটি লিখে রিপ্লাই দিন।`;
-            await sendMetaWhatsAppMessage(fromNumber, fallbackText);
+          const isExplicitCommand = /ঘুম|ghum|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|উঠি|uthi|utha|uthe|uthai|তুলে|tule|তুলে দাও|তুলে দিও|ডেকে|deke|ডাকা|dake|ডাকবা|dakba|ডেকে দিও|ডেকে দাও|mnt|min|minute|মিনিট|ঘণ্টা|ghonta|ghanta|মনে|mone|রিমাইন্ডার|reminder|নোট|note|লিস্ট|list|বাজার|মিটিং|meeting|ওষুধ|medicine|উইশ|wish|কার্ড|card/i.test(cleanText);
+
+          if (!isExplicitCommand) {
+            const onboardingPrompt = `আসসালামু আলাইকুম! স্মৃতি লাইফে (Smriti Life) আপনাকে স্বাগতম। 🌸\n\nআমি আপনার সার্বক্ষণিক এআই পার্সোনাল অ্যাসিস্ট্যান্ট। আমি আপনাকে কীভাবে সম্বোধন করব? অনুগ্রহ করে নিচের যেকোনো একটি সিলেক্ট করুন বা লিখে জানান:`;
+            const buttons = [
+              { id: 'honorific_chief', title: 'চিফ (Chief) 🎖️' },
+              { id: 'honorific_sir', title: 'স্যার (Sir) 👔' },
+              { id: 'honorific_bhai', title: 'ভাই (Bhai) 🤝' }
+            ];
+            const buttonsSent = await sendMetaWhatsAppButtons(
+              fromNumber,
+              onboardingPrompt,
+              buttons,
+              'অথবা বস / আপু লিখে জানান'
+            );
+            if (!buttonsSent) {
+              const fallbackText = `${onboardingPrompt}\n\n• চিফ (Chief)\n• স্যার (Sir)\n• ভাই (Bhai)\n• বস (Boss)\n• আপু (Apu)\n\n👉 যেকোনো একটি লিখে রিপ্লাই দিন।`;
+              await sendMetaWhatsAppMessage(fromNumber, fallbackText);
+            }
+            return;
+          } else {
+            user.honorific = 'ভাই';
+            await user.save();
           }
-          return;
         }
 
         // --- STEP 3: Regular AI Message & Audio Analysis ---
