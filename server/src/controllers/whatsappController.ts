@@ -107,10 +107,13 @@ export const extractHonorificChoice = (text: string, isAlreadySet: boolean = fal
   const target = (cmdMatch ? cmdMatch[1] : clean).trim().toLowerCase();
 
   // 1. Explicit title instruction/phrase:
-  // e.g. "আমাকে ভাই ডাকবেন", "আমাকে স্যার বলবেন", "এখন থেকে বস বলবেন", "ভাই বলে ডাকো", "vai bolben"
-  const phraseMatch = target.match(/(?:(?:আমাকে|আমায়|এখন\s*থেকে)\s+)?(চিফ|chief|chife|cheif|স্যার|sir|shir|স্যর|সার|বস|boss|bos|ভাই|ভাইয়া|ভায়া|ভাইরে|ভাইজান|vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|bro|brother|আপু|আপি|আপা|আপ্পি|apu|api|apa|apuu|appu|sis|sister|ম্যাডাম|মেডাম|madam|ma'am|mam|medam)(?:\s*(?:বলে|হিসেবে))?\s*(?:ডাকবেন|সম্বোধন\s*করবেন|বলবেন|ডাকো|বলো|ডাকিস|বলিস|বলবা|ডাকবা)/i);
+  // Requires explicit words like "আমাকে এখন থেকে বস বলবা", "আমাকে বস ডাকবেন", "আমাকে স্যার বলবেন", "এখন থেকে বস বলবেন", "call me boss", "vai bolben"
+  const phraseMatch = target.match(/(?:(?:আমাকে|আমায়|amake|amay)\s*(?:এখন\s*থেকে|akhon\s*theke)?|(?:এখন\s*থেকে|akhon\s*theke)\s*(?:আমাকে|আমায়|amake|amay)?)\s+(চিফ|chief|chife|cheif|স্যার|sir|shir|স্যর|সার|বস|boss|bos|ভাই|ভাইয়া|ভায়া|ভাইরে|ভাইজান|vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|bro|brother|আপু|আপি|আপা|আপ্পি|apu|api|apa|apuu|appu|sis|sister|ম্যাডাম|মেডাম|madam|ma'am|mam|medam)(?:\s*(?:বলে|হিসেবে))?\s*(?:ডাকবেন|সম্বোধন\s*করবেন|বলবেন|ডাকো|বলো|ডাকিস|বলিস|বলবা|ডাকবা|dakben|dakba|bolben|bolba)?/i) ||
+    target.match(/(?:call\s+me)\s+(chief|sir|boss|bhai|vai|apu|madam)/i) ||
+    target.match(/(চিফ|chief|chife|cheif|স্যার|sir|shir|স্যর|সার|বস|boss|bos|ভাই|ভাইয়া|ভায়া|ভাইরে|ভাইজান|vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|bro|brother|আপু|আপি|আপা|আপ্পি|apu|api|apa|apuu|appu|sis|sister|ম্যাডাম|মেডাম|madam|ma'am|mam|medam)\s+(?:বলে|হিসেবে)\s+(?:ডাকবেন|সম্বোধন\s*করবেন|বলবেন|ডাকো|বলো|ডাকিস|বলিস|বলবা|ডাকবা|dakben|dakba|bolben|bolba)/i);
+
   if (phraseMatch || cmdMatch) {
-    const raw = (phraseMatch ? phraseMatch[1] : target).toLowerCase();
+    const raw = (cmdMatch ? cmdMatch[1] : phraseMatch ? (phraseMatch[1] || phraseMatch[2]) : '').toLowerCase();
     if (/চিফ|chief|chife|cheif/.test(raw)) return 'চিফ';
     if (/স্যার|sir|shir|স্যর|সার/.test(raw)) return 'স্যার';
     if (/বস|boss|bos/.test(raw)) return 'বস';
@@ -119,7 +122,13 @@ export const extractHonorificChoice = (text: string, isAlreadySet: boolean = fal
     if (/ম্যাডাম|madam|ma'am|mam/.test(raw)) return 'ম্যাডাম';
   }
 
-  // 2. Exact single title match (stripped of punctuation/emojis/spaces)
+  // CRITICAL: If honorific is ALREADY SET, a standalone word (like "boss", "vai", "sir") MUST NEVER CHANGE it!
+  // It ONLY changes if the user explicitly commanded above (e.g. "আমাকে এখন থেকে বস বলবা" or "/callme boss").
+  if (isAlreadySet) {
+    return null;
+  }
+
+  // 2. ONLY during initial onboarding (!isAlreadySet), accept standalone title words:
   // e.g. "vai", "vaia", "ভাই", "sir", "chief", "chife", "boss", "apu"
   const exactSingle = target.replace(/[।.,!?🎖️👔👑❤️🌸✨🤝\s]/g, '');
   if (/^(?:চিফ|chief|chife|cheif)$/i.test(exactSingle)) return 'চিফ';
@@ -129,18 +138,16 @@ export const extractHonorificChoice = (text: string, isAlreadySet: boolean = fal
   if (/^(?:আপু|আপি|আপা|আপ্পি|apu|api|apa|apuu|appu|sis|sister)$/i.test(exactSingle)) return 'আপু';
   if (/^(?:ম্যাডাম|মেডাম|madam|ma'am|mam|medam)$/i.test(exactSingle)) return 'ম্যাডাম';
 
-  // 3. During initial onboarding (!isAlreadySet), accept natural phrases like:
+  // 3. Also during initial onboarding, accept conversational phrases like:
   // "vai bolchi", "vai bolbo", "vaiya bolben", "chife dakben", "sir dako"
-  if (!isAlreadySet) {
-    const notAction = !/\b(?:reminder|রিমাইন্ডার|ওষুধ|মিটিং|meeting|note|নোট|wish|উইশ|card|কার্ড|todo|টুডু)\b/i.test(target);
-    if (notAction) {
-      if (/\b(?:vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|ভাই|ভাইয়া|ভায়া|ভাইরে)\b/i.test(target)) return 'ভাই';
-      if (/\b(?:apu|api|apa|আপু|আপি|আপা)\b/i.test(target)) return 'আপু';
-      if (/\b(?:চিফ|chief|chife|cheif)\b/i.test(target)) return 'চিফ';
-      if (/\b(?:স্যার|স্যর|সার|sir|shir)\b/i.test(target)) return 'স্যার';
-      if (/\b(?:বস|boss|bos)\b/i.test(target)) return 'বস';
-      if (/\b(?:ম্যাডাম|মেডাম|madam|ma'am|mam)\b/i.test(target)) return 'ম্যাডাম';
-    }
+  const notAction = !/\b(?:reminder|রিমাইন্ডার|ওষুধ|মিটিং|meeting|note|নোট|wish|উইশ|card|কার্ড|todo|টুডু)\b/i.test(target);
+  if (notAction) {
+    if (/\b(?:vai|vaia|vaiya|vhai|vhaia|bhai|bhaiya|bhaia|ভাই|ভাইয়া|ভায়া|ভাইরে)\b/i.test(target)) return 'ভাই';
+    if (/\b(?:apu|api|apa|আপু|আপি|আপা)\b/i.test(target)) return 'আপু';
+    if (/\b(?:চিফ|chief|chife|cheif)\b/i.test(target)) return 'চিফ';
+    if (/^(?:স্যার|স্যর|সার|sir|shir)\b/i.test(target)) return 'স্যার';
+    if (/^(?:বস|boss|bos)\b/i.test(target)) return 'বস';
+    if (/^(?:ম্যাডাম|মেডাম|madam|ma'am|mam)\b/i.test(target)) return 'ম্যাডাম';
   }
 
   return null;
@@ -865,40 +872,110 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // --- STEP 1.5: Handle User Honorific/Salutation (Selection or Onboarding) ---
-        const selectedTitle = extractHonorificChoice(cleanText, !!user.honorific);
-        if (selectedTitle) {
-          user.honorific = selectedTitle;
-          await user.save();
-          await sendMetaWhatsAppMessage(
-            fromNumber,
-            `🎉 অনেক ধন্যবাদ ${selectedTitle}! এখন থেকে আমি আপনাকে সবসময় "${selectedTitle}" বলেই সম্বোধন করব। 🤝\n\nবলুন ${selectedTitle}, আজকে আপনাকে কীভাবে সাহায্য করতে পারি? যেমন:\n• রিমাইন্ডার বা অ্যালার্ম সেট করতে (লিখে বা ভয়েস পাঠিয়ে)\n• জন্মদিনের শুভেচ্ছা বা উইশ কার্ড পাঠাতে\n• কেনাকাটার তালিকা বা নোট সেভ করতে`
-          );
-          return;
-        }
-
-        // If user has not chosen an honorific yet, greet them with Salam and ask how to address them
-        if (!user.honorific && !buttonId) {
-          const onboardingPrompt = `আসসালামু আলাইকুম! স্মৃতি লাইফে (Smriti Life) আপনাকে স্বাগতম। 🌸\n\nআমি আপনার সার্বক্ষণিক এআই পার্সোনাল অ্যাসিস্ট্যান্ট। আমি আপনাকে কীভাবে সম্বোধন করব? অনুগ্রহ করে নিচের যেকোনো একটি সিলেক্ট করুন বা লিখে জানান:`;
-          const buttons = [
-            { id: 'honorific_chief', title: 'চিফ (Chief) 🎖️' },
-            { id: 'honorific_sir', title: 'স্যার (Sir) 👔' },
-            { id: 'honorific_bhai', title: 'ভাই (Bhai) 🤝' }
-          ];
-          const buttonsSent = await sendMetaWhatsAppButtons(
-            fromNumber,
-            onboardingPrompt,
-            buttons,
-            'অথবা বস / আপু লিখে জানান'
-          );
-          if (!buttonsSent) {
-            const fallbackText = `${onboardingPrompt}\n\n• চিফ (Chief)\n• স্যার (Sir)\n• ভাই (Bhai)\n• বস (Boss)\n• আপু (Apu)\n\n👉 যেকোনো একটি লিখে রিপ্লাই দিন।`;
-            await sendMetaWhatsAppMessage(fromNumber, fallbackText);
+        // --- STEP 2: Handle Pending Wish Name Response ---
+        const activeWishState = userWishState.get(user._id.toString());
+        if (activeWishState && activeWishState.expiresAt > Date.now() && activeWishState.waitingForName) {
+          const isCancel = /^(?:cancel|বাতিল|না|থাক|দরকার\s*নাই|লাগবে\s*না)\b/i.test(cleanText.trim());
+          if (isCancel) {
+            userWishState.delete(user._id.toString());
+            await sendMetaWhatsAppMessage(fromNumber, 'উইশ পাঠানোর অনুরোধ বাতিল করা হয়েছে।');
+            return;
           }
-          return;
+
+          // If user sends a completely new action command or phone number, cancel the pending wish and proceed with the new command
+          const isNewAction = /(?:\+?8801\d{9}|01\d{9})/.test(cleanText) ||
+            /\b(?:reminder|রিমাইন্ডার|মিটিং|meeting|note|নোট|todo|টুডু|checklist|লোকেশন|location)\b/i.test(cleanText) ||
+            (/\b(?:wish|উইশ|birthday|জন্মদিন)\b/i.test(cleanText) && /\b(?:send|pathao|পাঠাও|দাও|daw|dao|pathu)\b/i.test(cleanText));
+
+          if (isNewAction) {
+            userWishState.delete(user._id.toString());
+            // Fall through to process as a fresh command!
+          } else {
+            let extractedName = cleanText
+              .replace(/^(?:তার\s*নাম|নাম|recipient|name(?:\s+is)?|it(?:\s+is)?|for)\s*[:=]?\s*/i, '')
+              .replace(/^(?:হলো|হল|হচ্ছে)\s*[:=]?\s*/i, '')
+              .replace(/[।\.,!?]/g, '')
+              .trim();
+
+            if (/^(?:skip|no|নাই)\b/i.test(extractedName) || !extractedName || extractedName.length < 2) {
+              extractedName = 'প্রিয়জন';
+            } else {
+              // Capitalize first letter of each word if English
+              if (/^[a-z]/i.test(extractedName)) {
+                extractedName = extractedName
+                  .split(/\s+/)
+                  .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                  .join(' ');
+              }
+            }
+
+            userWishState.delete(user._id.toString());
+
+            const occasion = activeWishState.occasion || 'birthday';
+            const occasionTitle = getOccasionTitle(occasion);
+            const recipientPhone = activeWishState.recipientPhone;
+            const sendNow = activeWishState.sendNow !== false;
+
+            let message = activeWishState.message;
+            if (!message || message.includes('প্রিয়জন')) {
+              message = occasion === 'birthday'
+                ? `শুভ জন্মদিন ${extractedName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
+                : occasion === 'anniversary'
+                ? `শুভ বিবাহবার্ষিকী ${extractedName}! আপনাদের দুজনের পথচলা আজীবন অটুট ও আনন্দময় থাকুক।`
+                : occasion === 'eid'
+                ? `ঈদ মোবারক ${extractedName}! আপনার ও আপনার পরিবারের জন্য রইল পবিত্র ঈদের অফুরন্ত শুভেচ্ছা।`
+                : `অনেক অনেক আন্তরিক শুভেচ্ছা ও শুভকামনা, ${extractedName}! আপনার জীবন সুন্দর ও সাফল্যমণ্ডিত হোক।`;
+            } else {
+              message = message.replace(/প্রিয়জন/g, extractedName);
+            }
+
+            const smartCardId = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+            const imageUrl = getOccasionImageUrl(occasion);
+
+            let scheduledAt = new Date();
+            if (!sendNow && activeWishState.date) {
+              const timeStr = activeWishState.time || '10:00';
+              const bdIso = `${activeWishState.date}T${timeStr}:00+06:00`;
+              const parsedDate = new Date(bdIso);
+              if (!isNaN(parsedDate.getTime())) scheduledAt = parsedDate;
+            }
+
+            const newWish = await Wish.create({
+              userId: user._id,
+              recipientName: extractedName,
+              recipientContact: recipientPhone,
+              occasion,
+              message,
+              isSmartCard: true,
+              smartCardId,
+              cardData: {
+                image: imageUrl,
+                title: occasionTitle,
+                senderName: user.name || 'আপনার শুভাকাঙ্ক্ষী',
+                animation: 'envelope'
+              },
+              scheduledAt,
+              deliveryMethod: ['WhatsApp'],
+              status: sendNow ? 'Sent' : 'Scheduled'
+            });
+
+            if (sendNow && recipientPhone) {
+              await deliverWishCard(newWish, user.name || 'আপনার শুভাকাঙ্ক্ষী');
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🎉 ঠিক আছে! ${recipientPhone} নম্বরে ${extractedName}-র জন্য ${occasionTitle} কার্ড এবং শুভেচ্ছা বার্তা সফলভাবে পাঠিয়ে দেওয়া হয়েছে!`
+              );
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🎉 ঠিক আছে! ${extractedName}-র জন্য ${occasionTitle} কার্ডটি নির্ধারিত সময়ে ${recipientPhone || ''} নম্বরে স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
+              );
+            }
+            return;
+          }
         }
 
-        // --- STEP 2: Handle Conversational Yes / No / Reschedule for Active Reminders ---
+        // --- STEP 2.5: Handle Conversational Yes / No / Reschedule for Active Reminders ---
         let activeState = userReminderState.get(user._id.toString());
 
         // If not in memory state, check if there is a recently alerted/snoozed reminder in DB
@@ -962,91 +1039,35 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // --- STEP 2.5: Handle Pending Wish Name Response ---
-        const activeWishState = userWishState.get(user._id.toString());
-        if (activeWishState && activeWishState.expiresAt > Date.now() && activeWishState.waitingForName) {
-          const isCancel = /^(?:cancel|বাতিল|না|থাক|দরকার\s*নাই|লাগবে\s*না)\b/i.test(cleanText.trim());
-          if (isCancel) {
-            userWishState.delete(user._id.toString());
-            await sendMetaWhatsAppMessage(fromNumber, 'উইশ পাঠানোর অনুরোধ বাতিল করা হয়েছে।');
-            return;
-          }
+        // --- STEP 2.8: Handle User Honorific/Salutation (Explicit Change or Initial Onboarding) ---
+        const selectedTitle = extractHonorificChoice(cleanText, !!user.honorific);
+        if (selectedTitle) {
+          user.honorific = selectedTitle;
+          await user.save();
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🎉 অনেক ধন্যবাদ ${selectedTitle}! এখন থেকে আমি আপনাকে সবসময় "${selectedTitle}" বলেই সম্বোধন করব। 🤝\n\nবলুন ${selectedTitle}, আজকে আপনাকে কীভাবে সাহায্য করতে পারি? যেমন:\n• রিমাইন্ডার বা অ্যালার্ম সেট করতে (লিখে বা ভয়েস পাঠিয়ে)\n• জন্মদিনের শুভেচ্ছা বা উইশ কার্ড পাঠাতে\n• কেনাকাটার তালিকা বা নোট সেভ করতে`
+          );
+          return;
+        }
 
-          let extractedName = cleanText
-            .replace(/(?:নাম|name|তার\s*নাম|হলো|হল|হচ্ছে|is|for|recipient|amar|আমার|বন্ধু|ভাই|দাদা|নামে|বলো|লিখো)\s*[:=]?/gi, ' ')
-            .replace(/[।\.,!?]/g, '')
-            .trim();
-
-          if (/^(?:skip|no|নাই)\b/i.test(extractedName) || !extractedName || extractedName.length < 2) {
-            extractedName = 'প্রিয়জন';
-          } else {
-            // Capitalize first letter if English
-            if (/^[a-z]/i.test(extractedName)) {
-              extractedName = extractedName.charAt(0).toUpperCase() + extractedName.slice(1);
-            }
-          }
-
-          userWishState.delete(user._id.toString());
-
-          const occasion = activeWishState.occasion || 'birthday';
-          const occasionTitle = getOccasionTitle(occasion);
-          const recipientPhone = activeWishState.recipientPhone;
-          const sendNow = activeWishState.sendNow !== false;
-
-          let message = activeWishState.message;
-          if (!message || message.includes('প্রিয়জন')) {
-            message = occasion === 'birthday'
-              ? `শুভ জন্মদিন ${extractedName}! আপনার জীবনের প্রতিটি দিন অনেক আনন্দ, সুস্বাস্থ্য এবং সাফল্যে ভরে উঠুক।`
-              : occasion === 'anniversary'
-              ? `শুভ বিবাহবার্ষিকী ${extractedName}! আপনাদের দুজনের পথচলা আজীবন অটুট ও আনন্দময় থাকুক।`
-              : occasion === 'eid'
-              ? `ঈদ মোবারক ${extractedName}! আপনার ও আপনার পরিবারের জন্য রইল পবিত্র ঈদের অফুরন্ত শুভেচ্ছা।`
-              : `অনেক অনেক আন্তরিক শুভেচ্ছা ও শুভকামনা, ${extractedName}! আপনার জীবন সুন্দর ও সাফল্যমণ্ডিত হোক।`;
-          } else {
-            message = message.replace(/প্রিয়জন/g, extractedName);
-          }
-
-          const smartCardId = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
-          const imageUrl = getOccasionImageUrl(occasion);
-
-          let scheduledAt = new Date();
-          if (!sendNow && activeWishState.date) {
-            const timeStr = activeWishState.time || '10:00';
-            const bdIso = `${activeWishState.date}T${timeStr}:00+06:00`;
-            const parsedDate = new Date(bdIso);
-            if (!isNaN(parsedDate.getTime())) scheduledAt = parsedDate;
-          }
-
-          const newWish = await Wish.create({
-            userId: user._id,
-            recipientName: extractedName,
-            recipientContact: recipientPhone,
-            occasion,
-            message,
-            isSmartCard: true,
-            smartCardId,
-            cardData: {
-              image: imageUrl,
-              title: occasionTitle,
-              senderName: user.name || 'আপনার শুভাকাঙ্ক্ষী',
-              animation: 'envelope'
-            },
-            scheduledAt,
-            deliveryMethod: ['WhatsApp'],
-            status: sendNow ? 'Sent' : 'Scheduled'
-          });
-
-          if (sendNow && recipientPhone) {
-            await deliverWishCard(newWish, user.name || 'আপনার শুভাকাঙ্ক্ষী');
-            await sendMetaWhatsAppMessage(
-              fromNumber,
-              `🎉 ঠিক আছে! ${recipientPhone} নম্বরে ${extractedName}-র জন্য ${occasionTitle} কার্ড এবং শুভেচ্ছা বার্তা সফলভাবে পাঠিয়ে দেওয়া হয়েছে!`
-            );
-          } else {
-            await sendMetaWhatsAppMessage(
-              fromNumber,
-              `🎉 ঠিক আছে! ${extractedName}-র জন্য ${occasionTitle} কার্ডটি নির্ধারিত সময়ে ${recipientPhone || ''} নম্বরে স্বয়ংক্রিয়ভাবে পাঠিয়ে দেওয়া হবে।`
-            );
+        // If user has not chosen an honorific yet, greet them with Salam and ask how to address them
+        if (!user.honorific && !buttonId) {
+          const onboardingPrompt = `আসসালামু আলাইকুম! স্মৃতি লাইফে (Smriti Life) আপনাকে স্বাগতম। 🌸\n\nআমি আপনার সার্বক্ষণিক এআই পার্সোনাল অ্যাসিস্ট্যান্ট। আমি আপনাকে কীভাবে সম্বোধন করব? অনুগ্রহ করে নিচের যেকোনো একটি সিলেক্ট করুন বা লিখে জানান:`;
+          const buttons = [
+            { id: 'honorific_chief', title: 'চিফ (Chief) 🎖️' },
+            { id: 'honorific_sir', title: 'স্যার (Sir) 👔' },
+            { id: 'honorific_bhai', title: 'ভাই (Bhai) 🤝' }
+          ];
+          const buttonsSent = await sendMetaWhatsAppButtons(
+            fromNumber,
+            onboardingPrompt,
+            buttons,
+            'অথবা বস / আপু লিখে জানান'
+          );
+          if (!buttonsSent) {
+            const fallbackText = `${onboardingPrompt}\n\n• চিফ (Chief)\n• স্যার (Sir)\n• ভাই (Bhai)\n• বস (Boss)\n• আপু (Apu)\n\n👉 যেকোনো একটি লিখে রিপ্লাই দিন।`;
+            await sendMetaWhatsAppMessage(fromNumber, fallbackText);
           }
           return;
         }

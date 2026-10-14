@@ -1157,7 +1157,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       /^(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর)|সেভ\s*(?:করে\s*রাখো|করো|রাখো|কর)|মনে\s*(?:রেখো|রাখো|রাখ)|save\s*note)\s*[:：\-]?\s*(.+)$/i.test(text);
 
     const isInfoPattern =
-      /(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|is|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i.test(text);
+      /(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|\bis\b|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i.test(text);
 
     if (isExplicitSavePrefix || isInfoPattern) {
       let title = 'ব্যক্তিগত নোট';
@@ -1176,7 +1176,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
           content = payload;
         }
       } else {
-        const match = text.match(/(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|is|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i);
+        const match = text.match(/(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|\bis\b|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i);
         if (match) {
           const prefix = match[1] || '';
           const keyword = match[2] || '';
