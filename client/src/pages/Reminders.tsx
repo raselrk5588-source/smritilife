@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Plus, Bell, Calendar, Clock, Pill, Briefcase, Bookmark, Trash2, MoreVertical, ShoppingCart, CreditCard, Gift, Edit, Phone, MessageSquare } from 'lucide-react';
+import { ChevronLeft, Plus, Bell, Calendar, Clock, Pill, Briefcase, Bookmark, Trash2, MoreVertical, ShoppingCart, CreditCard, Gift, Edit, Phone, MessageSquare, BellRing, AlarmClock, SunMedium } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
@@ -65,7 +65,8 @@ export default function Reminders() {
           let color = 'text-purple-500';
           let bg = 'bg-purple-50';
           
-          if (item.category === 'medicine') { icon = Pill; color = 'text-red-500'; bg = 'bg-red-50'; }
+          if (item.category === 'wakeup' || item.category === 'alarm' || item.isAlarm) { icon = AlarmClock; color = 'text-amber-500'; bg = 'bg-amber-50'; }
+          else if (item.category === 'medicine') { icon = Pill; color = 'text-red-500'; bg = 'bg-red-50'; }
           else if (item.category === 'work') { icon = Briefcase; color = 'text-blue-500'; bg = 'bg-blue-50'; }
           else if (item.category === 'shopping') { icon = ShoppingCart; color = 'text-emerald-500'; bg = 'bg-emerald-50'; }
           else if (item.category === 'bill') { icon = CreditCard; color = 'text-orange-500'; bg = 'bg-orange-50'; }
@@ -218,6 +219,7 @@ export default function Reminders() {
           body: JSON.stringify({
             title: reminderTitle,
             category: reminderType,
+            isAlarm: reminderType === 'wakeup' || reminderType === 'alarm',
             date: reminderDate || new Date().toISOString(),
             time: reminderTime || '09:00',
             status: isAlertOn ? 'Pending' : 'Cancelled'
@@ -227,7 +229,11 @@ export default function Reminders() {
         setReminderTitle('');
         setReminderDate(getCurrentDate());
         setReminderTime(getCurrentTime());
-        toast.success(t('রিমাইন্ডার সেভ হয়েছে!', 'Reminder saved!'));
+        if (reminderType === 'wakeup') {
+          toast.success(t('ওয়েক-আপ অ্যালার্ম সেভ হয়েছে! নির্ধারিত সময়ে অ্যালার্ম বাজবে।', 'Wake-up alarm saved! Will ring at scheduled time.'));
+        } else {
+          toast.success(t('রিমাইন্ডার সেভ হয়েছে!', 'Reminder saved!'));
+        }
       } catch (e) {
         toast.error('Failed to save');
       }
@@ -295,7 +301,13 @@ export default function Reminders() {
           </h2>
 
           {/* Category Selector */}
-          <div className="grid grid-cols-3 gap-2 mb-5 relative z-10">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-5 relative z-10">
+            <button 
+              onClick={() => setReminderType('wakeup')}
+              className={`py-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 border ${reminderType === 'wakeup' ? 'bg-amber-50 text-amber-700 border-amber-300 shadow-sm ring-1 ring-amber-400/50' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+            >
+              <AlarmClock className="w-4 h-4 text-amber-600 animate-pulse" /> {t('ঘুম ভাঙা/অ্যালার্ম', 'Wake-up Alarm')}
+            </button>
             <button 
               onClick={() => setReminderType('medicine')}
               className={`py-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 border ${reminderType === 'medicine' ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
@@ -406,14 +418,21 @@ export default function Reminders() {
                   value={reminderTitle}
                   onChange={(e) => setReminderTitle(e.target.value)}
                   placeholder={
+                    reminderType === 'wakeup' ? t("যেমন: সকাল ৬টায় ঘুম থেকে ওঠা...", "e.g. Wake up at 6:00 AM...") :
                     reminderType === 'work' ? t("যেমন: বসের সাথে মিটিং...", "e.g. Meeting with boss...") : 
                     reminderType === 'shopping' ? t("যেমন: মাসের বাজার করা...", "e.g. Monthly grocery...") : 
                     reminderType === 'bill' ? t("যেমন: বিদ্যুৎ বা ইন্টারনেট বিল...", "e.g. Pay electricity bill...") : 
                     reminderType === 'event' ? t("যেমন: বন্ধুর বিয়ে...", "e.g. Friend's wedding...") : 
                     t("যেমন: কাউকে কল করা...", "e.g. Call someone...")
                   } 
-                  className={`w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all bg-slate-50/50 ${reminderType === 'work' ? 'focus:border-blue-300 focus:ring-blue-100' : 'focus:border-purple-300 focus:ring-purple-100'}`} 
+                  className={`w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all bg-slate-50/50 ${reminderType === 'wakeup' ? 'focus:border-amber-400 focus:ring-amber-100' : reminderType === 'work' ? 'focus:border-blue-300 focus:ring-blue-100' : 'focus:border-purple-300 focus:ring-purple-100'}`} 
                 />
+                {reminderType === 'wakeup' && (
+                  <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-center gap-2 mt-2 font-medium">
+                    <SunMedium className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>{t('নির্ধারিত সময়ে ফুলস্ক্রিন ওয়েক-আপ অ্যালার্ম উঠবে এবং বন্ধ না করা পর্যন্ত তীব্র রিংটোন বাজবে।', 'Full-screen wake-up alarm will ring with continuous tone until stopped.')}</span>
+                  </div>
+                )}
               </div>
             )}
             

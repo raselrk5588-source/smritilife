@@ -105,7 +105,14 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
     toast.loading('সংরক্ষণ করা হচ্ছে...', { id: 'save' });
     try {
       let url = `${import.meta.env.VITE_API_URL}/reminders`;
-      let body = { title: parsedText, date: parsedData.date || new Date().toISOString(), time: parsedData.time || "10:00" };
+      const isWakeup = /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(parsedText) || parsedData.category === 'wakeup';
+      let body: any = { 
+        title: parsedText, 
+        date: parsedData.date || new Date().toISOString(), 
+        time: parsedData.time || "10:00",
+        category: isWakeup ? 'wakeup' : (parsedData.category || 'General'),
+        isAlarm: isWakeup
+      };
       
       if (parsedData.intent === 'create_note') {
         url = `${import.meta.env.VITE_API_URL}/notes`;
@@ -125,7 +132,11 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
       });
 
       if (res.ok) {
-        toast.success('সফলভাবে সেভ করা হয়েছে!', { id: 'save' });
+        if (isWakeup) {
+          toast.success('⏰ ওয়েক-আপ অ্যালার্ম সেট করা হয়েছে! নির্ধারিত সময়ে রিংটোন বাজবে।', { id: 'save', duration: 4000 });
+        } else {
+          toast.success('সফলভাবে সেভ করা হয়েছে!', { id: 'save' });
+        }
         setTimeout(() => {
           onClose();
         }, 1000);

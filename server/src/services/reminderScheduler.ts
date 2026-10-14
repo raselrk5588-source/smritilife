@@ -143,7 +143,10 @@ export const startReminderScheduler = () => {
           } else {
             if (senderNumber) {
               const displayTime = formatTime12Hour(reminder.time);
+              const isWakeup = reminder.category === 'wakeup' || reminder.category === 'alarm' || !!reminder.isAlarm;
               const categoryMap: Record<string, string> = {
+                wakeup: '⏰ ওয়েক-আপ অ্যালার্ম',
+                alarm: '⏰ ওয়েক-আপ অ্যালার্ম',
                 medicine: '💊 ওষুধ',
                 work: '💼 কাজ/মিটিং',
                 shopping: '🛒 শপিং/বাজার',
@@ -154,7 +157,9 @@ export const startReminderScheduler = () => {
               const catLabel = categoryMap[reminder.category] || '';
               const catText = catLabel ? `\n🏷️ ক্যাটাগরি: ${catLabel}` : '';
               const salutation = user?.honorific ? ` ${user.honorific}` : (user?.name ? ` ${user.name.split(' ')[0]}` : '');
-              const alertBody = `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
+              const alertBody = isWakeup 
+                ? `⏰🔔⏰ শুভ সকাল${salutation}! ঘুম থেকে উঠুন!\n\nএটি আপনার স্মৃতি ওয়েক-আপ অ্যালার্ম:\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`
+                : `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
 
               // Track in active state for tracking response
               userReminderState.set(reminder.userId.toString(), {
@@ -164,10 +169,15 @@ export const startReminderScheduler = () => {
                 expiresAt: Date.now() + 4 * 60 * 60 * 1000
               });
 
-              const buttons = [
-                { id: `rem_done_${reminder._id}`, title: 'হ্যাঁ, করেছি ✅' },
-                { id: `rem_reschedule_${reminder._id}`, title: 'না, পুনঃনির্ধারণ ⏰' }
-              ];
+              const buttons = isWakeup
+                ? [
+                    { id: `rem_done_${reminder._id}`, title: 'জেগে গেছি ✅' },
+                    { id: `rem_reschedule_${reminder._id}`, title: '৫ মিনিট স্নুজ 💤' }
+                  ]
+                : [
+                    { id: `rem_done_${reminder._id}`, title: 'হ্যাঁ, করেছি ✅' },
+                    { id: `rem_reschedule_${reminder._id}`, title: 'না, পুনঃনির্ধারণ ⏰' }
+                  ];
 
               const buttonsSent = await sendMetaWhatsAppButtons(senderNumber, alertBody, buttons);
               if (!buttonsSent) {

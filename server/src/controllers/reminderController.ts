@@ -16,7 +16,7 @@ export const getReminders = async (req: Request, res: Response) => {
 
 export const createReminder = async (req: Request, res: Response) => {
   try {
-    const { title, description, date, time, priority, category, repeat } = req.body;
+    const { title, description, date, time, priority, category, repeat, isAlarm } = req.body;
 
     const user = await User.findById(req.user?.id);
     let settings = await SystemSettings.findOne();
@@ -29,6 +29,8 @@ export const createReminder = async (req: Request, res: Response) => {
       return res.status(403).json({ message: `আপনার রিমাইন্ডার লিমিট শেষ (${limit} টি)। দয়া করে সাবস্ক্রিপশন আপগ্রেড করুন বা পুরনো রিমাইন্ডার মুছুন।` });
     }
 
+    const isWakeup = category === 'wakeup' || category === 'alarm' || isAlarm === true;
+
     const reminder = new Reminder({
       userId: req.user?.id,
       title,
@@ -36,8 +38,9 @@ export const createReminder = async (req: Request, res: Response) => {
       date,
       time,
       priority,
-      category,
-      repeat
+      category: isWakeup ? 'wakeup' : (category || 'General'),
+      repeat,
+      isAlarm: isWakeup
     });
     const savedReminder = await reminder.save();
     res.status(201).json(savedReminder);

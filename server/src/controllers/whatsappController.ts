@@ -1505,7 +1505,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                                 /প্রতিদিন|দৈনিক|রোজ|রোজই|daily|everyday|every\s*day|protidin|roj/i.test(cleanText) ||
                                 aiResponse.data.repeat === 'Daily';
 
-                const finalCategory = isMedicine ? 'medicine' : (aiResponse.data.category || 'General');
+                const isWakeup = aiResponse.data.category === 'wakeup' || aiResponse.data.category === 'alarm' || /ঘুম|ঘুমের|ঘুমিয়ে|ঘুমাবো|ঘুমাব|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ডাকা|ডেকে দিও|ডেকে দাও|ডাকবা|উঠাবা|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(cleanTitle) || /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ঘুম ভাঙা/i.test(cleanText);
+                const finalCategory = isMedicine ? 'medicine' : (isWakeup ? 'wakeup' : (aiResponse.data.category || 'General'));
                 const finalRepeat = isDaily ? 'Daily' : (aiResponse.data.repeat || 'Once');
 
                 await Reminder.create({
@@ -1517,14 +1518,15 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   priority: 'Medium',
                   category: finalCategory,
                   repeat: finalRepeat,
-                  status: 'Pending'
+                  status: 'Pending',
+                  isAlarm: isWakeup
                 });
 
                 let reply = aiResponse.replyText;
                 if (!reply || reply.includes('সেট করা হয়েছে')) {
-                  const icon = isMedicine ? '💊' : '⏰';
+                  const icon = isMedicine ? '💊' : (isWakeup ? '⏰🔔' : '⏰');
                   const repeatStr = finalRepeat === 'Daily' ? 'প্রতিদিন ' : '';
-                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : ''}রিমাইন্ডার "${cleanTitle}" ${repeatStr}সময় ${formattedTime}-এ সফলভাবে সেট করা হয়েছে!`;
+                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার "${cleanTitle}" ${repeatStr}সময় ${formattedTime}-এ সফলভাবে সেট করা হয়েছে! নির্ধারিত সময়ে ঘুম ভাঙানোর জন্য অ্যালার্ম বাজবে।`;
                 }
 
                 await sendMetaWhatsAppMessage(fromNumber, reply);

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate } from 'lucide-react';
 import AIAssistantModal from '../components/AIAssistantModal';
+import WakeUpAlarmModal from '../components/WakeUpAlarmModal';
 import { Toaster } from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -248,6 +249,9 @@ export default function MainLayout() {
 
       {/* AI Assistant Voice Modal */}
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
+      {/* Global In-App Wake-Up Alarm Engine */}
+      <WakeUpAlarmModal />
     </div>
   );
 }

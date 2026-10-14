@@ -11,6 +11,7 @@ export interface IReminder extends Document {
   category: string;
   repeat: string;
   status: string;
+  isAlarm?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,7 +27,8 @@ const ReminderSchema: Schema = new Schema(
     priority: { type: String, enum: ['Low', 'Medium', 'High', 'Urgent'], default: 'Medium' },
     category: { type: String, default: 'General' },
     repeat: { type: String, enum: ['Once', 'Daily', 'Weekly', 'Monthly', 'Yearly', 'Weekdays', 'Custom'], default: 'Once' },
-    status: { type: String, enum: ['Pending', 'Completed', 'Cancelled', 'Snoozed'], default: 'Pending' }
+    status: { type: String, enum: ['Pending', 'Completed', 'Cancelled', 'Snoozed'], default: 'Pending' },
+    isAlarm: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
