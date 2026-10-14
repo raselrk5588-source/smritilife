@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet } from 'lucide-react';
+import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AIAssistantModal from '../components/AIAssistantModal';
@@ -276,32 +276,38 @@ export default function Home() {
         })()}
 
         {/* Quick Access Pills Grid */}
-        <div className="grid grid-cols-4 gap-1.5 md:gap-2">
-          <Link to="/app/notes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center mb-1 md:mb-1 relative">
-              <FileText className="w-4 h-4 md:w-5 md:h-5" />
+        <div className="grid grid-cols-5 gap-1 md:gap-2">
+          <Link to="/app/notes" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center mb-1 relative">
+              <FileText className="w-3.5 h-3.5 md:w-5 md:h-5" />
               {notesCount > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{notesCount}</div>}
             </div>
-            <span className="text-[10px] font-bold text-slate-700">{t('নোট', 'Notes')}</span>
+            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('নোট', 'Notes')}</span>
           </Link>
-          <Link to="/app/reminders" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center mb-1 md:mb-1 relative">
-              <Calendar className="w-4 h-4 md:w-5 md:h-5" />
+          <Link to="/app/reminders" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center mb-1 relative">
+              <Calendar className="w-3.5 h-3.5 md:w-5 md:h-5" />
               {remindersCount > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{remindersCount}</div>}
             </div>
-            <span className="text-[10px] font-bold text-slate-700">{t('রিমাইন্ডার', 'Reminders')}</span>
+            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('রিমাইন্ডার', 'Reminders')}</span>
           </Link>
-          <Link to="/app/wishes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-pink-50 text-pink-500 rounded-xl flex items-center justify-center mb-1 md:mb-1">
-              <Gift className="w-4 h-4 md:w-5 md:h-5" />
+          <Link to="/app/wishes" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-pink-50 text-pink-500 rounded-xl flex items-center justify-center mb-1">
+              <Gift className="w-3.5 h-3.5 md:w-5 md:h-5" />
             </div>
-            <span className="text-[10px] font-bold text-slate-700">{t('বিশেষ দিন', 'Wishes')}</span>
+            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('বিশেষ দিন', 'Wishes')}</span>
           </Link>
-          <Link to="/app/expenses" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-teal-50 text-[#0A7756] rounded-xl flex items-center justify-center mb-1 md:mb-1 relative">
-              <Wallet className="w-4 h-4 md:w-5 md:h-5" />
+          <Link to="/app/expenses" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-teal-50 text-[#0A7756] rounded-xl flex items-center justify-center mb-1 relative">
+              <Wallet className="w-3.5 h-3.5 md:w-5 md:h-5" />
             </div>
-            <span className="text-[10px] font-bold text-slate-700 mt-[2px]">{t('হিসাব খাতা', 'Expenses')}</span>
+            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('হিসাব খাতা', 'Expenses')}</span>
+          </Link>
+          <Link to="/app/debts" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-1 relative">
+              <Handshake className="w-3.5 h-3.5 md:w-5 md:h-5" />
+            </div>
+            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('বাকি খাতা', 'Debts')}</span>
           </Link>
         </div>
 

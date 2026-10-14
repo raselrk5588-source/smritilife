@@ -11,6 +11,7 @@ import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../servi
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
 import { parseExpenseInput, recordExpense, getExpenseSummary, getExpenseSummaryForDate, getExpenseSummaryForMonth, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
+import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -1309,6 +1310,72 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 dSummary.dateTotal,
                 dSummary.monthTotal,
                 parsedExpense.dateLabelBn
+              );
+              await sendMetaWhatsAppMessage(fromNumber, reply);
+              return;
+            }
+          }
+        }
+
+        // --- STEP 2.10: Udhar / Debt Tracker Fast-Path (0 Cost, Instant Response) ---
+        if (!isReminderAction) {
+          const parsedDebt = parseDebtInput(cleanText);
+          if (parsedDebt) {
+            if (parsedDebt.isQuery) {
+              if (parsedDebt.queryType === 'person' && parsedDebt.personName) {
+                const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
+                if (personSummary) {
+                  const reply = buildPersonDebtMessage(personSummary);
+                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                } else {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `👤 *${parsedDebt.personName}*-এর সাথে কোনো আগের ধার-দেনা বা বাকি লেনদেন পাওয়া যায়নি।`
+                  );
+                }
+              } else {
+                // Overall summary
+                const overallSummary = await getDebtSummary(user._id);
+                const reply = buildDebtSummaryMessage(overallSummary);
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+              }
+              return;
+            } else if (parsedDebt.isSettlement && parsedDebt.personName && parsedDebt.amount) {
+              // Settle repayment / refund
+              const settlementResult = await settleDebtByPerson(
+                user._id,
+                parsedDebt.personName,
+                parsedDebt.amount,
+                parsedDebt.settlementType || 'received'
+              );
+              const reply = buildDebtSettledMessage(
+                settlementResult.personName,
+                settlementResult.settledTotal,
+                parsedDebt.settlementType || 'received',
+                settlementResult.remainingForPerson
+              );
+              await sendMetaWhatsAppMessage(fromNumber, reply);
+              return;
+            } else if (parsedDebt.type && parsedDebt.personName && parsedDebt.amount) {
+              // New debt entry (lent or borrowed)
+              const savedDebt = await recordDebt(
+                user._id,
+                parsedDebt.personName,
+                parsedDebt.amount,
+                parsedDebt.type,
+                { notes: parsedDebt.notes }
+              );
+              // Calculate updated person balance
+              const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
+              const remaining = parsedDebt.type === 'lent'
+                ? (personSummary?.totalLentRemaining || parsedDebt.amount)
+                : (personSummary?.totalBorrowedRemaining || parsedDebt.amount);
+
+              const reply = buildDebtLoggedMessage(
+                savedDebt.personName,
+                savedDebt.amount,
+                savedDebt.type,
+                remaining
               );
               await sendMetaWhatsAppMessage(fromNumber, reply);
               return;
