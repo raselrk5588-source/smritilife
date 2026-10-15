@@ -163,12 +163,14 @@ export default function TodayTasks() {
           const displayedTasks = filter === 'all' ? tasks : tasks.filter(t => t.type === filter);
           if (displayedTasks.length === 0) {
             return (
-              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center min-h-[30vh]">
-                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                  <Calendar className="w-8 h-8 text-slate-300" />
+              <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-2xs border border-slate-200/80 flex items-center gap-3.5 text-left">
+                <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center shrink-0 text-slate-400">
+                  <Calendar className="w-4 h-4" />
                 </div>
-                <h3 className="text-base font-bold text-slate-700 mb-1">{t('কোনো তথ্য পাওয়া যায়নি', 'No tasks found')}</h3>
-                <p className="text-xs text-slate-500">{t('এই ক্যাটাগরিতে আজকের জন্য কোনো কাজ নেই।', 'No tasks for this category today.')}</p>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-700 leading-tight">{t('কোনো কাজ পাওয়া যায়নি', 'No tasks found')}</h3>
+                  <p className="text-[10px] sm:text-xs text-slate-400 font-medium mt-0.5">{t('এই ক্যাটাগরিতে আজকের জন্য কোনো কাজ শিডিউল করা নেই।', 'No tasks scheduled for today in this category.')}</p>
+                </div>
               </div>
             );
           }

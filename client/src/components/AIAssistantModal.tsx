@@ -101,6 +101,11 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
 
   const handleSetReminder = async () => {
     if (!parsedData) return;
+
+    if (parsedData.intent === 'medicine_inquiry') {
+      onClose();
+      return;
+    }
     
     toast.loading('সংরক্ষণ করা হচ্ছে...', { id: 'save' });
     try {
@@ -267,7 +272,7 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
               </div>
             )}
 
-            {parsedData && parsedData.intent !== 'create_note' && (
+            {parsedData && parsedData.intent !== 'create_note' && parsedData.intent !== 'medicine_inquiry' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div className="flex items-center text-slate-600 font-medium text-xs">
@@ -299,7 +304,12 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
             onClick={handleSetReminder}
             className="w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold text-sm py-3.5 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-95 transition-transform animate-in fade-in zoom-in duration-500"
           >
-            {parsedData?.intent === 'create_note' ? (
+            {parsedData?.intent === 'medicine_inquiry' ? (
+              <>
+                <X className="w-4 h-4 mr-2" />
+                ঠিক আছে, ধন্যবাদ
+              </>
+            ) : parsedData?.intent === 'create_note' ? (
               <>
                 <Edit className="w-4 h-4 mr-2" />
                 নোট সেভ করুন

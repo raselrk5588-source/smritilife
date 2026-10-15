@@ -744,16 +744,21 @@ export default function Wishes() {
             <button 
               onClick={handleGenerate}
               disabled={isGenerating}
-              className={`w-full text-white rounded-xl py-3.5 font-bold text-sm shadow-md transition-all flex items-center justify-center ${isGenerating ? 'bg-primary/70 cursor-wait' : 'bg-primary hover:bg-primary-dark hover:scale-[1.01] active:scale-95'}`}
+              className={`w-full text-white rounded-xl py-3 font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center cursor-pointer ${
+                isGenerating 
+                  ? 'bg-primary/70 cursor-wait' 
+                  : 'bg-gradient-to-r from-[#0A7756] to-emerald-600 hover:from-[#086146] hover:to-emerald-700 active:scale-95 shadow-emerald-700/20'
+              }`}
             >
               {isGenerating ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  {t('তৈরি করা হচ্ছে...', 'Generating...')}
+                  <svg className="animate-spin -ml-1 mr-2.5 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  <span>{t('তৈরি করা হচ্ছে...', 'Generating...')}</span>
                 </>
               ) : (
                 <>
-                  <Wand2 className="w-5 h-5 mr-2" /> {t('AI দিয়ে মেসেজ তৈরি করুন', 'Generate Message with AI')}
+                  <Wand2 className="w-4 h-4 mr-2" />
+                  <span>{t('AI দিয়ে মেসেজ তৈরি করুন', 'Generate Message with AI')}</span>
                 </>
               )}
             </button>
@@ -1184,56 +1189,55 @@ export default function Wishes() {
 
         {/* Bottom Preview Area - Shared for Text and Voice */}
         {(activeTab === 'text' || activeTab === 'voice') && (
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col pb-10">
-            <div className="flex justify-between items-center mb-4">
-              <div className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-2xs border border-slate-200/80 flex flex-col mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <div className="bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center">
                 <Sparkles className="w-3.5 h-3.5 mr-1" /> {t('মেসেজ প্রিভিউ', 'Message Preview')}
               </div>
               {generatedWish && (
-                <button onClick={activeTab === 'text' ? handleGenerate : handleVoiceRecord} className="text-emerald-600 text-xs font-bold flex items-center hover:bg-emerald-50 px-2 py-1 rounded transition">
-                  <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                <button onClick={activeTab === 'text' ? handleGenerate : handleVoiceRecord} className="text-emerald-600 text-xs font-bold flex items-center hover:bg-emerald-50 px-2 py-1 rounded transition cursor-pointer">
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" />
                   {t('পুনরায় তৈরি', 'Regenerate')}
                 </button>
               )}
             </div>
             
             {/* Generated Card Preview */}
-            <div className="w-full rounded-3xl bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-100 border-2 border-dashed border-amber-200 p-8 mb-5 min-h-[250px] flex flex-col justify-center relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
-              {/* Decorative elements */}
+            <div className={`w-full rounded-xl sm:rounded-2xl transition-all relative ${
+              isGenerating
+                ? 'p-5 min-h-[110px] bg-amber-50/50 border border-dashed border-amber-200 flex flex-col items-center justify-center'
+                : !generatedWish
+                ? 'p-3.5 sm:p-4 min-h-[80px] sm:min-h-[90px] bg-gradient-to-br from-amber-50/50 to-orange-50/30 border border-dashed border-amber-200/80 flex flex-col items-center justify-center text-center'
+                : 'p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-yellow-100/60 border border-amber-200/90 shadow-2xs'
+            }`}>
+              {/* Content */}
               {isGenerating ? (
-                <div className="flex flex-col items-center justify-center h-full space-y-4">
-                  <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin"></div>
-                  <p className="text-orange-600 font-bold animate-pulse text-sm">{t('সুন্দর কথা খুঁজছি...', 'Searching for beautiful words...')}</p>
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <div className="w-8 h-8 rounded-full border-3 border-orange-200 border-t-orange-500 animate-spin"></div>
+                  <p className="text-orange-700 font-bold animate-pulse text-xs">{t('সুন্দর কথা তৈরি হচ্ছে...', 'Generating beautiful wish...')}</p>
                 </div>
               ) : !generatedWish ? (
-                <div className="flex flex-col items-center justify-center h-full text-center text-slate-400">
-                  <Wand2 className="w-12 h-12 mb-3 opacity-20" />
-                  <p className="text-sm font-medium">
-                    {activeTab === 'text' ? t('বাম পাশের ফর্মটি পূরণ করে', 'Fill out the form') : t('মাইকে কথা বলে', 'Speak into the mic')} <br/>{t('ম্যাজিক দেখুন!', 'to see magic!')}
+                <div className="flex flex-col items-center justify-center text-center py-1">
+                  <Wand2 className="w-5 h-5 mb-1 text-amber-500/60" />
+                  <p className="text-xs font-medium text-amber-900/80 leading-snug">
+                    {activeTab === 'text' 
+                      ? t('তথ্য পূরণ করে উপরের বাটনে চাপুন, এখানে সুন্দর উইশ তৈরি হবে ✨', 'Fill out the form and tap generate to see your wish ✨') 
+                      : t('মাইকে কথা বলে ম্যাজিক মেসেজ তৈরি করুন ✨', 'Speak into the mic to generate your wish ✨')}
                   </p>
                 </div>
               ) : (
                 <>
-                  <div className="absolute top-4 right-4 text-3xl opacity-50">
+                  <div className="absolute top-2.5 right-3 text-xl opacity-40">
                     {occasions.find(o => o.id === selectedOccasion)?.icon || '✨'}
                   </div>
-                  <div className="absolute bottom-4 left-4 text-3xl opacity-50">
-                    {selectedStyle ? styles.find(s => s.id === selectedStyle)?.icon || '🌟' : '🎁'}
-                  </div>
                   
-                  <h2 
-                    className="text-3xl font-extrabold text-amber-700 mb-6 tracking-wide text-center leading-tight whitespace-pre-line"
-                    style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-                  >
-                    {generatedWish.title.split('\n')[0]}<br/><span className="text-5xl drop-shadow-sm">{generatedWish.title.split('\n')[1] || ''}</span>
+                  <h2 className="text-base sm:text-lg font-black text-amber-800 mb-2 tracking-tight text-center leading-snug">
+                    {generatedWish.title}
                   </h2>
                   
-                  <div 
-                    className="text-slate-800 text-base text-center leading-relaxed space-y-3 relative z-10 max-w-xs mx-auto"
-                    style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-                  >
+                  <div className="text-slate-800 text-xs sm:text-sm text-center leading-relaxed space-y-1.5 max-w-sm mx-auto font-medium">
                     {generatedWish.body.map((paragraph: string, idx: number) => (
-                      <p key={idx} className={idx === 0 ? "font-bold text-lg mb-3 text-amber-900" : paragraph.startsWith('ইতি,') ? "font-bold text-amber-800 mt-6 italic" : "text-slate-800 font-medium"}>
+                      <p key={idx} className={idx === 0 ? "font-bold text-xs sm:text-sm text-amber-900" : paragraph.startsWith('ইতি,') ? "font-bold text-amber-800 mt-2 italic" : "text-slate-700"}>
                         {paragraph}
                       </p>
                     ))}

@@ -18,23 +18,8 @@ export default function MainLayout() {
     if (!localStorage.getItem('isAuthenticated')) {
       navigate('/');
     }
-    
-    // Scale up the application by 120% only for mobile view (< 768px) to make text readable on phone
-    // On PC/desktop (>= 768px), use standard 100% to keep proportions sharp and avoid overflow
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        document.documentElement.style.fontSize = '120%';
-      } else {
-        document.documentElement.style.fontSize = '';
-      }
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      document.documentElement.style.fontSize = '';
-    };
+    // Ensure default natural 100% font size on mobile and desktop
+    document.documentElement.style.fontSize = '';
   }, [navigate]);
 
   // Dynamic check for Ramadan season (Month 9 of Islamic calendar or Sha'ban 26+)

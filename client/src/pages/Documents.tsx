@@ -260,50 +260,88 @@ export default function Documents() {
   const prescriptionCount = documents.filter((d) => d.category === 'Prescription').length;
   const reportCount = documents.filter((d) => d.category === 'Medical Report').length;
 
+  const getCategoryInfo = (category: string) => {
+    switch (category) {
+      case 'Prescription':
+        return { label: 'প্রেসক্রিপশন', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200/70', dot: 'bg-emerald-500' };
+      case 'Medical Report':
+        return { label: 'মেডিকেল রিপোর্ট', bg: 'bg-blue-50 text-blue-700 border-blue-200/70', dot: 'bg-blue-500' };
+      case 'NID/Card':
+        return { label: 'এনআইডি ও কার্ড', bg: 'bg-purple-50 text-purple-700 border-purple-200/70', dot: 'bg-purple-500' };
+      case 'Certificate':
+        return { label: 'সার্টিফিকেট', bg: 'bg-amber-50 text-amber-700 border-amber-200/70', dot: 'bg-amber-500' };
+      case 'Invoice/Bill':
+        return { label: 'ইনভয়েস/বিল', bg: 'bg-teal-50 text-teal-700 border-teal-200/70', dot: 'bg-teal-500' };
+      default:
+        return { label: 'অন্যান্য ফাইল', bg: 'bg-slate-100 text-slate-700 border-slate-200/70', dot: 'bg-slate-400' };
+    }
+  };
+
+  const getThumbnailSrc = (doc: DocumentItem) => {
+    if (doc.fileData) {
+      return `data:${doc.mimeType};base64,${doc.fileData}`;
+    }
+    if (doc.fileUrl) {
+      if (doc.fileUrl.startsWith('http')) return doc.fileUrl;
+      const apiBase = import.meta.env.VITE_API_URL || '/api';
+      return doc.fileUrl.startsWith('/') ? `${apiBase}${doc.fileUrl}` : `${apiBase}/${doc.fileUrl}`;
+    }
+    return null;
+  };
+
+  const getFileExt = (doc: DocumentItem) => {
+    if (doc.fileName && doc.fileName.includes('.')) {
+      return doc.fileName.split('.').pop()?.toUpperCase() || 'FILE';
+    }
+    if (doc.mimeType?.includes('pdf')) return 'PDF';
+    if (doc.mimeType?.includes('jpeg') || doc.mimeType?.includes('jpg')) return 'JPG';
+    if (doc.mimeType?.includes('png')) return 'PNG';
+    return 'FILE';
+  };
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 font-sans pb-24">
-      {/* Top Banner / Header */}
-      <div className="bg-gradient-to-r from-[#0A7756] via-emerald-700 to-teal-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden mb-8">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-6 font-sans pb-24">
+      {/* Top Banner / Header (Compact & Mobile-Optimized) */}
+      <div className="bg-gradient-to-r from-[#0A7756] via-emerald-700 to-teal-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-md sm:shadow-xl relative overflow-hidden mb-4 sm:mb-6">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 rounded-l-full pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 bg-white/15 px-3 py-1 rounded-full text-xs font-bold text-emerald-100 mb-3 backdrop-blur-xs">
-              <Shield className="w-3.5 h-3.5" /> 100% সুরক্ষিত এনক্রিপ্টেড ফাইল ভল্ট
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-6">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-1.5 bg-white/15 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-emerald-100 mb-1.5 backdrop-blur-xs">
+              <Shield className="w-3 h-3" /> 100% সুরক্ষিত এনক্রিপ্টেড ভল্ট
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+            <h1 className="text-lg sm:text-2xl font-black tracking-tight">
               ডকুমেন্ট ও প্রেসক্রিপশন মেমোরি
             </h1>
-            <p className="text-emerald-100 text-sm mt-1 max-w-xl">
-              আপনার প্রেসক্রিপশন, রিপোর্ট এবং জরুরি ফাইল নিরাপদে রাখুন। WhatsApp-এ শুধু বলবেন{' '}
-              <span className="font-bold underline text-white">"আমার প্রেসক্রিপশন দাও"</span>, স্মৃতি তৎক্ষণাৎ ফাইল পাঠাবে!
+            <p className="text-emerald-100/90 text-xs sm:text-sm mt-0.5 max-w-xl leading-relaxed">
+              আপনার প্রেসক্রিপশন ও রিপোর্ট নিরাপদে রাখুন। WhatsApp-এ চাইলেই তৎক্ষণাৎ ফাইল পাবেন!
             </p>
           </div>
 
           <button
             onClick={() => setShowUploadModal(true)}
-            className="self-start md:self-auto bg-white text-[#0A7756] hover:bg-emerald-50 font-bold px-6 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2 transform active:scale-95"
+            className="self-stretch sm:self-auto bg-white text-[#0A7756] hover:bg-emerald-50 font-bold px-4 py-2 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm active:scale-95 shrink-0 cursor-pointer"
           >
-            <Plus className="w-5 h-5 stroke-[2.5]" />
+            <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>নতুন ফাইল যোগ করুন</span>
           </button>
         </div>
 
-        {/* Quick Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/10">
-          <div className="bg-black/10 backdrop-blur-xs rounded-2xl p-3 border border-white/10">
-            <div className="text-xs text-emerald-200 font-medium">মোট সংরক্ষিত ফাইল</div>
-            <div className="text-2xl font-black mt-0.5">{documents.length}টি</div>
+        {/* Quick Stats Grid (Clean 1-row compact layout on mobile) */}
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3 mt-3.5 pt-3 border-t border-white/10">
+          <div className="bg-black/10 backdrop-blur-xs rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/10 text-center sm:text-left">
+            <div className="text-[10px] sm:text-xs text-emerald-200 font-medium truncate">মোট ফাইল</div>
+            <div className="text-base sm:text-2xl font-black mt-0.5">{documents.length}টি</div>
           </div>
-          <div className="bg-black/10 backdrop-blur-xs rounded-2xl p-3 border border-white/10">
-            <div className="text-xs text-emerald-200 font-medium">প্রেসক্রিপশন</div>
-            <div className="text-2xl font-black mt-0.5">{prescriptionCount}টি</div>
+          <div className="bg-black/10 backdrop-blur-xs rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/10 text-center sm:text-left">
+            <div className="text-[10px] sm:text-xs text-emerald-200 font-medium truncate">প্রেসক্রিপশন</div>
+            <div className="text-base sm:text-2xl font-black mt-0.5">{prescriptionCount}টি</div>
           </div>
-          <div className="bg-black/10 backdrop-blur-xs rounded-2xl p-3 border border-white/10">
-            <div className="text-xs text-emerald-200 font-medium">মেডিকেল রিপোর্ট</div>
-            <div className="text-2xl font-black mt-0.5">{reportCount}টি</div>
+          <div className="bg-black/10 backdrop-blur-xs rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/10 text-center sm:text-left">
+            <div className="text-[10px] sm:text-xs text-emerald-200 font-medium truncate">মেডিকেল রিপোর্ট</div>
+            <div className="text-base sm:text-2xl font-black mt-0.5">{reportCount}টি</div>
           </div>
-          <div className="bg-black/10 backdrop-blur-xs rounded-2xl p-3 border border-white/10">
-            <div className="text-xs text-emerald-200 font-medium">WhatsApp ইন্টিগ্রেশন</div>
+          <div className="hidden sm:block bg-black/10 backdrop-blur-xs rounded-2xl p-3 border border-white/10">
+            <div className="text-xs text-emerald-200 font-medium">WhatsApp সিঙ্ক</div>
             <div className="text-sm font-bold text-emerald-300 mt-1 flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               সক্রিয় (Active)
@@ -313,9 +351,9 @@ export default function Documents() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-4 justify-between items-center mb-4 sm:mb-6">
         {/* Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 scrollbar-none">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
           {categories.map((cat) => {
             const Icon = cat.icon;
             const isActive = selectedCategory === cat.id;
@@ -323,9 +361,9 @@ export default function Documents() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
                   isActive
-                    ? 'bg-[#0A7756] text-white shadow-md'
+                    ? 'bg-[#0A7756] text-white shadow-sm'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
                 }`}
               >
@@ -344,7 +382,7 @@ export default function Documents() {
             placeholder="ফাইল খুঁজুন..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] shadow-2xs"
+            className="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] shadow-2xs"
           />
         </div>
       </div>
@@ -356,102 +394,146 @@ export default function Documents() {
           <p className="text-sm font-medium">ডকুমেন্টগুলো লোড হচ্ছে...</p>
         </div>
       ) : filteredDocs.length === 0 ? (
-        <div className="bg-white rounded-3xl p-10 border border-slate-100 shadow-sm text-center">
-          <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 text-[#0A7756]">
-            <FolderOpen className="w-10 h-10" />
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-sm text-center">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4 text-[#0A7756]">
+            <FolderOpen className="w-8 h-8 sm:w-10 sm:h-10" />
           </div>
-          <h3 className="text-lg font-bold text-slate-800">কোনো ফাইল পাওয়া যায়নি</h3>
+          <h3 className="text-base sm:text-lg font-bold text-slate-800">কোনো ফাইল পাওয়া যায়নি</h3>
           <p className="text-slate-500 text-xs mt-1 max-w-md mx-auto">
             আপনার কোনো প্রেসক্রিপশন বা রিপোর্ট এখনো সেভ করা নেই। আপনি ওয়েবসাইট থেকে অথবা সরাসরি{' '}
             <span className="font-bold text-[#0A7756]">স্মৃতি লাইফ WhatsApp নম্বরে</span> যেকোনো ছবি বা PDF ফাইল পাঠিয়ে ক্যাপশনে নামটি লিখলেই তা মেমোরিতে যুক্ত হয়ে যাবে!
           </p>
           <button
             onClick={() => setShowUploadModal(true)}
-            className="mt-5 bg-[#0A7756] hover:bg-[#086146] text-white font-bold px-6 py-2.5 rounded-xl text-xs inline-flex items-center gap-2 transition"
+            className="mt-4 sm:mt-5 bg-[#0A7756] hover:bg-[#086146] text-white font-bold px-5 sm:px-6 py-2.5 rounded-xl text-xs inline-flex items-center gap-2 transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>প্রথম ফাইল আপলোড করুন</span>
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filteredDocs.map((doc) => {
-            const isPdf = doc.mimeType.includes('pdf');
-            const isImage = doc.mimeType.startsWith('image/');
+            const isPdf = doc.mimeType?.includes('pdf');
+            const isImage = doc.mimeType?.startsWith('image/');
             const createdDate = new Date(doc.createdAt).toLocaleDateString('bn-BD', {
               day: 'numeric',
               month: 'short',
               year: 'numeric'
             });
+            const catInfo = getCategoryInfo(doc.category);
+            const thumbSrc = isImage ? getThumbnailSrc(doc) : null;
+            const fileExt = getFileExt(doc);
 
             return (
               <div
                 key={doc._id}
-                className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+                className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-2xs hover:shadow-md hover:border-emerald-300 transition-all flex flex-col justify-between group relative overflow-hidden"
               >
+                {/* Top content */}
                 <div>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 ${
-                          isPdf
-                            ? 'bg-rose-50 text-rose-600 border border-rose-100'
-                            : isImage
-                            ? 'bg-sky-50 text-sky-600 border border-sky-100'
-                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                        }`}
-                      >
-                        {isPdf ? <FileText className="w-6 h-6" /> : isImage ? <ImageIcon className="w-6 h-6" /> : <FileCheck className="w-6 h-6" />}
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                          {doc.category}
+                  <div className="flex items-start gap-3">
+                    {/* Thumbnail / Visual Icon */}
+                    <div 
+                      onClick={() => handlePreview(doc)}
+                      className="cursor-pointer shrink-0 group-hover:scale-105 transition-transform"
+                    >
+                      {thumbSrc ? (
+                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/70 shadow-2xs relative">
+                          <img
+                            src={thumbSrc}
+                            alt={doc.title}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : isPdf ? (
+                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl bg-rose-50 border border-rose-200/70 flex flex-col items-center justify-center text-rose-600 shadow-2xs">
+                          <FileText className="w-5 h-5 stroke-[2]" />
+                          <span className="text-[9px] font-black uppercase mt-0.5">PDF</span>
+                        </div>
+                      ) : isImage ? (
+                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl bg-sky-50 border border-sky-200/70 flex flex-col items-center justify-center text-sky-600 shadow-2xs">
+                          <ImageIcon className="w-5 h-5 stroke-[2]" />
+                          <span className="text-[9px] font-black uppercase mt-0.5">IMG</span>
+                        </div>
+                      ) : (
+                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl bg-emerald-50 border border-emerald-200/70 flex flex-col items-center justify-center text-[#0A7756] shadow-2xs">
+                          <FileCheck className="w-5 h-5 stroke-[2]" />
+                          <span className="text-[9px] font-black uppercase mt-0.5">DOC</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Title & Metadata */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${catInfo.bg}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${catInfo.dot}`}></span>
+                          <span>{catInfo.label}</span>
                         </span>
-                        <h3 className="font-bold text-slate-800 text-sm mt-1 leading-snug line-clamp-2">
-                          {doc.title}
-                        </h3>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/50 uppercase">
+                          {fileExt}
+                        </span>
+                      </div>
+
+                      <h3 
+                        onClick={() => handlePreview(doc)}
+                        className="font-bold text-slate-800 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-[#0A7756] transition-colors cursor-pointer"
+                        title={doc.title}
+                      >
+                        {doc.title}
+                      </h3>
+
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-1 font-medium">
+                        <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>{createdDate}</span>
+                        <span>•</span>
+                        <span>{formatFileSize(doc.fileSize)}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-xs text-slate-400 space-y-1 mb-4">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{createdDate}</span>
-                      <span>•</span>
-                      <span>{formatFileSize(doc.fileSize)}</span>
-                    </div>
-                    {doc.notes && (
-                      <p className="text-slate-600 text-[11px] italic mt-2 line-clamp-2 bg-slate-50 p-2 rounded-xl">
-                        "{doc.notes}"
-                      </p>
-                    )}
-                  </div>
+                  {/* Notes snippet if available */}
+                  {doc.notes && (
+                    <p className="text-slate-600 text-[11px] italic mt-2.5 line-clamp-2 bg-slate-50/80 px-2.5 py-1.5 rounded-xl border border-slate-100">
+                      "{doc.notes}"
+                    </p>
+                  )}
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                {/* Bottom Action Toolbar */}
+                <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-1">
                     <button
-                      onClick={() => handleDownload(doc)}
-                      className="px-3 py-1.5 rounded-xl bg-[#0A7756]/10 hover:bg-[#0A7756] text-[#0A7756] hover:text-white font-bold text-xs transition flex items-center gap-1.5"
+                      type="button"
+                      onClick={() => handlePreview(doc)}
+                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-[#0A7756] text-[#0A7756] hover:text-white font-bold text-xs transition-all border border-emerald-200/60 hover:border-transparent active:scale-95 cursor-pointer shadow-2xs"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>ডাউনলোড</span>
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>দেখুন</span>
                     </button>
                     <button
-                      onClick={() => handlePreview(doc)}
-                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs transition flex items-center justify-center"
-                      title="দেখুন"
+                      type="button"
+                      onClick={() => handleDownload(doc)}
+                      className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs transition-all active:scale-95 cursor-pointer"
+                      title="ডাউনলোড করুন"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Download className="w-3.5 h-3.5 text-slate-600" />
+                      <span className="hidden sm:inline">ডাউনলোড</span>
                     </button>
                   </div>
+
                   <button
+                    type="button"
                     onClick={() => handleDelete(doc._id, doc.title)}
-                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors active:scale-95 cursor-pointer"
                     title="মুছে ফেলুন"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>

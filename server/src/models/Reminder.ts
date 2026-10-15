@@ -1,5 +1,13 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface IMedicineItem {
+  name: string;
+  mealTiming?: string;
+  durationDays?: number;
+  startDate?: Date;
+  endDate?: Date;
+}
+
 export interface IReminder extends Document {
   userId: mongoose.Types.ObjectId;
   title: string;
@@ -12,9 +20,23 @@ export interface IReminder extends Document {
   repeat: string;
   status: string;
   isAlarm?: boolean;
+  startDate?: Date;
+  endDate?: Date;
+  durationDays?: number;
+  mealTiming?: string;
+  medicineRoutine?: string;
+  medicines?: IMedicineItem[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+const MedicineItemSchema = new Schema({
+  name: { type: String, required: true },
+  mealTiming: { type: String, default: 'after' },
+  durationDays: { type: Number, default: 7 },
+  startDate: { type: Date },
+  endDate: { type: Date }
+}, { _id: true });
 
 const ReminderSchema: Schema = new Schema(
   {
@@ -28,7 +50,13 @@ const ReminderSchema: Schema = new Schema(
     category: { type: String, default: 'General' },
     repeat: { type: String, enum: ['Once', 'Daily', 'Weekly', 'Monthly', 'Yearly', 'Weekdays', 'Custom'], default: 'Once' },
     status: { type: String, enum: ['Pending', 'Completed', 'Cancelled', 'Snoozed'], default: 'Pending' },
-    isAlarm: { type: Boolean, default: false }
+    isAlarm: { type: Boolean, default: false },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    durationDays: { type: Number },
+    mealTiming: { type: String },
+    medicineRoutine: { type: String },
+    medicines: [MedicineItemSchema]
   },
   { timestamps: true }
 );

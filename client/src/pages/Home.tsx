@@ -147,90 +147,124 @@ export default function Home() {
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       
       {/* Top Section with Scenic Background */}
-      <div className="relative pt-3 md:pt-6 pb-16 md:pb-24 px-3 md:px-5 rounded-b-[2rem] md:rounded-b-[2.5rem] overflow-hidden">
-        {/* Background Image / Gradient mimicking the scenic view */}
+      <div className="relative pt-3 sm:pt-5 pb-10 sm:pb-14 px-3 sm:px-5 rounded-b-[2rem] sm:rounded-b-[2.5rem] overflow-hidden">
+        {/* Background Image / Soft Scenic Overlay */}
         <div 
           className="absolute inset-0 z-0 bg-cover bg-center"
           style={{ 
             backgroundImage: "url('/theme-bg.png')",
-            backgroundPosition: "center 30%",
-            opacity: "0.95"
+            backgroundPosition: "center 25%",
+            opacity: "0.22"
           }}
         ></div>
-        <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/20 via-white/40 to-[#f6f8f9]"></div>
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-emerald-100/60 via-teal-50/50 to-[#f6f8f9]"></div>
 
-        <div className="relative z-10 pt-2">
-          {/* Greeting */}
-          <div className="mb-3 md:mb-6 flex justify-between items-end">
-            <div>
-              <h2 className="text-xl md:text-3xl font-bold text-slate-800 mb-0.5 md:mb-1">{t('শুভ সকাল,', 'Good Morning,')} <br/>{userName}! 👋</h2>
-              <p className="text-[10px] md:text-sm text-slate-600 font-medium drop-shadow-sm">{t('আজকের দিনটাকে সুন্দর ও গোছানো করে শুরু করি।', 'Let\'s start the day beautifully and organized.')}</p>
-            </div>
-            {(() => {
-              const today = new Date();
-              
-              const getBengaliDate = (date: Date) => {
-                const d = date.getDate(), m = date.getMonth(), y = date.getFullYear();
-                let bDay, bMonth, bYear;
-                const isLeapYear = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
-                const bMonths = ['বৈশাখ', 'জ্যৈষ্ঠ', 'আষাঢ়', 'শ্রাবণ', 'ভাদ্র', 'আশ্বিন', 'কার্তিক', 'অগ্রহায়ণ', 'পৌষ', 'মাঘ', 'ফাল্গুন', 'চৈত্র'];
-                
-                if(m===0) { if(d<14){ bMonth=8; bDay=d+17; } else { bMonth=9; bDay=d-13; } }
-                else if(m===1) { if(d<13){ bMonth=9; bDay=d+18; } else { bMonth=10; bDay=d-12; } }
-                else if(m===2) { if(d<15){ bMonth=10; bDay=d+(isLeapYear?17:16); } else { bMonth=11; bDay=d-14; } }
-                else if(m===3) { if(d<14){ bMonth=11; bDay=d+17; } else { bMonth=0; bDay=d-13; } }
-                else if(m===4) { if(d<15){ bMonth=0; bDay=d+17; } else { bMonth=1; bDay=d-14; } }
-                else if(m===5) { if(d<15){ bMonth=1; bDay=d+17; } else { bMonth=2; bDay=d-14; } }
-                else if(m===6) { if(d<16){ bMonth=2; bDay=d+16; } else { bMonth=3; bDay=d-15; } }
-                else if(m===7) { if(d<16){ bMonth=3; bDay=d+16; } else { bMonth=4; bDay=d-15; } }
-                else if(m===8) { if(d<16){ bMonth=4; bDay=d+16; } else { bMonth=5; bDay=d-15; } }
-                else if(m===9) { if(d<16){ bMonth=5; bDay=d+15; } else { bMonth=6; bDay=d-15; } }
-                else if(m===10) { if(d<15){ bMonth=6; bDay=d+16; } else { bMonth=7; bDay=d-14; } }
-                else { if(d<15){ bMonth=7; bDay=d+16; } else { bMonth=8; bDay=d-14; } }
-                
-                bYear = y - 593;
-                if (m < 3 || (m === 3 && d < 14)) bYear--;
-                const bnNumbers = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-                const toBn = (num: number) => num.toString().split('').map(n => bnNumbers[parseInt(n)] || n).join('');
-                return `${toBn(bDay)} ${bMonths[bMonth]} ${toBn(bYear)}`;
-              };
+        <div className="relative z-10 pt-1">
+          {(() => {
+            const now = new Date();
+            const hour = now.getHours();
+            let greetingText = t('শুভ সকাল', 'Good Morning');
+            let greetingEmoji = '🌅';
+            if (hour >= 12 && hour < 17) {
+              greetingText = t('শুভ দুপুর', 'Good Afternoon');
+              greetingEmoji = '☀️';
+            } else if (hour >= 17 && hour < 20) {
+              greetingText = t('শুভ সন্ধ্যা', 'Good Evening');
+              greetingEmoji = '🌇';
+            } else if (hour >= 20 || hour < 5) {
+              greetingText = t('শুভ রাত্রি', 'Good Night');
+              greetingEmoji = '🌙';
+            }
 
-              // True Bengali Calendar Date
-              const bnDate = getBengaliDate(today);
-              // English Date
-              const enDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(today);
-              // Arabic/Hijri Date (in Bengali script)
-              let arDate = new Intl.DateTimeFormat('bn-BD-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(today);
-              arDate = arDate.replace('যুগ', 'হিজরি'); 
+            const getBengaliDate = (date: Date) => {
+              const d = date.getDate(), m = date.getMonth(), y = date.getFullYear();
+              let bDay, bMonth, bYear;
+              const isLeapYear = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+              const bMonths = ['বৈশাখ', 'জ্যৈষ্ঠ', 'আষাঢ়', 'শ্রাবণ', 'ভাদ্র', 'আশ্বিন', 'কার্তিক', 'অগ্রহায়ণ', 'পৌষ', 'মাঘ', 'ফাল্গুন', 'চৈত্র'];
               
-              return (
-                <div className="bg-white/80 backdrop-blur-sm px-3 md:px-4 py-2 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 flex flex-col items-end text-right justify-center">
-                  <span className="text-[11px] md:text-[13px] font-extrabold text-[#0A7756] mb-0.5">{bnDate}</span>
-                  <span className="text-[10px] md:text-[11px] font-bold text-[#0A7756] mb-0.5">{enDate}</span>
-                  <span className="text-[10px] md:text-[11px] font-bold text-[#0A7756]">{arDate}</span>
+              if(m===0) { if(d<14){ bMonth=8; bDay=d+17; } else { bMonth=9; bDay=d-13; } }
+              else if(m===1) { if(d<13){ bMonth=9; bDay=d+18; } else { bMonth=10; bDay=d-12; } }
+              else if(m===2) { if(d<15){ bMonth=10; bDay=d+(isLeapYear?17:16); } else { bMonth=11; bDay=d-14; } }
+              else if(m===3) { if(d<14){ bMonth=11; bDay=d+17; } else { bMonth=0; bDay=d-13; } }
+              else if(m===4) { if(d<15){ bMonth=0; bDay=d+17; } else { bMonth=1; bDay=d-14; } }
+              else if(m===5) { if(d<15){ bMonth=1; bDay=d+17; } else { bMonth=2; bDay=d-14; } }
+              else if(m===6) { if(d<16){ bMonth=2; bDay=d+16; } else { bMonth=3; bDay=d-15; } }
+              else if(m===7) { if(d<16){ bMonth=3; bDay=d+16; } else { bMonth=4; bDay=d-15; } }
+              else if(m===8) { if(d<16){ bMonth=4; bDay=d+16; } else { bMonth=5; bDay=d-15; } }
+              else if(m===9) { if(d<16){ bMonth=5; bDay=d+15; } else { bMonth=6; bDay=d-15; } }
+              else if(m===10) { if(d<15){ bMonth=6; bDay=d+16; } else { bMonth=7; bDay=d-14; } }
+              else { if(d<15){ bMonth=7; bDay=d+16; } else { bMonth=8; bDay=d-14; } }
+              
+              bYear = y - 593;
+              if (m < 3 || (m === 3 && d < 14)) bYear--;
+              const bnNumbers = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+              const toBn = (num: number) => num.toString().split('').map(n => bnNumbers[parseInt(n)] || n).join('');
+              return `${toBn(bDay)} ${bMonths[bMonth]} ${toBn(bYear)}`;
+            };
+
+            const bnDate = getBengaliDate(now);
+            const enDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(now);
+            let arDate = new Intl.DateTimeFormat('bn-BD-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+            arDate = arDate.replace('যুগ', 'হিজরি'); 
+
+            return (
+              <>
+                {/* Greeting & Date Row */}
+                <div className="mb-3.5 sm:mb-5 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#0A7756]/10 text-[#0A7756] text-[11px] sm:text-xs font-bold mb-1">
+                      <span>{greetingEmoji}</span>
+                      <span>{greetingText}</span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight">
+                      {userName}! 👋
+                    </h2>
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
+                      {t('আজকের দিনটাকে সুন্দর ও গোছানো করে শুরু করি।', 'Let\'s start the day beautifully and organized.')}
+                    </p>
+                  </div>
+
+                  {/* Date Card */}
+                  <div className="bg-white/90 backdrop-blur-md px-3 py-2 rounded-2xl shadow-2xs border border-emerald-100/80 flex flex-col items-end text-right justify-center shrink-0">
+                    <span className="text-xs font-extrabold text-[#0A7756] tracking-tight">{bnDate}</span>
+                    <span className="text-[11px] font-bold text-slate-600 mt-0.5">{enDate}</span>
+                    <span className="text-[10px] font-semibold text-emerald-700/80 mt-0.5">{arDate}</span>
+                  </div>
                 </div>
-              );
-            })()}
-          </div>
 
-          {/* Smart Input Bar */}
-          <div 
-            onClick={() => setIsModalOpen(true)}
-            className="bg-white rounded-full p-1 pl-2.5 md:p-1.5 md:pl-3 flex items-center shadow-sm border border-slate-200 cursor-text active:scale-95 transition w-[78%] md:w-[60%] max-w-[280px] md:max-w-[380px] mt-2 mb-2 mr-auto"
-          >
-            <Mic className="w-3 h-3 md:w-4 md:h-4 text-slate-400 mr-2 md:mr-2.5" />
-            <div className="flex-1">
-              <p className="text-[9px] md:text-[11px] text-slate-700 font-bold leading-tight">{t('কিছু লিখুন বা বলে বলুন...', 'Type or say something...')}</p>
-              <p className="text-[7px] md:text-[9px] text-slate-400 leading-tight mt-[1px]">{t('যেমন: আগামীকাল সকাল ১০টায় মিটিং মনে করিয়ে দাও', 'e.g. Remind me about the meeting tomorrow at 10 AM')}</p>
-            </div>
-            <button className="w-6 h-6 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center text-white shadow-sm hover:bg-[#086146] transition shrink-0 ml-1 md:ml-2">
-              <Mic className="w-3 h-3 md:w-4 md:h-4 animate-pulse" />
-            </button>
-          </div>
+                {/* Smart Input Bar (Full Width & Clean Interactive Style) */}
+                <div 
+                  onClick={() => setIsModalOpen(true)}
+                  className="w-full bg-white/95 backdrop-blur-md rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-3 shadow-sm border border-emerald-200/80 hover:border-emerald-400 hover:shadow-md cursor-pointer active:scale-[0.99] transition-all group"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-[#0A7756] flex items-center justify-center shrink-0 border border-emerald-100 group-hover:scale-105 transition-transform">
+                      <Search className="w-4 h-4 text-[#0A7756]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs sm:text-sm text-slate-800 font-bold leading-tight truncate">
+                        {t('কিছু লিখুন বা বলে বলুন...', 'Type or say something...')}
+                      </p>
+                      <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium leading-tight mt-0.5 truncate">
+                        {t('যেমন: "কাল সকাল ১০টায় মিটিং মনে করিয়ে দাও"', 'e.g. "Remind me about the meeting tomorrow at 10 AM"')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button 
+                    type="button"
+                    className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-tr from-[#0A7756] to-emerald-500 rounded-xl flex items-center justify-center text-white shadow-sm shadow-emerald-700/20 group-hover:shadow-md transition-all shrink-0 cursor-pointer"
+                  >
+                    <Mic className="w-4 h-4 animate-pulse" />
+                  </button>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 
-      <div className="px-3 md:px-5 -mt-8 md:-mt-16 relative z-20 space-y-3 md:space-y-5">
+      <div className="px-3 md:px-5 -mt-5 sm:-mt-8 relative z-20 space-y-3 md:space-y-5">
         
         {/* Islamic Prayer & Ramadan Auto Tracker Special Banner */}
         {(() => {

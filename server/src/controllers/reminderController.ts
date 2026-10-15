@@ -16,7 +16,7 @@ export const getReminders = async (req: Request, res: Response) => {
 
 export const createReminder = async (req: Request, res: Response) => {
   try {
-    const { title, description, date, time, priority, category, repeat, isAlarm } = req.body;
+    const { title, description, date, time, priority, category, repeat, isAlarm, startDate, endDate, durationDays, mealTiming, medicineRoutine, medicines } = req.body;
 
     const user = await User.findById(req.user?.id);
     let settings = await SystemSettings.findOne();
@@ -31,6 +31,50 @@ export const createReminder = async (req: Request, res: Response) => {
 
     const isWakeup = category === 'wakeup' || category === 'alarm' || isAlarm === true;
 
+    // If medicine routine reminder already exists for this slot, merge medicines
+    if (category === 'medicine' && medicineRoutine) {
+      const existingSlotReminder = await Reminder.findOne({
+        userId: req.user?.id,
+        category: 'medicine',
+        medicineRoutine,
+        status: { $in: ['Pending', 'Snoozed'] }
+      });
+
+      if (existingSlotReminder) {
+        let updatedMeds = existingSlotReminder.medicines || [];
+        if (Array.isArray(medicines) && medicines.length > 0) {
+          for (const newM of medicines) {
+            const idx = updatedMeds.findIndex(m => m.name.toLowerCase() === newM.name.toLowerCase());
+            if (idx >= 0) {
+              updatedMeds[idx] = newM;
+            } else {
+              updatedMeds.push(newM);
+            }
+          }
+        } else if (title) {
+          const medName = title.replace(/\s*\([^)]*\)/g, '').trim();
+          const idx = updatedMeds.findIndex(m => m.name.toLowerCase() === medName.toLowerCase());
+          const newM = {
+            name: medName,
+            mealTiming: mealTiming || 'after',
+            durationDays: durationDays ? Number(durationDays) : 7,
+            startDate: startDate ? new Date(startDate) : new Date(),
+            endDate: endDate ? new Date(endDate) : new Date(Date.now() + 7 * 86400000)
+          };
+          if (idx >= 0) {
+            updatedMeds[idx] = newM;
+          } else {
+            updatedMeds.push(newM);
+          }
+        }
+        existingSlotReminder.medicines = updatedMeds;
+        existingSlotReminder.status = 'Pending';
+        if (time) existingSlotReminder.time = time;
+        const saved = await existingSlotReminder.save();
+        return res.status(200).json(saved);
+      }
+    }
+
     const reminder = new Reminder({
       userId: req.user?.id,
       title,
@@ -40,7 +84,13 @@ export const createReminder = async (req: Request, res: Response) => {
       priority,
       category: isWakeup ? 'wakeup' : (category || 'General'),
       repeat,
-      isAlarm: isWakeup
+      isAlarm: isWakeup,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      durationDays: durationDays ? Number(durationDays) : undefined,
+      mealTiming,
+      medicineRoutine,
+      medicines: Array.isArray(medicines) ? medicines : undefined
     });
     const savedReminder = await reminder.save();
     res.status(201).json(savedReminder);

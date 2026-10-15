@@ -203,6 +203,42 @@ export const startReminderScheduler = () => {
               } else if (isWakeup) {
                 const greetingText = getWakeupGreeting(reminder.time);
                 alertBody = `⏰🔔⏰ ${greetingText} (রিং ১/৩)\n\n📌 বিষয়: ${reminder.title}\n⏰ সময়: ${displayTime}\n\nআপনার ঘুম ভাঙলে নিচের বাটনে চাপ দিন:`;
+              } else if (reminder.category === 'medicine') {
+                const now = new Date();
+                const bnDigits: Record<string, string> = { '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪', '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯' };
+                const toBnNum = (n: number) => n.toString().replace(/\d/g, d => bnDigits[d] || d);
+
+                let medicineListSection = '';
+                if (reminder.medicines && reminder.medicines.length > 0) {
+                  // Filter medicines active for today
+                  const activeMeds = reminder.medicines.filter(m => {
+                    const start = m.startDate ? new Date(m.startDate) : new Date(0);
+                    start.setHours(0, 0, 0, 0);
+                    const end = m.endDate ? new Date(m.endDate) : new Date(Date.now() + 365 * 86400000);
+                    end.setHours(23, 59, 59, 999);
+                    return now >= start && now <= end;
+                  });
+
+                  if (activeMeds.length === 0) {
+                    await Reminder.findByIdAndUpdate(reminder._id, { status: 'Completed' });
+                    continue;
+                  }
+
+                  const medLines = activeMeds.map((m, idx) => {
+                    const mealStr = m.mealTiming === 'before' ? 'খাবারের আগে' : 'খাবারের পরে';
+                    const end = m.endDate ? new Date(m.endDate) : null;
+                    const diffDays = end ? Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                    const daysLeft = diffDays > 0 ? ` (বাকি ${toBnNum(diffDays)} দিন)` : '';
+                    return `  ${toBnNum(idx + 1)}. 💊 *${m.name}* - ${mealStr}${daysLeft}`;
+                  });
+
+                  medicineListSection = `\n\n📋 আজকের ওষুধের তালিকা:\n${medLines.join('\n')}`;
+                }
+
+                const slotTitle = reminder.medicineRoutine ? `${reminder.medicineRoutine}ের ওষুধ` : reminder.title;
+                const descText = reminder.description && (!reminder.medicines || reminder.medicines.length === 0) ? `\n📝 বিবরণ: ${reminder.description}` : '';
+
+                alertBody = `🔔 আসসালামু আলাইকুম${salutation}!\nআপনার *${slotTitle}* খাওয়ার সময় হয়েছে:\n🏷️ ক্যাটাগরি: 💊 ওষুধ\n⏰ সময়: ${displayTime}${descText}${medicineListSection}\n\nসুস্থ থাকতে নিয়ম মেনে সময়মতো ওষুধ খেয়ে নিন! 🩺`;
               } else {
                 alertBody = `🔔 আসসালামু আলাইকুম${salutation}! এটি আপনার স্মৃতির রিমাইন্ডার:${catText}\n📌 বিষয়: ${reminder.title}\n⏰ নির্ধারিত সময়: ${displayTime}`;
               }
@@ -234,6 +270,11 @@ export const startReminderScheduler = () => {
                     { id: `rem_done_${reminder._id}`, title: isSehri ? 'জেগে গেছি 🤲' : 'জেগে গেছি ✅' },
                     { id: `rem_reschedule_${reminder._id}`, title: '৫ মিনিট স্নুজ 💤' }
                   ]
+                : reminder.category === 'medicine'
+                ? [
+                    { id: `rem_done_${reminder._id}`, title: 'ওষুধ খেয়েছি ✅' },
+                    { id: `rem_reschedule_${reminder._id}`, title: '১৫ মিনিট পর ⏰' }
+                  ]
                 : [
                     { id: `rem_done_${reminder._id}`, title: 'হ্যাঁ, করেছি ✅' },
                     { id: `rem_reschedule_${reminder._id}`, title: 'না, পুনঃনির্ধারণ ⏰' }
@@ -242,7 +283,9 @@ export const startReminderScheduler = () => {
               const buttonsSent = await sendMetaWhatsAppButtons(senderNumber, alertBody, buttons);
               if (!buttonsSent) {
                 // Fallback to text message with instructions
-                const fallbackText = `${alertBody}\n\n👉 সম্পন্ন হলে লিখুন: "হ্যাঁ" বা "Yes"\n👉 পুনঃনির্ধারণ করতে লিখুন: "না" বা নতুন সময় (যেমন: "আজ বিকাল ৫টায়")`;
+                const fallbackText = reminder.category === 'medicine'
+                  ? `${alertBody}\n\n👉 ওষুধ খাওয়া সম্পন্ন হলে লিখুন: "হ্যাঁ" বা "খেয়েছি"\n👉 একটু পরে খেতে চাইলে লিখুন: "না" বা সময় (যেমন: "১৫ মিনিট পর")`
+                  : `${alertBody}\n\n👉 সম্পন্ন হলে লিখুন: "হ্যাঁ" বা "Yes"\n👉 পুনঃনির্ধারণ করতে লিখুন: "না" বা নতুন সময় (যেমন: "আজ বিকাল ৫টায়")`;
                 await sendWhatsAppAlert(senderNumber, fallbackText);
               }
               console.log(`[ReminderScheduler] Interactive prompt sent for "${reminder.title}" to ${senderNumber}`);
@@ -268,18 +311,62 @@ export const startReminderScheduler = () => {
               nextDate.setFullYear(nextDate.getFullYear() + 1);
             }
 
-            await Reminder.findByIdAndUpdate(reminder._id, {
-              date: nextDate,
-              status: 'Pending'
-            });
-            console.log(`🔄 [ReminderScheduler] Recurring (${reminder.repeat}) reminder "${reminder.title}" advanced to: ${nextDate.toISOString().split('T')[0]}`);
+            // Check if medicine course has finished
+            let isMedicineCourseEnded = false;
+            if (reminder.category === 'medicine') {
+              if (reminder.medicines && reminder.medicines.length > 0) {
+                const hasAnyActiveMed = reminder.medicines.some(m => {
+                  if (!m.endDate) return true;
+                  const end = new Date(m.endDate);
+                  end.setHours(23, 59, 59, 999);
+                  return nextDate <= end;
+                });
+                isMedicineCourseEnded = !hasAnyActiveMed;
+              } else if (reminder.endDate) {
+                isMedicineCourseEnded = nextDate > new Date(reminder.endDate);
+              }
+            }
+
+            if (isMedicineCourseEnded) {
+              await Reminder.findByIdAndUpdate(reminder._id, {
+                status: 'Completed'
+              });
+              console.log(`💊✅ [ReminderScheduler] Medicine course completed for "${reminder.title}"`);
+            } else {
+              await Reminder.findByIdAndUpdate(reminder._id, {
+                date: nextDate,
+                status: 'Pending'
+              });
+              console.log(`🔄 [ReminderScheduler] Recurring (${reminder.repeat}) reminder "${reminder.title}" advanced to: ${nextDate.toISOString().split('T')[0]}`);
+            }
           } else if (reminder.category === 'medicine') {
             const nextDate = new Date(reminder.date || new Date());
             nextDate.setDate(nextDate.getDate() + 1);
-            await Reminder.findByIdAndUpdate(reminder._id, {
-              date: nextDate,
-              status: 'Pending'
-            });
+
+            let isCourseEnded = false;
+            if (reminder.medicines && reminder.medicines.length > 0) {
+              const hasAnyActiveMed = reminder.medicines.some(m => {
+                if (!m.endDate) return true;
+                const end = new Date(m.endDate);
+                end.setHours(23, 59, 59, 999);
+                return nextDate <= end;
+              });
+              isCourseEnded = !hasAnyActiveMed;
+            } else if (reminder.endDate) {
+              isCourseEnded = nextDate > new Date(reminder.endDate);
+            }
+
+            if (isCourseEnded) {
+              await Reminder.findByIdAndUpdate(reminder._id, {
+                status: 'Completed'
+              });
+              console.log(`💊✅ [ReminderScheduler] Medicine course completed for "${reminder.title}"`);
+            } else {
+              await Reminder.findByIdAndUpdate(reminder._id, {
+                date: nextDate,
+                status: 'Pending'
+              });
+            }
           }
         }
       }

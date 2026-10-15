@@ -36,8 +36,8 @@ export const sendLoginWelcomeMessage = async (targetPhone: string, userName?: st
     }
     lastWelcomeSentMap.set(cleanPhone, now);
 
-    const nameText = userName && userName !== 'নতুন ব্যবহারকারী' ? `প্রিয় ${userName},\n\n` : '';
-    const welcomeText = `🎉 *স্মৃতি লাইফে (Smriti Life) স্বাগতম!*\n\n${nameText}আপনার অ্যাকাউন্টে সফলভাবে লগইন সম্পন্ন হয়েছে। আমি আপনার সার্বক্ষণিক এআই অ্যাসিস্ট্যান্ট। 🤖✨\n\nএখন থেকে আপনাকে আর নম্বর খুঁজতে হবে না! এই চ্যাটেই আপনি আপনার প্রয়োজনীয় সবকিছু পরিচালনা করতে পারবেন:\n\n⏰ *রিমাইন্ডার:* "কাল সকাল ১০টায় মিটিং আছে মনে করিয়ে দিও"\n💰 *খরচের হিসাব:* "আজ বাজারে ৬৫০ টাকা খরচ হয়েছে"\n📝 *নোট ও ডকুমেন্ট:* "আমার ফাইল বা তথ্য সেভ রাখো"\n\nকথা শুরু করতে এখনই এই মেসেজে একটি *"হাই"* বা *"Hello"* লিখে পাঠান! 😊`;
+    const namePart = userName && userName !== 'নতুন ব্যবহারকারী' ? `, ${userName}` : '';
+    const welcomeText = `🎉 *স্মৃতি লাইফে স্বাগতম${namePart}!* 🤖\n\nআপনার লগইন সফল হয়েছে। রিমাইন্ডার, দৈনিক খরচ বা নোট রাখতে এই চ্যাটে একটি *"হাই"* বা যা প্রয়োজন সরাসরি লিখে পাঠান! 😊`;
 
     await sendMetaWhatsAppMessage(targetPhone, welcomeText);
     console.log(`[Auth] Welcome message sent to WhatsApp ${targetPhone}`);

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { matchRelativeDuration } from '../services/aiWhatsAppService';
+import { handleMedicineInquiry } from './whatsappController';
 
 export const parseCommand = async (req: Request, res: Response) => {
   const extractTime = (text: string): string => {
@@ -102,6 +103,22 @@ export const parseCommand = async (req: Request, res: Response) => {
 
   try {
     const { command } = req.body;
+    const userId = (req as any).user?.id || (req as any).user?._id;
+
+    if (userId && command) {
+      const medAnswer = await handleMedicineInquiry(userId, command);
+      if (medAnswer) {
+        return res.json({
+          success: true,
+          data: {
+            intent: "medicine_inquiry",
+            title: "💊 ওষুধের রিমাইন্ডার তথ্য",
+            content: medAnswer,
+            message: medAnswer
+          }
+        });
+      }
+    }
     
     let intent = "unknown";
     let parsedData: any = {};
