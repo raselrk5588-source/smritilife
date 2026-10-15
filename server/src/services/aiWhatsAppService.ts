@@ -165,6 +165,41 @@ export const parseBengaliTime = (rawText: string): string => {
  * Banglish ('kal', 'kaal', 'agamikal', 'porshu', 'aj', 'ajke'), and English ('tomorrow', 'today').
  * Also correctly handles relative duration rollover past midnight (e.g. 23:50 + 20 min).
  */
+/**
+ * Detects whether the user mentioned an explicit date, day of week, or relative day/duration in their text.
+ */
+export const hasExplicitDateOrDay = (rawText: string): boolean => {
+  if (!rawText) return false;
+  const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+  const lower = rawText.replace(/[০-৯]/g, (m) => bnToEn[m] || m).toLowerCase().trim();
+
+  // 1. Relative duration (e.g. 10 minute por)
+  if (matchRelativeDuration(lower) !== null) return true;
+
+  // 2. Relative days: today, tomorrow, day after tomorrow
+  if (/\b(?:today|tomorrow|kal|kaal|kalke|kaalke|agamikal|agamikaal|aj|aaj|ajke|aajke|porshu|porshudin)\b/i.test(lower)) return true;
+  if (/(?:^|[^\u0980-\u09FF]|[\s])(?:আজ|আজকে|কাল|কালে|কালকে|আগামীকাল|পরশু|পরশুদিন)(?:[^\u0980-\u09FF]|[\s]|$)/.test(rawText)) return true;
+
+  // 3. Weekdays (Sunday to Saturday)
+  const weekdayRegex = /(?:রবিবার|রবিবারে|রবি\s*বার|রবি|রবিতে|robibar|robi\s*bar|robibare|robi\s*bare|sunday|সোমবার|সোমবারে|সোম\s*বার|সোম|সোমে|sombar|som\s*bar|sombare|som\s*bare|monday|মঙ্গলবার|মঙ্গলবারে|মঙ্গল\s*বার|মঙ্গল|মঙ্গলে|mongolbar|mongol\s*bar|mongolbare|mongol\s*bare|tuesday|বুধবার|বুধবারে|বুধ\s*বার|বুধ|বুধে|budhbar|budh\s*bar|budhbare|budh\s*bare|wednesday|বৃহস্পতিবার|বৃহস্পতিবারে|বৃহস্পতি\s*বার|বৃহস্পতি|brihospotibar|brihospoti\s*bar|brihoshpotibar|thursday|শুক্রবার|শুক্রবারে|শুক্র\s*বার|শুক্র|জুম্মা|জুম্মাবার|জুমার\s*দিন|shukrobar|shukro\s*bar|sukrobar|shukrobare|jumma|jummabar|friday|শনিবার|শনিবারে|শনি\s*বার|শনি|শনিতে|shonibar|shoni\s*bar|sonibar|shonibare|saturday)/i;
+  if (weekdayRegex.test(lower)) return true;
+
+  // 4. Calendar date (e.g. 18 tarik, 18/10, 18 October)
+  if (/\b(\d{1,2})\s*(?:tarik|tarikh|তারিখ|তারিখে|ই|শে|রা|th|st|nd|rd)\b/i.test(lower)) return true;
+  if (/\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/.test(lower)) return true;
+  if (/(?:january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec|জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর)/i.test(lower)) return true;
+
+  return false;
+};
+
+/**
+ * Intelligent relative & absolute date parser.
+ * Supports:
+ * - Weekdays (রবিবার, robibar, agami robi bare, সোমবার, etc.)
+ * - Explicit calendar dates (18 tarik, 18 October, 18/10/2026)
+ * - Relative days (kal, kaal, agamikal, porshu, aj, ajke, tomorrow, today)
+ * - Relative durations (in 20 minutes, 10 minute por)
+ */
 export const parseRelativeDate = (rawText: string, parsedTime?: string): Date => {
   const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
   const text = (rawText || '').replace(/[০-৯]/g, (m) => bnToEn[m] || m);
@@ -177,8 +212,9 @@ export const parseRelativeDate = (rawText: string, parsedTime?: string): Date =>
 
   const [year, month, day] = dhakaStr.split('-').map(Number);
   const targetDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const currentDayOfWeek = targetDate.getUTCDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
 
-  // Check if this was a relative duration request (minutes/hours later)
+  // 1. Check if this was a relative duration request (minutes/hours later)
   const relativeMins = matchRelativeDuration(text);
   if (relativeMins !== null) {
     const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
@@ -190,19 +226,144 @@ export const parseRelativeDate = (rawText: string, parsedTime?: string): Date =>
     return targetDate;
   }
 
-  // Match tomorrow keywords: Banglish ('kal', 'kaal', 'kalke', 'kaalke', 'agamikal', 'agamikaal', 'tomorrow')
-  // and Bengali ('কাল', 'কালে', 'কালকে', 'আগামীকাল') while ensuring Bengali 'সকাল' is NOT mistaken for 'কাল'
+  // 2. Weekdays Detection: Sunday (0) to Saturday (6)
+  const WEEKDAYS = [
+    {
+      index: 0, // Sunday
+      regex: /(?:রবিবার|রবিবারে|রবি\s*বার|রবি|রবিতে|robibar|robi\s*bar|robibare|robi\s*bare|sunday)/i
+    },
+    {
+      index: 1, // Monday
+      regex: /(?:সোমবার|সোমবারে|সোম\s*বার|সোম|সোমে|sombar|som\s*bar|sombare|som\s*bare|monday)/i
+    },
+    {
+      index: 2, // Tuesday
+      regex: /(?:মঙ্গলবার|মঙ্গলবারে|মঙ্গল\s*বার|মঙ্গল|মঙ্গলে|mongolbar|mongol\s*bar|mongolbare|mongol\s*bare|tuesday)/i
+    },
+    {
+      index: 3, // Wednesday
+      regex: /(?:বুধবার|বুধবারে|বুধ\s*বার|বুধ|বুধে|budhbar|budh\s*bar|budhbare|budh\s*bare|wednesday)/i
+    },
+    {
+      index: 4, // Thursday
+      regex: /(?:বৃহস্পতিবার|বৃহস্পতিবারে|বৃহস্পতি\s*বার|বৃহস্পতি|brihospotibar|brihospoti\s*bar|brihoshpotibar|thursday)/i
+    },
+    {
+      index: 5, // Friday
+      regex: /(?:শুক্রবার|শুক্রবারে|শুক্র\s*বার|শুক্র|জুম্মা|জুম্মাবার|জুমার\s*দিন|shukrobar|shukro\s*bar|sukrobar|shukrobare|jumma|jummabar|friday)/i
+    },
+    {
+      index: 6, // Saturday
+      regex: /(?:শনিবার|শনিবারে|শনি\s*বার|শনি|শনিতে|shonibar|shoni\s*bar|sonibar|soni\s*bar|shonibare|saturday)/i
+    }
+  ];
+
+  let matchedWeekday: number | null = null;
+  for (const w of WEEKDAYS) {
+    if (w.regex.test(lower)) {
+      matchedWeekday = w.index;
+      break;
+    }
+  }
+
+  if (matchedWeekday !== null) {
+    const hasAgamiPrefix = /\b(?:agami|agamir|samne|samner|asonno|next|porer|পরের|সামনের|সামনে|আগামী|আসন্ন)\b/i.test(lower);
+    let diff = (matchedWeekday - currentDayOfWeek + 7) % 7;
+    if (diff === 0) {
+      if (hasAgamiPrefix) {
+        diff = 7;
+      } else if (parsedTime) {
+        const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
+        const [tHour, tMin] = parsedTime.split(':').map(Number);
+        if (tHour * 60 + tMin <= cHour * 60 + cMin) {
+          diff = 7;
+        }
+      }
+    }
+    targetDate.setUTCDate(targetDate.getUTCDate() + diff);
+    return targetDate;
+  }
+
+  // 3. Explicit Calendar Date (e.g. "18 October", "১৮ অক্টোবর", "18 tarik", "১৮ তারিখ", "18/10/2026")
+  const MONTHS_PATTERN = '(?:january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec|জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর)';
+
+  const dayMonthMatch = lower.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th|ই|শে|রা)?\\s+(${MONTHS_PATTERN})`, 'i')) ||
+                        lower.match(new RegExp(`(${MONTHS_PATTERN})\\s+(\\d{1,2})(?:st|nd|rd|th|ই|শে|রা)?\\b`, 'i'));
+
+  const slashDateMatch = lower.match(/\b(\d{1,2})[-/](\d{1,2})(?:[-/](\d{2,4}))?\b/);
+  const tarikMatch = lower.match(/\b(\d{1,2})\s*(?:tarik|tarikh|তারিখ|তারিখে|ই|শে|রা|th|st|nd|rd)\b/i);
+
+  if (dayMonthMatch || slashDateMatch || tarikMatch) {
+    let targetDayNum = 1;
+    let targetMonthNum = month - 1; // 0-indexed
+    let targetYearNum = year;
+
+    const monthNames: Array<{ idx: number; regex: RegExp }> = [
+      { idx: 0, regex: /(?:january|jan|জানুয়ারি|জানুয়ারি)/i },
+      { idx: 1, regex: /(?:february|feb|ফেব্রুয়ারি|ফেব্রুয়ারি)/i },
+      { idx: 2, regex: /(?:march|mar|মার্চ)/i },
+      { idx: 3, regex: /(?:april|apr|এপ্রিল)/i },
+      { idx: 4, regex: /(?:may|মে)/i },
+      { idx: 5, regex: /(?:june|jun|জুন)/i },
+      { idx: 6, regex: /(?:july|jul|জুলাই)/i },
+      { idx: 7, regex: /(?:august|aug|আগস্ট)/i },
+      { idx: 8, regex: /(?:september|sep|sept|সেপ্টেম্বর)/i },
+      { idx: 9, regex: /(?:october|oct|অক্টোবর)/i },
+      { idx: 10, regex: /(?:november|nov|নভেম্বর)/i },
+      { idx: 11, regex: /(?:december|dec|ডিসেম্বর)/i }
+    ];
+
+    if (dayMonthMatch) {
+      const isDayFirst = /^\d/.test(dayMonthMatch[1]);
+      targetDayNum = parseInt(isDayFirst ? dayMonthMatch[1] : dayMonthMatch[2], 10);
+      const rawMonthName = isDayFirst ? dayMonthMatch[2] : dayMonthMatch[1];
+      const foundM = monthNames.find(m => m.regex.test(rawMonthName));
+      if (foundM) {
+        targetMonthNum = foundM.idx;
+        if (targetMonthNum < month - 1) {
+          targetYearNum += 1;
+        }
+      }
+    } else if (slashDateMatch) {
+      targetDayNum = parseInt(slashDateMatch[1], 10);
+      targetMonthNum = parseInt(slashDateMatch[2], 10) - 1;
+      if (slashDateMatch[3]) {
+        targetYearNum = parseInt(slashDateMatch[3], 10);
+        if (targetYearNum < 100) targetYearNum += 2000;
+      }
+    } else if (tarikMatch) {
+      targetDayNum = parseInt(tarikMatch[1], 10);
+      const foundM = monthNames.find(m => m.regex.test(lower));
+      if (foundM) {
+        targetMonthNum = foundM.idx;
+        if (targetMonthNum < month - 1) {
+          targetYearNum += 1;
+        }
+      } else {
+        if (targetDayNum < day) {
+          targetMonthNum += 1;
+          if (targetMonthNum > 11) {
+            targetMonthNum = 0;
+            targetYearNum += 1;
+          }
+        }
+      }
+    }
+
+    if (targetDayNum >= 1 && targetDayNum <= 31 && targetMonthNum >= 0 && targetMonthNum <= 11) {
+      return new Date(Date.UTC(targetYearNum, targetMonthNum, targetDayNum, 0, 0, 0));
+    }
+  }
+
+  // 4. Relative Days: Tomorrow / Day after tomorrow / Today
   const isTomorrowBanglish = /\b(?:kal|kaal|kalke|kaalke|agamikal|agamikaal|tomorrow)\b/i.test(lower);
-  const isTomorrowBengali = /(?:^|[^\u0980-\u09FF]|[\s])(?:আগামীকাল|কালকে|কালে|কাল)(?:[^\u0980-\u09FF]|[\s]|$)/.test(rawText) ||
-    (/(?<![সsh])(?:কাল|আগামীকাল)/i.test(rawText) && !rawText.includes('আজ') && !rawText.includes('সকাল') && rawText.includes('কাল'));
+  const isTomorrowBengali = /(?:^|[^\u0980-\u09FF])(?:আগামীকাল|কালকে|কালে|কাল)(?:[^\u0980-\u09FF]|$)/.test(rawText);
   const isTomorrow = isTomorrowBanglish || isTomorrowBengali;
 
-  // Day after tomorrow: Banglish ('porshu', 'porshudin') / Bengali ('পরশু', 'পরশুদিন')
   const isDayAfterBanglish = /\b(?:porshu|porshudin|day after tomorrow)\b/i.test(lower);
   const isDayAfterBengali = /(?:পরশু|পরশুদিন)/.test(rawText);
   const isDayAfter = isDayAfterBanglish || isDayAfterBengali;
 
-  // Today keywords: Banglish ('aj', 'aaj', 'ajke', 'aajke', 'today') / Bengali ('আজ', 'আজকে')
   const isTodayBanglish = /\b(?:aj|aaj|ajke|aajke|today)\b/i.test(lower);
   const isTodayBengali = /(?:^|[^\u0980-\u09FF]|[\s])(?:আজ|আজকে)(?:[^\u0980-\u09FF]|[\s]|$)/.test(rawText) || rawText.includes('আজ');
   const isToday = isTodayBanglish || isTodayBengali;
@@ -212,8 +373,6 @@ export const parseRelativeDate = (rawText: string, parsedTime?: string): Date =>
   } else if (isTomorrow) {
     targetDate.setUTCDate(targetDate.getUTCDate() + 1);
   } else if (!isToday && parsedTime) {
-    // If user specified a time without explicitly saying "today" or "tomorrow":
-    // Check if the time has already passed today in Dhaka
     const [currentHour, currentMin] = dhakaTimeStr.split(':').map(Number);
     const [targetHour, targetMin] = parsedTime.split(':').map(Number);
 
@@ -729,6 +888,9 @@ Possible actions:
       * "amake poti mas ar 2 tarik a akta reminder diow Boss k report joma dite hobe" বা "প্রতি মাসের ২ তারিখে বসকে রিপোর্ট দেওয়ার রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "Boss কে রিপোর্ট জমা দেওয়া", "repeat": "Monthly", "date": "2026-11-02", "time": "10:00" }
       * "প্রতি মাসের ৫ তারিখে বাসা ভাড়া দেওয়ার রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "বাসা ভাড়া দেওয়া", "repeat": "Monthly", "time": "10:00" }
       * "প্রতি শুক্রবার দুপুর ১২:৩০ টায় জুমার নামাজের রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "জুমার নামাজ", "repeat": "Weekly", "time": "12:30" }
+      * "Agami robi bare rubel bhai r mamun er bhai er UCB te bank account kore dite hobe dupur 12 tay" -> action: "create_reminder", data: { "title": "রুবেল ভাই এবং মামুনের ভাইয়ের ইউসিবি ব্যাংকে অ্যাকাউন্ট খোলা", "time": "12:00", "repeat": "Once" }
+      * "আগামী রবিবার দুপুর ১২টায় ব্যাংকে যেতে হবে" -> action: "create_reminder", data: { "title": "ব্যাংকে যাওয়া", "time": "12:00", "repeat": "Once" }
+      * "সোমবারে বিকাল ৪টায় মিটিং" -> action: "create_reminder", data: { "title": "মিটিং", "time": "16:00", "repeat": "Once" }
     Fields in "data":
     - "title": string
     - "recipientNames"?: string[] (e.g. ["রনি", "Bou"] if sent to specific contacts from contact list)
@@ -1063,8 +1225,12 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
    - Example: "20 minutes por akta reminder diow bazar jete hobe" -> title: "বাজার যেতে হবে" (or "বাজার যাওয়া").
    - Example: "১০ মিনিট পর ওষুধ খাওয়ার রিমাইন্ডার দাও" -> title: "ওষুধ খাওয়া" (or "ওষুধ খেতে হবে").
    - Example: "আধা ঘণ্টা পর পড়তে বসব মনে করিয়ে দিও" -> title: "পড়তে বসা".
-   - NEVER invent or hallucinate unrelated titles like "কাজে বসা" or "জরুরি কাজ" when a specific task is mentioned!
-3. Date format must be strictly YYYY-MM-DD and time must be 24-hour HH:mm.
+3. WEEKDAY TO DATE CALCULATION:
+   - When user specifies a day of the week (e.g. "রবিবার", "আগামী রবিবার", "robi bar", "agami sombar", "next friday", "রবিবারে"):
+     * Calculate the EXACT date for that upcoming weekday from CURRENT DATE (${dhakaDateStr}).
+     * Example: If CURRENT DATE is Thursday, then "আগামী রবিবার" (Sunday) is upcoming Sunday!
+     * NEVER set today's date if a future weekday was requested!
+4. Date format must be strictly YYYY-MM-DD and time must be 24-hour HH:mm.
 `;
 
     const honorificPrompt = userHonorific
@@ -1652,6 +1818,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
           .replace(/(?:in\s+)?(?:[০-৯\d]+)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
           .replace(/(?:adha|adho|আধা|অর্ধেক|der|দেড়|দেড়)\s*(?:ghont[ao]|ghant[ao]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|পরে|পর|বাদ|বাদে|later|after)?/gi, ' ')
           .replace(/\b(?:current\s*time\s*theke|akhon\s*theke|এখন\s*থেকে)\b/gi, ' ')
+          .replace(/(?:agami|agamir|samne|samner|asonno|next|porer|পরের|সামনের|সামনে|আগামী|আসন্ন)?\s*(?:রবিবার|রবিবারে|রবি\s*বার|রবি|রবিতে|robibar|robi\s*bar|robibare|robi\s*bare|sunday|সোমবার|সোমবারে|সোম\s*বার|সোম|সোমে|sombar|som\s*bar|sombare|som\s*bare|monday|মঙ্গলবার|মঙ্গলবারে|মঙ্গল\s*বার|মঙ্গল|মঙ্গলে|mongolbar|mongol\s*bar|mongolbare|mongol\s*bare|tuesday|বুধবার|বুধবারে|বুধ\s*বার|বুধ|বুধে|budhbar|budh\s*bar|budhbare|budh\s*bare|wednesday|বৃহস্পতিবার|বৃহস্পতিবারে|বৃহস্পতি\s*বার|বৃহস্পতি|brihospotibar|brihospoti\s*bar|brihoshpotibar|thursday|শুক্রবার|শুক্রবারে|শুক্র\s*বার|শুক্র|জুম্মা|জুম্মাবার|জুমার\s*দিন|shukrobar|shukro\s*bar|sukrobar|shukrobare|jumma|jummabar|friday|শনিবার|শনিবারে|শনি\s*বার|শনি|শনিতে|shonibar|shoni\s*bar|sonibar|soni\s*bar|shonibare|saturday)/gi, ' ')
           .replace(/(কাল|আগামীকাল|আজ|সকাল|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|\b(?:kal|kaal|kalke|kaalke|agamikal|aj|ajke|porshu|sokal|shokal|dupur|bikal|rat)\b|[০-৯0-9]{1,2}(?::[০-৯0-9]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, ' ')
           .replace(/(রিমাইন্ডার\s*(?:সেট\s*করো|দাও|রাখো|সেভ\s*করো)?|মনে\s*(?:করিয়ে|করাই|করে)?\s*(?:দিও|দাও|দিন|করো)?|reminder|\b(?:mone\s*(?:korai|koriye|kore)?\s*(?:diow|diyo|dio|diba|dao|koro)?|akta|ekta|একটি|একটা|diow|diyo|dio|diba|dao)\b)/gi, ' ')
           .replace(/\s+/g, ' ')

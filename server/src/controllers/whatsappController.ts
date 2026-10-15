@@ -11,7 +11,7 @@ import AITrainingRule from '../models/AITrainingRule';
 import UserDocument from '../models/UserDocument';
 import SystemSettings from '../models/SystemSettings';
 import { getMaintenanceStatus, updateMaintenanceCache } from '../services/maintenanceService';
-import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
@@ -46,10 +46,20 @@ export interface DocumentPendingState {
   expiresAt: number;
 }
 
+export interface PendingReminderState {
+  title: string;
+  time: string;
+  formattedTime: string;
+  category?: string;
+  customMessage?: string;
+  expiresAt: number;
+}
+
 // In-memory state tracking for active reminder prompts, wish prompts, and pending document uploads
 export const userReminderState = new Map<string, ReminderActionState>();
 export const userWishState = new Map<string, WishPendingState>();
 export const userDocPendingState = new Map<string, DocumentPendingState>();
+export const userPendingReminderState = new Map<string, PendingReminderState>();
 export const lastRescheduledReminder = new Map<string, { reminderId: string; title: string; updatedAt: number }>();
 
 /**
@@ -1538,6 +1548,61 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        // Check if user was asked for a date/day for a pending reminder
+        if (userPendingReminderState.has(user._id.toString())) {
+          const pending = userPendingReminderState.get(user._id.toString())!;
+          if (Date.now() > pending.expiresAt) {
+            userPendingReminderState.delete(user._id.toString());
+          } else if (cleanText && !cleanText.startsWith('/')) {
+            let reminderTime = pending.time;
+            const hasNewTime = cleanText.match(/(?:(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/i);
+            if (hasNewTime && hasNewTime[1]) {
+              reminderTime = parseBengaliTime(cleanText);
+            }
+
+            const targetDate = parseRelativeDate(cleanText, reminderTime);
+
+            await Reminder.create({
+              userId: user._id,
+              title: pending.title,
+              description: pending.customMessage,
+              date: targetDate,
+              time: reminderTime,
+              priority: 'Medium',
+              category: pending.category || 'General',
+              repeat: 'Once',
+              status: 'Pending',
+              isAlarm: false
+            });
+
+            userPendingReminderState.delete(user._id.toString());
+
+            const formattedTime = formatTime12Hour(reminderTime);
+            const isEng = isPureEnglishText(cleanText);
+            const dateStrBn = targetDate.toLocaleDateString('bn-BD', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+              timeZone: 'Asia/Dhaka'
+            });
+            const dateStrEn = targetDate.toLocaleDateString('en-US', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              timeZone: 'Asia/Dhaka'
+            });
+
+            const confirmMsg = isEng
+              ? `⏰ Your reminder *"${pending.title}"* has been successfully set!\n📅 *Date:* ${dateStrEn}\n⏰ *Time:* ${formattedTime}`
+              : `⏰ আপনার রিমাইন্ডার *"${pending.title}"* সফলভাবে সেট করা হয়েছে!\n📅 *তারিখ:* ${dateStrBn}\n⏰ *সময়:* ${formattedTime}`;
+
+            await sendMetaWhatsAppMessage(fromNumber, confirmMsg);
+            return;
+          }
+        }
+
         // --- STEP 2.8: Handle User Honorific/Salutation (Explicit Change or Initial Onboarding) ---
         const selectedTitle = extractHonorificChoice(cleanText, !!user.honorific);
         if (selectedTitle) {
@@ -2265,8 +2330,32 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   formattedTime = '04:00 AM';
                 }
 
-                // Calculate accurate target date for monthly recurring reminders
-                let calculatedDate = reminderDate;
+                // 1. Detect if user explicitly stated a date, day of week, or relative day/duration in their text
+                const hasDateOrDay = hasExplicitDateOrDay(cleanText);
+
+                // 2. If no date/day/duration was mentioned, and it's a one-time general reminder (not recurring, not alarm/sehri, not immediate send):
+                if (!hasDateOrDay && finalRepeat === 'Once' && !isWakeup && !isSehri && !sendNow && !aiResponse.data?.relativeMinutes) {
+                  userPendingReminderState.set(user._id.toString(), {
+                    title: finalTitle,
+                    time: reminderTime,
+                    formattedTime,
+                    category: finalCategory,
+                    customMessage: customMsg,
+                    expiresAt: Date.now() + 15 * 60 * 1000
+                  });
+
+                  const isEng = isPureEnglishText(cleanText);
+                  const askDateMsg = isEng
+                    ? `⏰ Got it! The time is set to *${formattedTime}* for: *"${finalTitle}"*.\n\n📅 Which date or day would you like to set this reminder for?\n(e.g., *Today*, *Tomorrow*, *Next Sunday*, or *18 October*)`
+                    : `⏰ আপনার *"${finalTitle}"* রিমাইন্ডারের সময় *${formattedTime}* পেয়েছি।\n\n📅 কিন্তু আপনি এটি **কোন দিন বা কোন বারে** সেট করতে চান?\n(যেমন লিখে জানান: *আজকে*, *আগামীকাল*, *আগামী রবিবার*, বা *১৮ তারিখ*)`;
+
+                  await sendMetaWhatsAppMessage(fromNumber, askDateMsg);
+                  break;
+                }
+
+                // 3. Calculate accurate target date using our enhanced weekday & date parser:
+                let calculatedDate = hasDateOrDay ? parseRelativeDate(cleanText, reminderTime) : reminderDate;
+
                 if (isMonthly) {
                   const bnToEnMap: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
                   const textNormalized = cleanText.replace(/[০-৯]/g, (m) => bnToEnMap[m] || m);
@@ -2308,7 +2397,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   isAlarm: isWakeup
                 });
 
-                let reply = aiResponse.replyText;
+                let reply = '';
                 if (isSehri) {
                   const repeatStr = finalRepeat === 'Daily' ? 'প্রতিদিন ' : '';
                   reply = `🌙🔔 আপনার সেহরি ওয়েক-আপ অ্যালার্ম "${finalTitle}" ${repeatStr}ভোর ${formattedTime}-এ সফলভাবে সেট করা হয়েছে! নির্ধারিত সময়ে আপনাকে ঘুম থেকে তোলার জন্য উচ্চশব্দে রিং অ্যালার্ম বাজবে।`;
@@ -2320,16 +2409,26 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   if (finalRepeat === 'Daily') {
                     repeatStr = 'প্রতিদিন ';
                   } else if (finalRepeat === 'Weekly') {
-                    repeatStr = 'প্রতি সপ্তাহে ';
+                    const weekdayName = calculatedDate.toLocaleDateString('bn-BD', { weekday: 'long', timeZone: 'Asia/Dhaka' });
+                    repeatStr = `প্রতি সপ্তাহে (${weekdayName}) `;
                   } else if (finalRepeat === 'Monthly') {
                     const dNum = calculatedDate.getDate();
                     const dBn = dNum.toString().replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[parseInt(d, 10)]);
                     repeatStr = `প্রতি মাসের ${dBn} তারিখে `;
-                    const firstDateBn = calculatedDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
-                    dateInfo = `\n📅 *প্রথম রিমাইন্ডার:* ${firstDateBn}`;
+                    const firstDateBn = calculatedDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dhaka' });
+                    dateInfo = `\n📅 *প্রথম রিমাইন্ডার:* ${firstDateBn}\n\n💡 স্মৃতি প্রতি মাসের নির্ধারিত তারিখে স্বয়ংক্রিয়ভাবে আপনাকে মনে করিয়ে দেবে।`;
+                  } else {
+                    const dateBn = calculatedDate.toLocaleDateString('bn-BD', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      timeZone: 'Asia/Dhaka'
+                    });
+                    dateInfo = `\n📅 *তারিখ:* ${dateBn}`;
                   }
 
-                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার *"${finalTitle}"* ${repeatStr}সময় *${formattedTime}*-এ সফলভাবে সেট করা হয়েছে!${dateInfo}\n\n💡 স্মৃতি প্রতি মাসের নির্ধারিত তারিখে স্বয়ংক্রিয়ভাবে আপনাকে মনে করিয়ে দেবে।`;
+                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার *"${finalTitle}"* ${repeatStr}সময় *${formattedTime}*-এ সফলভাবে সেট করা হয়েছে!${dateInfo}`;
                 }
 
                 await sendMetaWhatsAppMessage(fromNumber, reply);
