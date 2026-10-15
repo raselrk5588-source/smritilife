@@ -15,7 +15,7 @@ import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
 import { parseExpenseInput, recordExpense, getExpenseSummary, getExpenseSummaryForDate, getExpenseSummaryForMonth, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
 import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
-import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, formatDocumentListMessage } from '../services/documentService';
+import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer } from '../services/documentService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -814,7 +814,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const salutation = user.honorific ? ` ${user.honorific}` : '';
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 *পরবর্তীতে ফাইলটি পেতে:* যেকোনো সময় লিখুন—\n👉 *"আমার ${title} দাও"* বা *"প্রেসক্রিপশনটা পাঠাও"*\nস্মৃতি তৎক্ষণাৎ আপনার ফাইলটি পাঠিয়ে দেবে!`
+              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে যেকোনো সময় লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*\nস্মৃতি তৎক্ষণাৎ ছবি ও তারিখসহ হিসাব পাঠিয়ে দেবে!`
             );
             return;
           } else {
@@ -868,13 +868,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const salutation = user.honorific ? ` ${user.honorific}` : '';
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে সেভ করা হয়েছে${salutation}!* 📁\n\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 ভবিষ্যতে ফাইলটি প্রয়োজন হলে শুধু লিখবেন:\n👉 *"আমার ${title} দাও"*`
+              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে সেভ করা হয়েছে${salutation}!* 📁\n\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*`
             );
             return;
           }
         }
 
-        // --- STEP 0D: Handle Document Retrieval & Listing ("আমার প্রেসক্রিপশন দাও", "amar bottol daw", "রিপোর্ট পাঠাও", "সব ফাইল দেখাও") ---
+        // --- STEP 0D: Handle Document Retrieval & Item Lifespan Tracking ("আমার প্রেসক্রিপশন দাও", "Tishu box ta kobe save kora hoyechilo", "সিলিন্ডার কয়দিন চলছে") ---
         const isDocListQuery = /^(?:\/docs|\/files|ফাইলগুলো|ডকুমেন্টগুলো|সব\s*ফাইল|লিস্ট\s*ফাইল)\b/i.test(cleanText) ||
           /(?:আমার|amr|amar)?\s*(?:কি\s*কি|কোন\s*কোন|সব|সকল|list)?\s*(?:ফাইল|ডকুমেন্ট|কাগজ|প্রেসক্রিপশন|রিপোর্ট|file|doc|document)\s*(?:আছে|দেখাও|দেখান|লিস্ট|list|সব\s*দেখাও)/i.test(cleanText);
 
@@ -885,58 +885,54 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        const isTrackingOrDateQuery =
+          /(?:কবে|কবেকার|কত\s*দিন|কয়\s*দিন|কদ্দিন|তারিখ|তারিখে|দিন\s*হলো|দিন\s*গেছে|চলছে|চলতেছে|কিনেছি|কিনেছিলাম|এনেছি|এনেছিলাম|নিয়েছি|নিয়েছিলাম|সেভ\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|আপলোড\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|রাখলাম|রেখেছি|kobe|kobekar|koto\s*din|koy\s*din|koddin|tarikh|tarikhe|din\s*holo|din\s*geche|cholche|choltese|kinesi|kinesilam|enechi|enesilam|niesi|niesilam|save\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|upload\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|rekhechi|rakhlam|when\s*(?:was|did)|how\s*(?:many\s*days|long))\b/i.test(cleanText);
+
         const hasFetchIntent =
           /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|lagbe|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText);
 
         const isShortQuery = cleanText.split(/\s+/).length <= 4;
         const userDocsCount = await UserDocument.countDocuments({ userId: user._id });
 
-        if (userDocsCount > 0 && (hasFetchIntent || isShortQuery)) {
+        if (userDocsCount > 0 && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
           const doc = await findMatchingDocument(user._id.toString(), cleanText);
           if (doc) {
-            console.log(`[WhatsAppDoc] Found matching document "${doc.title}" for query: "${cleanText}"`);
-            let fileBuffer: Buffer | null = null;
-            const baseName = path.basename(doc.fileUrl);
-            const candidates = [
-              path.join(__dirname, '../../uploads/documents', baseName),
-              path.join(__dirname, '../uploads/documents', baseName),
-              path.join(process.cwd(), 'uploads/documents', baseName),
-              path.join(process.cwd(), 'server/uploads/documents', baseName)
-            ];
-            for (const c of candidates) {
-              if (fs.existsSync(c)) {
-                try {
-                  fileBuffer = await fs.promises.readFile(c);
-                  break;
-                } catch (e) {}
-              }
-            }
-            if (!fileBuffer && doc.fileData) {
-              fileBuffer = Buffer.from(doc.fileData, 'base64');
+            console.log(`[WhatsAppDoc] Found matching document "${doc.title}" for query: "${cleanText}" (isTracking: ${isTrackingOrDateQuery})`);
+            const fileBuffer = await getDocumentBuffer(doc);
+            const isEng = isPureEnglishText(cleanText);
+            const duration = calculateItemDuration(doc.createdAt);
+
+            if (isTrackingOrDateQuery) {
+              const msg = isEng
+                ? `📦 *${doc.title}* Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}\n\n💡 Here is the original photo you saved to track this item:`
+                : `📦 *${doc.title}* এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`;
+              await sendMetaWhatsAppMessage(fromNumber, msg);
+            } else {
+              const msg = isEng
+                ? `📄 Here is your saved file: *${doc.title}* (${doc.category})\n📅 Saved: ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ Active: ${duration.durationTextEn}`
+                : `📄 এই যে আপনার সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ সময়কাল: ${duration.durationTextBn}`;
+              await sendMetaWhatsAppMessage(fromNumber, msg);
             }
 
             if (fileBuffer) {
-              const isEng = isPureEnglishText(cleanText);
-              if (isEng) {
-                await sendMetaWhatsAppMessage(fromNumber, `📄 Here is your saved file: *${doc.title}* (${doc.category})`);
-              } else {
-                await sendMetaWhatsAppMessage(fromNumber, `📄 এই যে আপনার সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})`);
-              }
+              const caption = isEng
+                ? `📸 ${doc.title} • Saved: ${duration.savedDateEn}`
+                : `📸 ${doc.title} • সেভ: ${duration.savedDateBn}`;
               const sent = await sendMetaWhatsAppFile(
                 fromNumber,
                 fileBuffer,
                 doc.fileName,
                 doc.mimeType,
-                `📄 ${doc.title}`
+                caption
               );
-              if (!sent) {
+              if (!sent && !isTrackingOrDateQuery) {
                 await sendMetaWhatsAppMessage(
                   fromNumber,
                   `⚠️ ফাইলটি হোয়াটসঅ্যাপে সরাসরি পাঠানো সম্ভব হয়নি। অনুগ্রহ করে ওয়েব পোর্টাল থেকে ডাউনলোড করুন: ${process.env.APP_URL || 'https://smriti.life'}/app/documents`
                 );
               }
-              return;
             }
+            return;
           }
         }
 
@@ -2768,6 +2764,40 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 );
               }
             } else {
+              // Fallback: Check if user has a matching saved document / item
+              const doc = await findMatchingDocument(user._id.toString(), query || cleanText);
+              if (doc) {
+                const duration = calculateItemDuration(doc.createdAt);
+                const isEng = isPureEnglishText(cleanText);
+                const fileBuffer = await getDocumentBuffer(doc);
+
+                if (isEng) {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `📦 *${doc.title}* Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}\n\n💡 Here is the original photo you saved to track this item:`
+                  );
+                } else {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `📦 *${doc.title}* এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`
+                  );
+                }
+
+                if (fileBuffer) {
+                  const caption = isEng
+                    ? `📸 ${doc.title} • Saved: ${duration.savedDateEn}`
+                    : `📸 ${doc.title} • সেভ: ${duration.savedDateBn}`;
+                  await sendMetaWhatsAppFile(
+                    fromNumber,
+                    fileBuffer,
+                    doc.fileName,
+                    doc.mimeType,
+                    caption
+                  );
+                }
+                break;
+              }
+
               await sendMetaWhatsAppMessage(
                 fromNumber,
                 `দুঃখিত, আপনার "${query}" সম্পর্কিত কোনো তথ্য স্মৃতিতে সেভ করা নেই।\n\n💡 এটি সেভ করতে লিখুন: "${query}: [আপনার তথ্য]"`

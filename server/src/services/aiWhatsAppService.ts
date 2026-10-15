@@ -765,15 +765,16 @@ Possible actions:
    - "category"?: "Address" | "Personal" | "Health" | "Work" | "General"
 
 9. get_note:
-   When the user asks for their saved personal info, address, notes, passwords, or asks to see their notes.
+   When the user asks for their saved personal info, address, notes, passwords, or asks to see their notes, or asks about when an item/file was saved or how long it's lasting (e.g. "Tishu box ta kobe save kora hoyechilo", "tishu box ta kobe upload kora hoyechilo", "গ্যাস সিলিন্ডার কয়দিন চলছে", "প্রেসক্রিপশনটা দাও").
    Examples in Bengali/Banglish:
+   - "Tishu box ta kobe save kora hoyechilo" বা "tishu box ta kobe upload kora hoyechilo" -> action: "get_note", data: { searchQuery: "Tishu box" }
    - "আমার বাসার ঠিকানাটা দাও" বা "বাসার ঠিকানা কি?" বা "বাসার এড্রেস বলো" বা "basar address ta daw" -> action: "get_note", data: { searchQuery: "বাসার ঠিকানা" }
    - "অফিসের ঠিকানাটা দাও" বা "office address ta daw" -> action: "get_note", data: { searchQuery: "অফিসের ঠিকানা" }
    - "আমার রক্তের গ্রুপ কি?" -> action: "get_note", data: { searchQuery: "রক্তের গ্রুপ" }
    - "ওয়াইফাই পাসওয়ার্ড কত?" -> action: "get_note", data: { searchQuery: "ওয়াইফাই পাসওয়ার্ড" }
    - "আমার নোটগুলো দেখাও" বা "সব নোট দেখাও" বা "নোট কি কি আছে" -> action: "get_note", data: { searchQuery: "সব" }
    Fields in "data":
-   - "searchQuery": string (The topic name being requested, or "সব" to view all saved notes)
+   - "searchQuery": string (The item or topic name being requested, preserving English/Bangla text, or "সব" to view all saved notes)
 
 10. delete_note:
    When the user wants to delete or remove a saved note, address, or personal info.
