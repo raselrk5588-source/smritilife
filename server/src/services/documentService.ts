@@ -345,8 +345,66 @@ const synonymMap: Record<string, string[]> = {
   'বিল': ['bill', 'ইনভয়েস', 'invoice', 'ভাউচার', 'voucher', 'রিসিপ্ট', 'receipt'],
   'bill': ['বিল', 'ইনভয়েস', 'invoice', 'ভাউচার', 'voucher', 'রিসিপ্ট', 'receipt'],
   'রিসিপ্ট': ['receipt', 'বিল', 'bill', 'ভাউচার'],
-  'receipt': ['রিসিপ্ট', 'বিল', 'bill', 'ভাউচার']
+  'receipt': ['রিসিপ্ট', 'বিল', 'bill', 'ভাউচার'],
+  'ট্যাক্স': ['tax', 'আয়কর', 'aykor', 'ট্যাক্স ফাইল', 'tax file', 'রিটার্ন', 'টিন'],
+  'tax': ['ট্যাক্স', 'আয়কর', 'aykor', 'tax file', 'ট্যাক্স ফাইল', 'return', 'tin'],
+  'আয়কর': ['tax', 'ট্যাক্স', 'aykor', 'tax file'],
+  'aykor': ['tax', 'ট্যাক্স', 'আয়কর', 'tax file'],
+  'pdf': ['fdp', 'পিডিএফ', 'file', 'doc'],
+  'fdp': ['pdf', 'পিডিএফ', 'file', 'doc']
 };
+
+export function convertBengaliDigitsToEnglish(str: string): string {
+  if (!str) return '';
+  const bnToEn: Record<string, string> = {
+    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+  };
+  return str.replace(/[০-৯]/g, (d) => bnToEn[d] || d);
+}
+
+export function convertEnglishDigitsToBengali(str: string | number): string {
+  if (str === undefined || str === null) return '';
+  const enToBn: Record<string, string> = {
+    '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪',
+    '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯'
+  };
+  return str.toString().replace(/[0-9]/g, (d) => enToBn[d] || d);
+}
+
+/**
+ * Extract 4-digit calendar year (1990 - 2099) from Bengali or English text
+ */
+export function extractYearFromText(text: string): number | null {
+  if (!text) return null;
+  const normalized = convertBengaliDigitsToEnglish(text);
+  const match = normalized.match(/(?<!\d)(19\d{2}|20\d{2})(?!\d)/);
+  if (match) {
+    const yr = parseInt(match[1], 10);
+    if (yr >= 1990 && yr <= 2099) {
+      return yr;
+    }
+  }
+  return null;
+}
+
+/**
+ * Determine the associated year of a user document
+ */
+export function getDocYear(doc: IUserDocument): number {
+  const titleYear = extractYearFromText(doc.title);
+  if (titleYear) return titleYear;
+
+  const notesYear = extractYearFromText(doc.notes || '');
+  if (notesYear) return notesYear;
+
+  if (doc.createdAt) {
+    const yr = new Date(doc.createdAt).getFullYear();
+    if (!isNaN(yr) && yr >= 1990 && yr <= 2099) return yr;
+  }
+
+  return new Date().getFullYear();
+}
 
 function getTermVariants(term: string): string[] {
   const clean = term.toLowerCase().trim();
@@ -358,45 +416,55 @@ function getTermVariants(term: string): string[] {
   return Array.from(variants);
 }
 
+export interface DocumentMatchResult {
+  doc: IUserDocument | null;
+  targetYear: number | null;
+  matchedByYear: boolean;
+  itemKeyword: string;
+  otherAvailableYears: number[];
+  allMatchingDocs: IUserDocument[];
+  yearNotFound?: boolean;
+}
+
 /**
- * Find matching document for user by search term, tracking query, or intent
+ * Find matching document for user with intelligent Year & Version discrimination
  */
-export async function findMatchingDocument(
+export async function findMatchingDocumentWithVersion(
   userId: string,
   query: string
-): Promise<IUserDocument | null> {
+): Promise<DocumentMatchResult> {
   const userDocs = await UserDocument.find({ userId }).sort({ createdAt: -1 });
-  if (!userDocs || userDocs.length === 0) return null;
+  if (!userDocs || userDocs.length === 0) {
+    return {
+      doc: null,
+      targetYear: null,
+      matchedByYear: false,
+      itemKeyword: '',
+      otherAvailableYears: [],
+      allMatchingDocs: []
+    };
+  }
 
-  const clean = query
+  // 1. Detect target year in user query (e.g., 2026, 2024, ২০২৪)
+  const targetYear = extractYearFromText(query);
+
+  let clean = query
     .replace(/[?,।!]/g, '')
     .trim()
     .toLowerCase();
 
-  // 1. Direct Title or Variant Containment in User Query
-  for (const doc of userDocs) {
-    const docTitle = doc.title.toLowerCase().trim();
-    if (!docTitle) continue;
-
-    // Direct substring in query (e.g. "tishu box ta kobe save kora hoyechilo" contains "tishu box")
-    if (clean.includes(docTitle) || docTitle.includes(clean)) {
-      return doc;
-    }
-
-    // Check title variants (e.g. "Tishu box" -> doc tokens: "tishu", "box")
-    const docTokens = docTitle.split(/\s+/).filter((t) => t.length >= 2);
-    if (docTokens.length > 0) {
-      const allTokensPresent = docTokens.every((token) => {
-        const variants = getTermVariants(token);
-        return variants.some((v) => clean.includes(v));
-      });
-      if (allTokensPresent) {
-        return doc;
-      }
-    }
+  // Strip year tokens from query to isolate core item keyword
+  let queryWithoutYear = clean;
+  if (targetYear) {
+    const yrStr = targetYear.toString();
+    const bnYrStr = convertEnglishDigitsToBengali(targetYear);
+    queryWithoutYear = queryWithoutYear
+      .replace(new RegExp(`(?<!\\d)${yrStr}(?:[-_]?(?:ar|er|saler|th|s|সালে|সালের|এর|র))?(?!\\d)`, 'gi'), '')
+      .replace(new RegExp(`(?<!\\d)${bnYrStr}(?:[-_]?(?:সালে|সালের|এর|র))?(?!\\d)`, 'gi'), '')
+      .replace(/(?:বছর|সালের|সালে|year|saler)/gi, '')
+      .trim();
   }
 
-  // 2. Token Matching with Stopwords Stripped
   const stopWords = new Set([
     'আমাকে', 'দাও', 'দিস', 'দিবেন', 'দেন', 'পাঠাও', 'পাঠান', 'দেখাও', 'দেখান',
     'চাই', 'খুঁজে', 'খুঁজো', 'কোথায়', 'আছে', 'আমার', 'মায়ের', 'আম্মুর', 'বাবার',
@@ -411,74 +479,146 @@ export async function findMatchingDocument(
     'kobekar', 'koto', 'koy', 'koddin', 'din', 'tarikh', 'tarikhe', 'holo', 'geche',
     'cholche', 'choltese', 'kinesi', 'kinesilam', 'enechi', 'enesilam', 'niesi',
     'niesilam', 'save', 'upload', 'koresi', 'koresilam', 'korsi', 'kora', 'hoyechilo',
-    'hoyeche', 'rekhechi', 'rakhlam', 'when', 'did', 'was', 'how', 'many', 'days', 'long'
+    'hoyeche', 'rekhechi', 'rakhlam', 'when', 'did', 'was', 'how', 'many', 'days', 'long',
+    'এর', 'র', 'ar', 'er', 'saler'
   ]);
 
-  const queryWords = clean
+  const queryWords = queryWithoutYear
     .split(/\s+/)
     .map((w) => w.replace(/[^\w\u0980-\u09FF]/g, ''))
     .filter((w) => w.length >= 2 && !stopWords.has(w));
 
-  // Score docs based on query word overlap & synonyms
-  let bestDoc: IUserDocument | null = null;
-  let bestScore = 0;
+  const itemKeyword = queryWords.join(' ') || queryWithoutYear;
+
+  // 2. Score and group matching documents for this item
+  const matchingDocsWithScores: Array<{ doc: IUserDocument; score: number }> = [];
 
   for (const doc of userDocs) {
-    const docTitle = doc.title.toLowerCase();
+    const docTitle = doc.title.toLowerCase().trim();
     const docTokens = docTitle.split(/\s+/).filter((t) => t.length >= 2);
     let score = 0;
 
+    // Direct substring in title
+    if (queryWithoutYear && (queryWithoutYear.includes(docTitle) || docTitle.includes(queryWithoutYear))) {
+      score += 100;
+    }
+
+    // Check individual query tokens and synonyms
     for (const qWord of queryWords) {
       const qVariants = getTermVariants(qWord);
 
-      // Check against whole title
       if (qVariants.some((v) => docTitle.includes(v))) {
-        score += 30;
+        score += 35;
       }
 
-      // Check against doc tokens
       for (const dToken of docTokens) {
         const dVariants = getTermVariants(dToken);
         if (qVariants.some((qv) => dVariants.includes(qv))) {
-          score += 50;
+          score += 60;
         }
       }
 
-      // Check doc tags
       if (doc.tags && doc.tags.some((t) => qVariants.some((qv) => t.toLowerCase().includes(qv)))) {
-        score += 20;
+        score += 25;
       }
     }
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestDoc = doc;
+    if (score > 0) {
+      matchingDocsWithScores.push({ doc, score });
     }
   }
 
-  if (bestDoc && bestScore >= 30) {
-    return bestDoc;
+  // Sort descending by match score, then by creation date
+  matchingDocsWithScores.sort((a, b) => b.score - a.score || b.doc.createdAt.getTime() - a.doc.createdAt.getTime());
+  let allMatchingDocs = matchingDocsWithScores.map((m) => m.doc);
+
+  // If no direct keyword score match, try category detection
+  if (allMatchingDocs.length === 0) {
+    const { category, tags } = detectDocumentCategory(queryWithoutYear || clean);
+    if (category !== 'Other') {
+      const catMatches = userDocs.filter(
+        (d) => d.category === category || (d.tags && d.tags.some((t) => tags.includes(t)))
+      );
+      allMatchingDocs.push(...catMatches);
+    }
   }
 
-  // 3. Category match based on keywords
-  const { category, tags } = detectDocumentCategory(clean);
-  if (category !== 'Other') {
-    const catMatch = userDocs.find(
-      (d) => d.category === category || (d.tags && d.tags.some((t) => tags.includes(t)))
-    );
-    if (catMatch) return catMatch;
+  // If still no matches and user asked for "last" or only has 1 document
+  if (allMatchingDocs.length === 0) {
+    if (/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)\b/i.test(clean)) {
+      allMatchingDocs.push(userDocs[0]);
+    } else if (userDocs.length === 1 && queryWords.length === 0) {
+      allMatchingDocs.push(userDocs[0]);
+    }
   }
 
-  // 4. If user asks for "last" / "শেষ" saved file or only has 1 document:
-  if (/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)\b/i.test(clean)) {
-    return userDocs[0];
+  if (allMatchingDocs.length === 0) {
+    return {
+      doc: null,
+      targetYear,
+      matchedByYear: false,
+      itemKeyword,
+      otherAvailableYears: [],
+      allMatchingDocs: []
+    };
   }
 
-  if (userDocs.length === 1 && queryWords.length === 0) {
-    return userDocs[0];
+  // 3. Year Filter Logic
+  if (targetYear) {
+    // Check which documents match the targetYear
+    const yearMatchedDocs = allMatchingDocs.filter((d) => getDocYear(d) === targetYear);
+    const allDocYears = Array.from(new Set(allMatchingDocs.map((d) => getDocYear(d))));
+    const otherYears = allDocYears.filter((yr) => yr !== targetYear).sort((a, b) => b - a);
+
+    if (yearMatchedDocs.length > 0) {
+      return {
+        doc: yearMatchedDocs[0],
+        targetYear,
+        matchedByYear: true,
+        itemKeyword: yearMatchedDocs[0].title,
+        otherAvailableYears: otherYears,
+        allMatchingDocs
+      };
+    } else {
+      // User specifically requested a year that is not available for this item
+      return {
+        doc: null,
+        targetYear,
+        matchedByYear: false,
+        itemKeyword: allMatchingDocs[0].title,
+        otherAvailableYears: allDocYears.sort((a, b) => b - a),
+        allMatchingDocs,
+        yearNotFound: true
+      };
+    }
   }
 
-  return null;
+  // 4. Default: User did not specify year -> return the latest one
+  const primaryDoc = allMatchingDocs[0];
+  const primaryDocYear = getDocYear(primaryDoc);
+  const otherYears = Array.from(new Set(allMatchingDocs.map((d) => getDocYear(d))))
+    .filter((yr) => yr !== primaryDocYear)
+    .sort((a, b) => b - a);
+
+  return {
+    doc: primaryDoc,
+    targetYear: null,
+    matchedByYear: false,
+    itemKeyword: primaryDoc.title,
+    otherAvailableYears: otherYears,
+    allMatchingDocs
+  };
+}
+
+/**
+ * Backwards compatible findMatchingDocument
+ */
+export async function findMatchingDocument(
+  userId: string,
+  query: string
+): Promise<IUserDocument | null> {
+  const result = await findMatchingDocumentWithVersion(userId, query);
+  return result.doc;
 }
 
 /**
@@ -500,6 +640,6 @@ export function formatDocumentListMessage(docs: IUserDocument[]): string {
     msg += `${i + 1}. ${icon} *${d.title}*\n   📂 ${d.category} • 📅 ${dateStr}\n\n`;
   });
 
-  msg += '💡 যেকোনো ফাইল ফেরত পেতে শুধু ফাইলের নামটি লিখে মেসেজ দিন (যেমন: *"আমার প্রেসক্রিপশন দাও"*)।';
+  msg += '💡 যেকোনো ফাইল ফেরত পেতে শুধু ফাইলের নামটি লিখে মেসেজ দিন (যেমন: *"আমার প্রেসক্রিপশন দাও"*, বা নির্দিষ্ট বছরের ফাইল পেতে *"২০২৬ সালের ফাইল দাও"*)।';
   return msg;
 }

@@ -17,7 +17,7 @@ import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
 import { parseExpenseInput, recordExpense, getExpenseSummary, getExpenseSummaryForDate, getExpenseSummaryForMonth, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
 import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
-import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer } from '../services/documentService';
+import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer } from '../services/documentService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -915,29 +915,60 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         const userDocsCount = await UserDocument.countDocuments({ userId: user._id });
 
         if (userDocsCount > 0 && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
-          const doc = await findMatchingDocument(user._id.toString(), cleanText);
+          const docResult = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
+          const isEng = isPureEnglishText(cleanText);
+
+          // If user specifically requested a year that doesn't exist for this document
+          if (docResult.yearNotFound && docResult.targetYear) {
+            const yrBn = convertEnglishDigitsToBengali(docResult.targetYear);
+            const otherYearsBn = docResult.otherAvailableYears.map(convertEnglishDigitsToBengali).join(', ');
+            const otherYearsEn = docResult.otherAvailableYears.join(', ');
+            const sampleYr = docResult.otherAvailableYears[0];
+            const sampleYrBn = convertEnglishDigitsToBengali(sampleYr);
+
+            const msg = isEng
+              ? `⚠️ No file for year *${docResult.targetYear}* was found for "${docResult.itemKeyword}".\n\n💡 However, you have files saved for year(s): *${otherYearsEn}*.\nTo retrieve that year, send: "${sampleYr} ${docResult.itemKeyword}".`
+              : `⚠️ আপনার *${yrBn}* সালের কোনো "${docResult.itemKeyword}" স্মৃতি মেমোরিতে খুঁজে পাওয়া যায়নি।\n\n💡 তবে আপনার মেমোরিতে *${otherYearsBn}* সালের ফাইল সংরক্ষিত আছে।\nসেটি দেখতে চাইলে লিখুন: "${sampleYrBn} সালের ${docResult.itemKeyword} দাও"।`;
+
+            await sendMetaWhatsAppMessage(fromNumber, msg);
+            return;
+          }
+
+          const doc = docResult.doc;
           if (doc) {
-            console.log(`[WhatsAppDoc] Found matching document "${doc.title}" for query: "${cleanText}" (isTracking: ${isTrackingOrDateQuery})`);
+            console.log(`[WhatsAppDoc] Found matching document "${doc.title}" for query: "${cleanText}" (isTracking: ${isTrackingOrDateQuery}, matchedYear: ${docResult.targetYear})`);
             const fileBuffer = await getDocumentBuffer(doc);
-            const isEng = isPureEnglishText(cleanText);
             const duration = calculateItemDuration(doc.createdAt);
+            const yrBn = docResult.targetYear ? convertEnglishDigitsToBengali(docResult.targetYear) : '';
+            const otherYearsBn = docResult.otherAvailableYears.map(convertEnglishDigitsToBengali).join(', ');
+            const otherYearsEn = docResult.otherAvailableYears.join(', ');
+
+            // Construct additional multi-year guidance if other years exist
+            let multiYearNote = '';
+            if (docResult.otherAvailableYears.length > 0) {
+              const sampleYr = docResult.otherAvailableYears[0];
+              const sampleYrBn = convertEnglishDigitsToBengali(sampleYr);
+              multiYearNote = isEng
+                ? `\n\n💡 Note: You also have files saved for year(s): *${otherYearsEn}*.\nTo get a specific year, send: "${sampleYr} ${doc.title}".`
+                : `\n\n💡 তথ্য: আপনার কাছে *${otherYearsBn}* সালের ফাইলও সংরক্ষিত আছে।\nনির্দিষ্ট সালের ফাইল পেতে লিখুন: "${sampleYrBn} সালের ${doc.title} দাও"।`;
+            }
 
             if (isTrackingOrDateQuery) {
               const msg = isEng
-                ? `📦 *${doc.title}* Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}\n\n💡 Here is the original photo you saved to track this item:`
-                : `📦 *${doc.title}* এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`;
+                ? `📦 *${doc.title}* ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}${multiYearNote}\n\n💡 Here is the original photo you saved to track this item:`
+                : `📦 *${doc.title}* ${docResult.matchedByYear ? `(${yrBn} সাল) ` : ''}এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}${multiYearNote}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`;
               await sendMetaWhatsAppMessage(fromNumber, msg);
             } else {
               const msg = isEng
-                ? `📄 Here is your saved file: *${doc.title}* (${doc.category})\n📅 Saved: ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ Active: ${duration.durationTextEn}`
-                : `📄 এই যে আপনার সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ সময়কাল: ${duration.durationTextBn}`;
+                ? `📄 Here is your ${docResult.matchedByYear ? `*${docResult.targetYear}* ` : ''}saved file: *${doc.title}* (${doc.category})\n📅 Saved: ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ Active: ${duration.durationTextEn}${multiYearNote}`
+                : `📄 এই যে আপনার ${docResult.matchedByYear ? `*${yrBn}* সালের ` : ''}সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ সময়কাল: ${duration.durationTextBn}${multiYearNote}`;
               await sendMetaWhatsAppMessage(fromNumber, msg);
             }
 
             if (fileBuffer) {
               const caption = isEng
-                ? `📸 ${doc.title} • Saved: ${duration.savedDateEn}`
-                : `📸 ${doc.title} • সেভ: ${duration.savedDateBn}`;
+                ? `📸 ${doc.title} ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}• Saved: ${duration.savedDateEn}`
+                : `📸 ${doc.title} ${docResult.matchedByYear ? `(${yrBn}) ` : ''}• সেভ: ${duration.savedDateBn}`;
               const sent = await sendMetaWhatsAppFile(
                 fromNumber,
                 fileBuffer,
@@ -2845,28 +2876,57 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               }
             } else {
               // Fallback: Check if user has a matching saved document / item
-              const doc = await findMatchingDocument(user._id.toString(), query || cleanText);
+              const docResult = await findMatchingDocumentWithVersion(user._id.toString(), query || cleanText);
+              const isEng = isPureEnglishText(cleanText);
+
+              if (docResult.yearNotFound && docResult.targetYear) {
+                const yrBn = convertEnglishDigitsToBengali(docResult.targetYear);
+                const otherYearsBn = docResult.otherAvailableYears.map(convertEnglishDigitsToBengali).join(', ');
+                const otherYearsEn = docResult.otherAvailableYears.join(', ');
+                const sampleYr = docResult.otherAvailableYears[0];
+                const sampleYrBn = convertEnglishDigitsToBengali(sampleYr);
+
+                const msg = isEng
+                  ? `⚠️ No file for year *${docResult.targetYear}* was found for "${docResult.itemKeyword}".\n\n💡 However, you have files saved for year(s): *${otherYearsEn}*.\nTo retrieve that year, send: "${sampleYr} ${docResult.itemKeyword}".`
+                  : `⚠️ আপনার *${yrBn}* সালের কোনো "${docResult.itemKeyword}" স্মৃতি মেমোরিতে খুঁজে পাওয়া যায়নি।\n\n💡 তবে আপনার মেমোরিতে *${otherYearsBn}* সালের ফাইল সংরক্ষিত আছে।\nসেটি দেখতে চাইলে লিখুন: "${sampleYrBn} সালের ${docResult.itemKeyword} দাও"।`;
+
+                await sendMetaWhatsAppMessage(fromNumber, msg);
+                break;
+              }
+
+              const doc = docResult.doc;
               if (doc) {
                 const duration = calculateItemDuration(doc.createdAt);
-                const isEng = isPureEnglishText(cleanText);
                 const fileBuffer = await getDocumentBuffer(doc);
+                const yrBn = docResult.targetYear ? convertEnglishDigitsToBengali(docResult.targetYear) : '';
+                const otherYearsBn = docResult.otherAvailableYears.map(convertEnglishDigitsToBengali).join(', ');
+                const otherYearsEn = docResult.otherAvailableYears.join(', ');
+
+                let multiYearNote = '';
+                if (docResult.otherAvailableYears.length > 0) {
+                  const sampleYr = docResult.otherAvailableYears[0];
+                  const sampleYrBn = convertEnglishDigitsToBengali(sampleYr);
+                  multiYearNote = isEng
+                    ? `\n\n💡 Note: You also have files saved for year(s): *${otherYearsEn}*.\nTo get a specific year, send: "${sampleYr} ${doc.title}".`
+                    : `\n\n💡 তথ্য: আপনার কাছে *${otherYearsBn}* সালের ফাইলও সংরক্ষিত আছে।\nনির্দিষ্ট সালের ফাইল পেতে লিখুন: "${sampleYrBn} সালের ${doc.title} দাও"।`;
+                }
 
                 if (isEng) {
                   await sendMetaWhatsAppMessage(
                     fromNumber,
-                    `📦 *${doc.title}* Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}\n\n💡 Here is the original photo you saved to track this item:`
+                    `📦 *${doc.title}* ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}${multiYearNote}\n\n💡 Here is the original photo you saved to track this item:`
                   );
                 } else {
                   await sendMetaWhatsAppMessage(
                     fromNumber,
-                    `📦 *${doc.title}* এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`
+                    `📦 *${doc.title}* ${docResult.matchedByYear ? `(${yrBn} সাল) ` : ''}এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}${multiYearNote}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`
                   );
                 }
 
                 if (fileBuffer) {
                   const caption = isEng
-                    ? `📸 ${doc.title} • Saved: ${duration.savedDateEn}`
-                    : `📸 ${doc.title} • সেভ: ${duration.savedDateBn}`;
+                    ? `📸 ${doc.title} ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}• Saved: ${duration.savedDateEn}`
+                    : `📸 ${doc.title} ${docResult.matchedByYear ? `(${yrBn}) ` : ''}• সেভ: ${duration.savedDateBn}`;
                   await sendMetaWhatsAppFile(
                     fromNumber,
                     fileBuffer,
