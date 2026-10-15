@@ -18,6 +18,34 @@ function normalizeMobile(mobile: string): string {
   return cleaned;
 }
 
+// Prevent sending duplicate welcome messages to the same mobile within 5 minutes
+const lastWelcomeSentMap = new Map<string, number>();
+
+/**
+ * Send a welcoming message to user's WhatsApp after successful login
+ * so the official chat thread immediately appears at the top of their WhatsApp.
+ */
+export const sendLoginWelcomeMessage = async (targetPhone: string, userName?: string) => {
+  try {
+    const cleanPhone = normalizeMobile(targetPhone);
+    const now = Date.now();
+    const lastSent = lastWelcomeSentMap.get(cleanPhone);
+    if (lastSent && now - lastSent < 5 * 60 * 1000) {
+      // Sent within last 5 minutes, skip duplicate
+      return;
+    }
+    lastWelcomeSentMap.set(cleanPhone, now);
+
+    const nameText = userName && userName !== 'নতুন ব্যবহারকারী' ? `প্রিয় ${userName},\n\n` : '';
+    const welcomeText = `🎉 *স্মৃতি লাইফে (Smriti Life) স্বাগতম!*\n\n${nameText}আপনার অ্যাকাউন্টে সফলভাবে লগইন সম্পন্ন হয়েছে। আমি আপনার সার্বক্ষণিক এআই অ্যাসিস্ট্যান্ট। 🤖✨\n\nএখন থেকে আপনাকে আর নম্বর খুঁজতে হবে না! এই চ্যাটেই আপনি আপনার প্রয়োজনীয় সবকিছু পরিচালনা করতে পারবেন:\n\n⏰ *রিমাইন্ডার:* "কাল সকাল ১০টায় মিটিং আছে মনে করিয়ে দিও"\n💰 *খরচের হিসাব:* "আজ বাজারে ৬৫০ টাকা খরচ হয়েছে"\n📝 *নোট ও ডকুমেন্ট:* "আমার ফাইল বা তথ্য সেভ রাখো"\n\nকথা শুরু করতে এখনই এই মেসেজে একটি *"হাই"* বা *"Hello"* লিখে পাঠান! 😊`;
+
+    await sendMetaWhatsAppMessage(targetPhone, welcomeText);
+    console.log(`[Auth] Welcome message sent to WhatsApp ${targetPhone}`);
+  } catch (err) {
+    console.error(`[Auth] Failed to send welcome message to ${targetPhone}:`, err);
+  }
+};
+
 /**
  * Check if the device is already recognized (Max 2 devices allowed)
  * If recognized and subscribed -> Login directly without OTP
@@ -36,6 +64,8 @@ export const checkMobile = async (req: Request, res: Response) => {
     // If user is subscribed and this device is already in authorized devices (max 2)
     if (user && user.isSubscribed && user.deviceIds && user.deviceIds.includes(deviceId)) {
       const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
+      // Send welcome message asynchronously so user gets instant WhatsApp thread
+      sendLoginWelcomeMessage(user.whatsapp || cleanMobile, user.name);
       return res.json({
         requireOtp: false,
         token,
@@ -166,6 +196,9 @@ export const loginWithOtp = async (req: Request, res: Response) => {
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
+
+    // Send WhatsApp welcome message asynchronously so user gets instant WhatsApp thread
+    sendLoginWelcomeMessage(user.whatsapp || cleanMobile, user.name);
 
     res.json({
       token,

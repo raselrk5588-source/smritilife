@@ -13,6 +13,7 @@ import SystemSettings from '../models/SystemSettings';
 import ErrorLog from '../models/ErrorLog';
 import AITrainingRule from '../models/AITrainingRule';
 import { updateMaintenanceCache } from '../services/maintenanceService';
+import { sendLoginWelcomeMessage } from './authController';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
@@ -175,6 +176,9 @@ export const createDemoUser = async (req: Request, res: Response) => {
       sub.status = 'SUBSCRIBED';
       await sub.save();
     }
+
+    // Send welcome WhatsApp message to the demo user immediately
+    sendLoginWelcomeMessage(cleanMobile, userName);
 
     res.json({
       success: true,
