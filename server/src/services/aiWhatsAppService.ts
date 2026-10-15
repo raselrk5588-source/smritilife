@@ -23,30 +23,83 @@ export const formatTime12Hour = (time24?: string): string => {
 };
 
 /**
- * Helper to detect relative durations (e.g. "20 mnt por", "20 min por", "20 মিনিট পর", "1 ghonta por", "আধা ঘণ্টা পর")
+ * Helper to detect relative durations (e.g. "20 mnt por", "20 min por", "20 মিনিট পর", "1 ghonta por", "1 ghinta pore", "আধা ঘণ্টা পর")
  */
 export const matchRelativeDuration = (rawText: string): number | null => {
+  if (!rawText) return null;
   const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
-  const text = (rawText || '').replace(/[০-৯]/g, (m) => bnToEn[m] || m).toLowerCase();
+  let text = (rawText || '').replace(/[০-৯]/g, (m) => bnToEn[m] || m).toLowerCase();
 
-  // Pattern for minutes: "20 mnt", "20 min", "20 mint", "20 minute", "20 minutes", "২০ মিনিট"
-  const minMatch = text.match(/(?:in\s+)?(\d+)\s*(?:minute|minutes|min|mins|mnt|mnts|mint|mints|m|মিনিট(?:ের)?|মি\.)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i);
-  
-  // Pattern for hours: "1 ghonta", "1 hr", "1 hour", "১ ঘণ্টা"
-  const hourMatch = text.match(/(?:in\s+)?(\d+)\s*(?:ghont[ao]|ghant[ao]|hour|hours|hr|hrs|h|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i);
+  // Normalize common number words
+  text = text
+    .replace(/\b(?:ek|ak|এক|one)\b/gi, '1')
+    .replace(/\b(?:dui|দুই|two)\b/gi, '2')
+    .replace(/\b(?:tin|teen|তিন|three)\b/gi, '3')
+    .replace(/\b(?:char|chaar|চার|four)\b/gi, '4')
+    .replace(/\b(?:pach|paach|পাঁচ|five)\b/gi, '5')
+    .replace(/\b(?:dosh|দশ|ten)\b/gi, '10')
+    .replace(/\b(?:ponero|fifteen)\b/gi, '15')
+    .replace(/\b(?:kuri|bis|twenty)\b/gi, '20')
+    .replace(/\b(?:trish|tirish|thirty)\b/gi, '30');
 
   // Half hour / 1.5 hours
-  const halfHour = /(?:adha|adho|আধা|অর্ধেক)\s*(?:ghont[ao]|ghant[ao]|hour|hours|hr|hrs|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i.test(text);
-  const oneAndHalfHour = /(?:der|দেড়|দেড়)\s*(?:ghont[ao]|ghant[ao]|hour|hours|hr|hrs|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/i.test(text);
+  const halfHour = /(?:adha|adho|half|আধা|অর্ধেক)\s*(?:gh[aoie]nt[aoe]|g[aoie]nt[aoe]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)?(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after))?/i.test(text);
+  const oneAndHalfHour = /(?:der|দেড়|দেড়|1\.5)\s*(?:gh[aoie]nt[aoe]|g[aoie]nt[aoe]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)?(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after))?/i.test(text);
 
-  if (minMatch || hourMatch || halfHour || oneAndHalfHour) {
-    let addMinutes = 0;
-    if (minMatch) addMinutes += parseInt(minMatch[1], 10);
-    if (hourMatch) addMinutes += parseInt(hourMatch[1], 10) * 60;
-    if (halfHour) addMinutes += 30;
-    if (oneAndHalfHour) addMinutes += 90;
-    return addMinutes;
+  if (halfHour && !oneAndHalfHour && !/\d+\s*(?:minute|min)/i.test(text)) {
+    return 30;
   }
+  if (oneAndHalfHour) {
+    return 90;
+  }
+
+  let totalMinutes = 0;
+  let matched = false;
+
+  // Pattern for hours: "1 ghonta", "1 ghinta", "1 ghanta", "1 gonta", "1 hr", "1 hour", "১ ঘণ্টা", "1h"
+  // Handles: ghonta, ghanta, ghinta, ghinte, ghonte, gonta, ginta, hour, hr
+  const hourRegex = /(?:in\s+)?(\d+(?:\.\d+)?)\s*(?:gh[aoie]nt[aoe]|g[aoie]nt[aoe]|hours?|hrs?|h|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\b(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after|dau|dao|দাও))?/i;
+  const hourMatch = text.match(hourRegex);
+  if (hourMatch && hourMatch[1]) {
+    const hours = parseFloat(hourMatch[1]);
+    if (!isNaN(hours)) {
+      totalMinutes += Math.round(hours * 60);
+      matched = true;
+    }
+  }
+
+  // Pattern for minutes: "20 mnt", "20 min", "20 mint", "20 minute", "20 minutes", "২০ মিনিট"
+  const minRegex = /(?:in\s+)?(\d+)\s*(?:minutes?|mins?|mnts?|mints?|m|মিনিট(?:ের)?|মি\.)\b(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after|dau|dao|দাও))?/i;
+  const minMatch = text.match(minRegex);
+  if (minMatch && minMatch[1]) {
+    const mins = parseInt(minMatch[1], 10);
+    if (!isNaN(mins)) {
+      totalMinutes += mins;
+      matched = true;
+    }
+  }
+
+  // Generic relative duration fallback: e.g. "1 pore" or "10 pore"
+  if (!matched) {
+    const genericMatch = text.match(/(\d+)\s*(?:por|pore|পরে|পর|বাদে|বাদ|later|after)/i);
+    if (genericMatch && genericMatch[1]) {
+      const val = parseInt(genericMatch[1], 10);
+      if (!isNaN(val)) {
+        if (val <= 4) {
+          totalMinutes += val * 60; // 1-4 is almost always hours
+          matched = true;
+        } else {
+          totalMinutes += val; // 5+ is minutes
+          matched = true;
+        }
+      }
+    }
+  }
+
+  if (matched && totalMinutes > 0) {
+    return totalMinutes;
+  }
+
   return null;
 };
 
@@ -573,20 +626,24 @@ export const extractScheduledMessage = (rawText: string, recipientPhone?: string
 const SYSTEM_INSTRUCTION = `
 You are an AI assistant for a WhatsApp bot called "Smriti Life" (স্মৃতি লাইফ).
 Your job is to analyze the user's message and return a JSON object with the action to perform.
-The user speaks Bengali, Banglish, or English. Always be warm, friendly, polite, and helpful.
+Always be warm, friendly, polite, and helpful.
 
-When the user sends greetings (hi, hello, hlw, salam), asks who you are, asks your name, asks how you are, asks what you do, or has casual conversation:
-- Action: "general_reply"
-- Data: {}
-- "replyText": A sweet, polite, and natural response in clear Bengali.
-  * For greeting ("hi", "hello", "hlw", "assalamu alaikum", etc.):
-    "আসসালামু আলাইকুম! আমি স্মৃতি লাইফ (Smriti Life), আপনার এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
-  * For name question ("তোমার নাম কি?", "tumar nam ki", "who are you"):
-    "আসসালামু আলাইকুম! আমার নাম স্মৃতি লাইফ (Smriti Life), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
-  * For how are you ("কেমন আছো?", "kemon acho"):
-    "আলহামদুলিল্লাহ, আমি বেশ ভালো আছি! আশা করি আপনিও ভালো আছেন। 😊 আজ আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
-  * For what you do or help ("কী করতে পারো?", "help"):
-    "আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট স্মৃতি লাইফ (Smriti Life)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে সুন্দর উইশ কার্ড পাঠিয়ে দেওয়া\n\nআপনি কী করতে চান বলুন?"
+CRITICAL LANGUAGE MIRRORING RULES:
+1. PURE ENGLISH: If the user communicates in English (e.g. "Who are you?", "How are you?", "Set a reminder for meeting tomorrow at 4 PM", "Show my tasks", "What can you do?"), ALWAYS set "replyText" and all conversation in polite, natural, and fluent ENGLISH.
+   * Greeting: "Hello! I am Smriti Life, your personal AI assistant. 😊 How may I help you today?"
+   * Who are you: "I am Smriti Life, your personal AI assistant. 😊 How can I help you?"
+   * How are you: "I'm doing well, thank you! I hope you are having a wonderful day. 😊 How may I assist you today?"
+   * What can you do: "I am Smriti Life, your personal AI assistant. 😊 Here is what I can do:\n• Set and manage your reminders\n• Send scheduled WhatsApp messages\n• Send personalized greeting cards to loved ones\n• Save and retrieve your documents & prescriptions\n\nWhat would you like to do?"
+   * Reminder confirmation: "⏰ Your reminder for \"{title}\" has been successfully set for {time} on {date}!"
+2. BENGALI & BANGLISH: If the user writes in Bengali (বাংলা লিপি) OR phonetic Banglish (e.g. "kemon acho", "tumar nam ki", "amar bottol daw", "kal sokal 10tay meeting"), ALWAYS reply in sweet, warm, natural BENGALI (বাংলা).
+   * For greeting ("hi", "hello", "hlw", "assalamu alaikum", etc.):
+     "আসসালামু আলাইকুম! আমি স্মৃতি লাইফ (Smriti Life), আপনার এআই অ্যাসিস্ট্যান্ট। 😊 আমি কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
+   * For name question ("তোমার নাম কি?", "tumar nam ki"):
+     "আসসালামু আলাইকুম! আমার নাম স্মৃতি লাইফ (Smriti Life), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
+   * For how are you ("কেমন আছো?", "kemon acho"):
+     "আলহামদুলিল্লাহ, আমি বেশ ভালো আছি! আশা করি আপনিও ভালো আছেন। 😊 আজ আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
+   * For what you do or help ("কী করতে পারো?", "help"):
+     "আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট স্মৃতি লাইফ (Smriti Life)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে সুন্দর উইশ কার্ড পাঠিয়ে দেওয়া\n• প্রেসক্রিপশন ও জরুরি ফাইল সংরক্ষণ ও সরবরাহ করা\n\nআপনি কী করতে চান বলুন?"
 
 Your capabilities include:
 1. Listing/viewing existing reminders ("list_reminders").

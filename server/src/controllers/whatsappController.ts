@@ -9,7 +9,7 @@ import Note from '../models/Note';
 import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
 import UserDocument from '../models/UserDocument';
-import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
@@ -48,6 +48,39 @@ export interface DocumentPendingState {
 export const userReminderState = new Map<string, ReminderActionState>();
 export const userWishState = new Map<string, WishPendingState>();
 export const userDocPendingState = new Map<string, DocumentPendingState>();
+export const lastRescheduledReminder = new Map<string, { reminderId: string; title: string; updatedAt: number }>();
+
+/**
+ * Helper to detect if a message is written in pure English (not Bangla or phonetic Banglish)
+ */
+export const isPureEnglishText = (text: string): boolean => {
+  if (!text) return false;
+  // If text contains Bengali script characters (0980-09FF), it's Bengali
+  if (/[\u0980-\u09FF]/.test(text)) return false;
+
+  const clean = text.toLowerCase().trim();
+
+  // Common Banglish markers
+  const banglishMarkers = /\b(?:kemon|acho|aso|achen|asen|bhalo|valo|tumi|apni|tumar|tomar|apnar|amar|amr|amake|koro|korun|dao|daw|pathao|pathan|dekhaw|dekhan|chai|khuje|mone|koriye|dio|diyo|shokal|sokal|dupur|bikal|bikele|sondha|shondha|raat|rat|pore|por|aj|aaj|ajke|aajke|kal|kaal|kalke|porshu|kothay|ase|ache|nai|hobena|hobe|bhai|vai|apu|bhaiya|chif|chief|seheri|sehri|sahari|romjan|ramadan|iftar|baki|khata|hisab|taka|poisa|ghonta|ghinta|ghanta|gonta|ginta|boro|choto|eta|oita|aita|brta)\b/i;
+  if (banglishMarkers.test(clean)) return false;
+
+  const englishWords = clean.match(/\b[a-z]{2,}\b/g) || [];
+  if (englishWords.length === 0) return false;
+
+  const commonEnglish = new Set([
+    'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
+    'how', 'are', 'you', 'who', 'what', 'can', 'do', 'help', 'set', 'reminder',
+    'alarm', 'meeting', 'tomorrow', 'today', 'tonight', 'for', 'at', 'pm', 'am',
+    'please', 'thank', 'thanks', 'show', 'list', 'my', 'all', 'tasks', 'notes',
+    'send', 'message', 'to', 'call', 'is', 'the', 'and', 'with', 'in', 'on',
+    'about', 'cancel', 'delete', 'modify', 'update', 'time', 'date', 'wish',
+    'birthday', 'happy', 'document', 'documents', 'prescription', 'file', 'files',
+    'vault', 'card', 'download', 'view', 'need', 'want', 'wake', 'up'
+  ]);
+
+  const matchedEnglish = englishWords.filter((w) => commonEnglish.has(w));
+  return matchedEnglish.length >= 1 && matchedEnglish.length / englishWords.length >= 0.5;
+};
 
 // Function to send interactive buttons via Meta API
 export const sendMetaWhatsAppButtons = async (
@@ -883,7 +916,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             }
 
             if (fileBuffer) {
-              await sendMetaWhatsAppMessage(fromNumber, `📄 এই যে আপনার সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})`);
+              const isEng = isPureEnglishText(cleanText);
+              if (isEng) {
+                await sendMetaWhatsAppMessage(fromNumber, `📄 Here is your saved file: *${doc.title}* (${doc.category})`);
+              } else {
+                await sendMetaWhatsAppMessage(fromNumber, `📄 এই যে আপনার সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})`);
+              }
               const sent = await sendMetaWhatsAppFile(
                 fromNumber,
                 fileBuffer,
@@ -1368,32 +1406,77 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        if (activeState && (isNoIntent || activeState.waitingForTime)) {
-          // Check if message has a time mentioned (e.g. "না, বিকাল ৫টায় দাও" or just "বিকাল ৫টায়")
+        // Check if user has an active reminder waiting for time OR if user is correcting a recently rescheduled/alerted reminder
+        const recentRescheduled = lastRescheduledReminder.get(user._id.toString());
+        const isRecentCorrection = !!(
+          recentRescheduled &&
+          Date.now() - recentRescheduled.updatedAt < 15 * 60 * 1000 &&
+          /^(?:না|নো|আরে\s*না|এটা\s*না|ওটা\s*না|ভুল\s*হয়েছে|ভুল|সংশোধন|change|na|no|are\s*eta\s*na|eta\s*na|oita\s*na|vul|bhul|mistake)\b/i.test(cleanText)
+        );
+
+        const targetState = activeState || (isRecentCorrection ? {
+          reminderId: recentRescheduled!.reminderId,
+          title: recentRescheduled!.title,
+          waitingForTime: true,
+          expiresAt: Date.now() + 15 * 60 * 1000
+        } : null);
+
+        if (targetState && (isNoIntent || isRecentCorrection || targetState.waitingForTime)) {
+          const relDuration = matchRelativeDuration(cleanText);
           const hasTimeMatch = cleanText.match(/(?:(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/i);
-          if (hasTimeMatch && hasTimeMatch[1]) {
+
+          if (relDuration !== null || (hasTimeMatch && hasTimeMatch[1])) {
             const parsedTime = parseBengaliTime(cleanText);
             const targetDate = parseRelativeDate(cleanText, parsedTime);
-            await Reminder.findByIdAndUpdate(activeState.reminderId, {
+
+            await Reminder.findByIdAndUpdate(targetState.reminderId, {
               time: parsedTime,
               date: targetDate,
               status: 'Pending'
             });
+
+            // Clean up any accidental dummy reminder (like "নির্ধারিত কাজ") created within the last 5 minutes
+            await Reminder.deleteMany({
+              userId: user._id,
+              title: /নির্ধারিত কাজ/i,
+              createdAt: { $gte: new Date(Date.now() - 5 * 60 * 1000) }
+            });
+
+            // Remember for 15 minutes so immediate corrections ("না এটা না...") continue to target this reminder
+            lastRescheduledReminder.set(user._id.toString(), {
+              reminderId: targetState.reminderId,
+              title: targetState.title,
+              updatedAt: Date.now()
+            });
+
             userReminderState.delete(user._id.toString());
-            const dStr = targetDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' });
-            await sendMetaWhatsAppMessage(
-              fromNumber,
-              `✅ ঠিক আছে! "${activeState.title}" রিমাইন্ডারটি পুনঃনির্ধারণ করা হলো:\n⏰ নতুন সময়: ${formatTime12Hour(parsedTime)} (${dStr})`
-            );
+
+            const isEng = isPureEnglishText(cleanText);
+            if (isEng) {
+              const dStrEng = targetDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' });
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✅ All set! Your reminder "${targetState.title}" has been rescheduled:\n⏰ New Time: ${formatTime12Hour(parsedTime)} (${dStrEng})`
+              );
+            } else {
+              const dStr = targetDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' });
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✅ ঠিক আছে! "${targetState.title}" রিমাইন্ডারটি পুনঃনির্ধারণ করা হলো:\n⏰ নতুন সময়: ${formatTime12Hour(parsedTime)} (${dStr})`
+              );
+            }
             return;
           }
 
           // If no time is provided yet, prompt for time
-          activeState.waitingForTime = true;
-          userReminderState.set(user._id.toString(), activeState);
+          targetState.waitingForTime = true;
+          userReminderState.set(user._id.toString(), targetState);
+          const isEng = isPureEnglishText(cleanText);
           await sendMetaWhatsAppMessage(
             fromNumber,
-            `⏰ কোনো সমস্যা নেই! আপনি কখন বা কোন সময়ে রিমাইন্ডারটি পুনঃনির্ধারণ করতে চান বলুন (যেমন: "আজ বিকাল ৫টায়" বা "কাল সকাল ১০টায়")।`
+            isEng
+              ? `⏰ No problem! When would you like to reschedule this reminder? (e.g., "in 1 hour", "today at 5 PM", or "tomorrow at 10 AM")`
+              : `⏰ কোনো সমস্যা নেই! আপনি কখন বা কোন সময়ে রিমাইন্ডারটি পুনঃনির্ধারণ করতে চান বলুন (যেমন: "১ ঘণ্টা পর", "আজ বিকাল ৫টায়" বা "কাল সকাল ১০টায়")।`
           );
           return;
         }
