@@ -15,7 +15,26 @@ import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
-import { parseExpenseInput, recordExpense, getExpenseSummary, getExpenseSummaryForDate, getExpenseSummaryForMonth, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
+import {
+  parseExpenseInput,
+  recordExpense,
+  getExpenseSummary,
+  getExpenseSummaryForDate,
+  getExpenseSummaryForMonth,
+  detectExpenseCategory,
+  buildExpenseLoggedMessage,
+  buildDailyExpenseQueryMessage,
+  buildMonthlyExpenseQueryMessage,
+  deleteExpenseByIndex,
+  deleteExpenseByTitle,
+  deleteLastExpense,
+  deleteAllExpensesForDate,
+  buildExpenseDeletedMessage,
+  buildExpenseDeleteChoiceMessage,
+  enToBnDigits,
+  formatTaka,
+  bnToEnDigits
+} from '../services/expenseService';
 import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
 import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer } from '../services/documentService';
 
@@ -55,12 +74,20 @@ export interface PendingReminderState {
   expiresAt: number;
 }
 
-// In-memory state tracking for active reminder prompts, wish prompts, and pending document uploads
+export interface ExpenseContextState {
+  targetDate: Date;
+  dateLabelBn: string;
+  expenses: Array<{ id: string; title: string; amount: number }>;
+  expiresAt: number;
+}
+
+// In-memory state tracking for active reminder prompts, wish prompts, pending document uploads, and expense context
 export const userReminderState = new Map<string, ReminderActionState>();
 export const userWishState = new Map<string, WishPendingState>();
 export const userDocPendingState = new Map<string, DocumentPendingState>();
 export const userPendingReminderState = new Map<string, PendingReminderState>();
 export const lastRescheduledReminder = new Map<string, { reminderId: string; title: string; updatedAt: number }>();
+export const userExpenseContext = new Map<string, ExpenseContextState>();
 
 /**
  * Helper to detect if a message is written in pure English (not Bangla or phonetic Banglish)
@@ -1730,9 +1757,160 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // --- STEP 2.9: Daily Expense Tracker Fast-Path (0 Cost, Instant Response) ---
-        // Allow expense commands and queries (yesterday, day before yesterday, specific dates like '10 oct', months)
+        // Allow expense commands, queries and deletions (yesterday, day before yesterday, specific dates like '10 oct', months)
         const isReminderAction = /মনে\s*করিয়ে|ডাকবে|তুলে\s*দিও|wake\s*me|অ্যালার্ম|alarm/i.test(cleanText);
         if (!isReminderAction) {
+          // 2.9A: Expense Deletion Handling (Explicit expense delete or Active expense context delete)
+          const hasDeleteVerb = /(?:ডিলিট|মুছে|মুছ|delete|remove|ক্লিয়ার|বাতিল|cancel|বাদ|ফেলে)/i.test(cleanText);
+          const hasExplicitReminder = /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|সেহরি|সাহরি|রোজা)/i.test(cleanText);
+          const hasExplicitNote = /(?:নোট|note)/i.test(cleanText);
+          const hasExplicitContact = /(?:কন্ট্যাক্ট|contact|নম্বর)/i.test(cleanText);
+          const hasExplicitTodo = /(?:টু-ডু|todo|চেকলিস্ট|checklist)/i.test(cleanText);
+          const hasExplicitExpense = /(?:খরচ|khoroc|khoros|expense|expenses|ব্যয়|ব্যায়|খাতা)/i.test(cleanText);
+
+          const expContext = userExpenseContext.get(user._id.toString());
+          const isExpContextActive = !!(expContext && expContext.expiresAt > Date.now() && expContext.expenses.length > 0);
+
+          if (hasDeleteVerb && !hasExplicitReminder && !hasExplicitNote && !hasExplicitContact && !hasExplicitTodo) {
+            if (hasExplicitExpense || isExpContextActive) {
+              // 1. Delete ALL expenses for date
+              if (/(?:সব|সকল|all|sob|shob)\s*(?:খরচ|khoroc|khoros|expense)/i.test(cleanText)) {
+                const targetDate = expContext?.targetDate || new Date();
+                const dateLabel = expContext?.dateLabelBn || 'আজকের';
+                const delRes = await deleteAllExpensesForDate(user._id, targetDate);
+                userExpenseContext.delete(user._id.toString());
+                if (delRes.deletedCount > 0) {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `🗑️ আপনার ${dateLabel} সব (${enToBnDigits(delRes.deletedCount)}টি) খরচের এন্ট্রি সফলভাবে মুছে ফেলা হয়েছে!\n\n📅 চলতি মাসের নতুন মোট: ${formatTaka(delRes.monthTotal)}`
+                  );
+                } else {
+                  await sendMetaWhatsAppMessage(fromNumber, `আপনার ওই তারিখে কোনো খরচের এন্ট্রি ছিল না।`);
+                }
+                return;
+              }
+
+              // 2. Delete by Index (e.g. "1 number delete kore daw", "১ নম্বরটা ডিলিট করো", "শেষেরটা ডিলিট করো")
+              let targetIndex: number | undefined = undefined;
+              const enDigits = bnToEnDigits(cleanText);
+              const indexMatch = enDigits.match(/(\d+)\s*(?:number|nmbr|numbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি)?/i);
+              if (indexMatch) {
+                targetIndex = parseInt(indexMatch[1], 10);
+              } else if (/(?:protom|first|প্রথম)(?:\s*(?:ta|ti|টা|টি))?/i.test(cleanText)) {
+                targetIndex = 1;
+              } else if (/(?:last|shesh|শেষ|লাস্ট)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি))?/i.test(cleanText)) {
+                targetIndex = -1;
+              }
+
+              if (targetIndex !== undefined) {
+                const targetDate = expContext?.targetDate || new Date();
+                const dateLabel = expContext?.dateLabelBn || 'আজকের';
+                const result = await deleteExpenseByIndex(user._id, targetDate, targetIndex);
+                if (result) {
+                  if (result.remainingCount > 0) {
+                    userExpenseContext.set(user._id.toString(), {
+                      targetDate,
+                      dateLabelBn: dateLabel,
+                      expenses: result.remainingExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                      expiresAt: Date.now() + 15 * 60 * 1000
+                    });
+                  } else {
+                    userExpenseContext.delete(user._id.toString());
+                  }
+                  const reply = buildExpenseDeletedMessage(
+                    result.deletedExpense.title,
+                    result.deletedExpense.amount,
+                    result.dateTotal,
+                    result.monthTotal,
+                    dateLabel
+                  );
+                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  return;
+                } else {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `দুঃখিত, ${targetIndex === -1 ? 'সর্বশেষ' : enToBnDigits(targetIndex) + ' নম্বরে'} কোনো খরচের এন্ট্রি পাওয়া যায়নি।`
+                  );
+                  return;
+                }
+              }
+
+              // 3. Delete by Title/Keyword (e.g. "rate dinner delete koro", "লাঞ্চ ডিলিট করো")
+              const cleanedQuery = cleanText
+                .replace(/(?:খরচ|khoroc|khoros|expense|expenses|হিসাব|ব্যয়|ব্যয়|টা|টি|ডিলিট|মুছে|মুছ|delete|remove|ক্লিয়ার|বাতিল|cancel|বাদ|ফেলে|করে|দাও|করো|দিন|dao|daw|koro|kore)/gi, '')
+                .trim();
+
+              if (cleanedQuery.length >= 2) {
+                const targetDate = expContext?.targetDate || new Date();
+                const result = await deleteExpenseByTitle(user._id, targetDate, cleanedQuery);
+                if (result) {
+                  if (result.remainingCount > 0) {
+                    userExpenseContext.set(user._id.toString(), {
+                      targetDate,
+                      dateLabelBn: expContext?.dateLabelBn || 'আজকের',
+                      expenses: result.remainingExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                      expiresAt: Date.now() + 15 * 60 * 1000
+                    });
+                  } else {
+                    userExpenseContext.delete(user._id.toString());
+                  }
+                  const reply = buildExpenseDeletedMessage(
+                    result.deletedExpense.title,
+                    result.deletedExpense.amount,
+                    result.dateTotal,
+                    result.monthTotal,
+                    expContext?.dateLabelBn || 'আজকের'
+                  );
+                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  return;
+                }
+              }
+
+              // 4. Context is active and user sent generic delete command (like "delete kore daw" in the screenshot)
+              if (isExpContextActive && expContext) {
+                if (expContext.expenses.length === 1) {
+                  const result = await deleteExpenseByIndex(user._id, expContext.targetDate, 1);
+                  if (result) {
+                    userExpenseContext.delete(user._id.toString());
+                    const reply = buildExpenseDeletedMessage(
+                      result.deletedExpense.title,
+                      result.deletedExpense.amount,
+                      result.dateTotal,
+                      result.monthTotal,
+                      expContext.dateLabelBn
+                    );
+                    await sendMetaWhatsAppMessage(fromNumber, reply);
+                    return;
+                  }
+                } else if (expContext.expenses.length > 1) {
+                  const choiceReply = buildExpenseDeleteChoiceMessage(expContext.expenses, expContext.dateLabelBn);
+                  await sendMetaWhatsAppMessage(fromNumber, choiceReply);
+                  return;
+                }
+              }
+
+              // 5. Explicit "last expense" delete without active context
+              if (hasExplicitExpense && /(?:last|shesh|লাস্ট|শেষ)/i.test(cleanText)) {
+                const result = await deleteLastExpense(user._id);
+                if (result) {
+                  const reply = buildExpenseDeletedMessage(
+                    result.deletedExpense.title,
+                    result.deletedExpense.amount,
+                    result.dateTotal,
+                    result.monthTotal,
+                    'আজকের'
+                  );
+                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  return;
+                } else {
+                  await sendMetaWhatsAppMessage(fromNumber, 'আপনার কোনো খরচের এন্ট্রি পাওয়া যায়নি।');
+                  return;
+                }
+              }
+            }
+          }
+
+          // 2.9B: Standard Expense Query & Logging
           const parsedExpense = parseExpenseInput(cleanText);
           if (parsedExpense) {
             if (parsedExpense.isQuery) {
@@ -1769,6 +1947,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   targetDate,
                   parsedExpense.dateLabelBn || 'আজকের'
                 );
+                // Save conversation context for follow-up deletions or edits
+                userExpenseContext.set(user._id.toString(), {
+                  targetDate,
+                  dateLabelBn: dSummary.dateLabelBn || 'আজকের',
+                  expenses: dSummary.dateExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                  expiresAt: Date.now() + 15 * 60 * 1000
+                });
                 const reply = buildDailyExpenseQueryMessage(
                   dSummary.dateExpenses,
                   dSummary.dateTotal,
@@ -1782,6 +1967,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               const expDate = parsedExpense.expenseDate || new Date();
               await recordExpense(user._id, parsedExpense.title, parsedExpense.amount, parsedExpense.paymentMethod, expDate);
               const dSummary = await getExpenseSummaryForDate(user._id, expDate, parsedExpense.dateLabelBn || 'আজকের');
+              // Save conversation context for follow-up deletions or edits
+              userExpenseContext.set(user._id.toString(), {
+                targetDate: expDate,
+                dateLabelBn: parsedExpense.dateLabelBn || 'আজকের',
+                expenses: dSummary.dateExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                expiresAt: Date.now() + 15 * 60 * 1000
+              });
               const cat = detectExpenseCategory(parsedExpense.title);
               const reply = buildExpenseLoggedMessage(
                 parsedExpense.title,
@@ -2090,12 +2282,47 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           case 'delete_all_reminders': {
+            const hasExplicitReminder = /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm)/i.test(cleanText);
+            const hasAllWord = /(?:সব|সকল|all|sob|shob)/i.test(cleanText);
+
+            // Safety Guard: NEVER delete all reminders on generic phrases without explicit reminder mention
+            if (!hasExplicitReminder || !hasAllWord) {
+              const expContext = userExpenseContext.get(user._id.toString());
+              if (expContext && expContext.expiresAt > Date.now() && expContext.expenses.length > 0) {
+                if (expContext.expenses.length === 1) {
+                  const result = await deleteExpenseByIndex(user._id, expContext.targetDate, 1);
+                  if (result) {
+                    userExpenseContext.delete(user._id.toString());
+                    const reply = buildExpenseDeletedMessage(
+                      result.deletedExpense.title,
+                      result.deletedExpense.amount,
+                      result.dateTotal,
+                      result.monthTotal,
+                      expContext.dateLabelBn
+                    );
+                    await sendMetaWhatsAppMessage(fromNumber, reply);
+                    break;
+                  }
+                } else {
+                  const choiceReply = buildExpenseDeleteChoiceMessage(expContext.expenses, expContext.dateLabelBn);
+                  await sendMetaWhatsAppMessage(fromNumber, choiceReply);
+                  break;
+                }
+              }
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                '⚠️ আপনি কী ডিলিট করতে চান অনুগ্রহ করে স্পষ্ট করে বলুন (যেমন: "সব রিমাইন্ডার ডিলিট করো", "১ নম্বর রিমাইন্ডার ডিলিট করো" বা "১ নম্বর খরচ ডিলিট করো")।'
+              );
+              break;
+            }
+
             const count = await Reminder.countDocuments({ userId: user._id });
             if (count === 0) {
               await sendMetaWhatsAppMessage(fromNumber, 'আপনার বর্তমানে কোনো রিমাইন্ডার সেভ করা নেই।');
             } else {
               await Reminder.deleteMany({ userId: user._id });
-              await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার সব (${count}টি) রিমাইন্ডার সফলভাবে মুছে ফেলা হয়েছে!`);
+              await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার সব (${enToBnDigits(count)}টি) রিমাইন্ডার সফলভাবে মুছে ফেলা হয়েছে!`);
             }
             break;
           }
@@ -2512,6 +2739,32 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 );
                 break;
               } else {
+                // If not found in reminders, check if user was referring to expense in active context
+                const expContext = userExpenseContext.get(user._id.toString());
+                if (expContext && expContext.expiresAt > Date.now()) {
+                  const result = await deleteExpenseByIndex(user._id, expContext.targetDate, itemIndex);
+                  if (result) {
+                    if (result.remainingCount > 0) {
+                      userExpenseContext.set(user._id.toString(), {
+                        targetDate: expContext.targetDate,
+                        dateLabelBn: expContext.dateLabelBn,
+                        expenses: result.remainingExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                        expiresAt: Date.now() + 15 * 60 * 1000
+                      });
+                    } else {
+                      userExpenseContext.delete(user._id.toString());
+                    }
+                    const reply = buildExpenseDeletedMessage(
+                      result.deletedExpense.title,
+                      result.deletedExpense.amount,
+                      result.dateTotal,
+                      result.monthTotal,
+                      expContext.dateLabelBn
+                    );
+                    await sendMetaWhatsAppMessage(fromNumber, reply);
+                    break;
+                  }
+                }
                 await sendMetaWhatsAppMessage(
                   fromNumber,
                   `দুঃখিত, ${itemIndex} নম্বরে কোনো পেন্ডিং রিমাইন্ডার পাওয়া যায়নি।`
@@ -2528,6 +2781,19 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               if (reminderToDelete) {
                 await sendMetaWhatsAppMessage(fromNumber, `🗑️ "${reminderToDelete.title}" রিমাইন্ডারটি সফলভাবে ডিলিট করা হয়েছে।`);
               } else {
+                // Check if query matches an expense
+                const expResult = await deleteExpenseByTitle(user._id, new Date(), query);
+                if (expResult) {
+                  const reply = buildExpenseDeletedMessage(
+                    expResult.deletedExpense.title,
+                    expResult.deletedExpense.amount,
+                    expResult.dateTotal,
+                    expResult.monthTotal,
+                    'আজকের'
+                  );
+                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  break;
+                }
                 await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো রিমাইন্ডার খুঁজে পাওয়া যায়নি।`);
               }
             } else {

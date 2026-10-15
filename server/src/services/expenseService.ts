@@ -778,3 +778,172 @@ export const buildMonthlyExpenseQueryMessage = (
          `🌐 সম্পূর্ণ গ্রাফ ও খাতা দেখতে: https://smritilife.com/app/expenses`;
 };
 
+/**
+ * Delete Expense by Index (1-based index matching daily query list order)
+ */
+export const deleteExpenseByIndex = async (
+  userId: string | mongoose.Types.ObjectId,
+  targetDate: Date = new Date(),
+  index: number
+) => {
+  const dhakaDateStr = targetDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+  const startOfDay = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+  const endOfDay = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
+
+  const dateExpenses = await Expense.find({
+    userId,
+    date: { $gte: startOfDay, $lte: endOfDay }
+  }).sort({ date: -1 });
+
+  if (dateExpenses.length === 0) {
+    return null;
+  }
+
+  let targetExpense = null;
+  if (index === -1) {
+    targetExpense = dateExpenses[dateExpenses.length - 1];
+  } else if (index >= 1 && index <= dateExpenses.length) {
+    targetExpense = dateExpenses[index - 1];
+  }
+
+  if (!targetExpense) {
+    return null;
+  }
+
+  await Expense.findByIdAndDelete(targetExpense._id);
+  const updatedSummary = await getExpenseSummaryForDate(userId, targetDate);
+
+  return {
+    deletedExpense: targetExpense,
+    dateTotal: updatedSummary.dateTotal,
+    monthTotal: updatedSummary.monthTotal,
+    remainingCount: updatedSummary.dateCount,
+    remainingExpenses: updatedSummary.dateExpenses
+  };
+};
+
+/**
+ * Delete Expense by Title / Keyword
+ */
+export const deleteExpenseByTitle = async (
+  userId: string | mongoose.Types.ObjectId,
+  targetDate: Date = new Date(),
+  titleQuery: string
+) => {
+  const dhakaDateStr = targetDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+  const startOfDay = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+  const endOfDay = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
+
+  const escaped = titleQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // First search in target date
+  let targetExpense = await Expense.findOne({
+    userId,
+    date: { $gte: startOfDay, $lte: endOfDay },
+    title: { $regex: new RegExp(escaped, 'i') }
+  }).sort({ date: -1 });
+
+  // If not found in target date, search recent expenses across any date
+  if (!targetExpense) {
+    targetExpense = await Expense.findOne({
+      userId,
+      title: { $regex: new RegExp(escaped, 'i') }
+    }).sort({ date: -1 });
+  }
+
+  if (!targetExpense) {
+    return null;
+  }
+
+  await Expense.findByIdAndDelete(targetExpense._id);
+  const updatedSummary = await getExpenseSummaryForDate(userId, targetExpense.date);
+
+  return {
+    deletedExpense: targetExpense,
+    dateTotal: updatedSummary.dateTotal,
+    monthTotal: updatedSummary.monthTotal,
+    remainingCount: updatedSummary.dateCount,
+    remainingExpenses: updatedSummary.dateExpenses
+  };
+};
+
+/**
+ * Delete Last Logged Expense for User
+ */
+export const deleteLastExpense = async (userId: string | mongoose.Types.ObjectId) => {
+  const last = await Expense.findOne({ userId }).sort({ createdAt: -1 });
+  if (!last) return null;
+
+  await Expense.findByIdAndDelete(last._id);
+  const updatedSummary = await getExpenseSummaryForDate(userId, last.date);
+
+  return {
+    deletedExpense: last,
+    dateTotal: updatedSummary.dateTotal,
+    monthTotal: updatedSummary.monthTotal,
+    remainingCount: updatedSummary.dateCount,
+    remainingExpenses: updatedSummary.dateExpenses
+  };
+};
+
+/**
+ * Delete All Expenses for a Specific Date
+ */
+export const deleteAllExpensesForDate = async (
+  userId: string | mongoose.Types.ObjectId,
+  targetDate: Date = new Date()
+) => {
+  const dhakaDateStr = targetDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+  const startOfDay = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+  const endOfDay = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
+
+  const deleteResult = await Expense.deleteMany({
+    userId,
+    date: { $gte: startOfDay, $lte: endOfDay }
+  });
+
+  const updatedSummary = await getExpenseSummaryForDate(userId, targetDate);
+  return {
+    deletedCount: deleteResult.deletedCount,
+    monthTotal: updatedSummary.monthTotal
+  };
+};
+
+/**
+ * Format Response Message for Expense Deletion
+ */
+export const buildExpenseDeletedMessage = (
+  deletedTitle: string,
+  deletedAmount: number,
+  dayTotal: number,
+  monthTotal: number,
+  dateLabelBn: string = 'আজকের'
+): string => {
+  const label = dateLabelBn.includes('আজ') ? 'আজকের' : dateLabelBn;
+  return `🗑️ আপনার খরচের তালিকা থেকে *"${deletedTitle}" (${formatTaka(deletedAmount)})* সফলভাবে মুছে ফেলা হয়েছে!\n\n` +
+         `📊 *${label} নতুন মোট খরচ:* ${formatTaka(dayTotal)}\n` +
+         `📅 *চলতি মাসের মোট:* ${formatTaka(monthTotal)}`;
+};
+
+/**
+ * Format Response Message when User sends generic Delete command and multiple expenses exist
+ */
+export const buildExpenseDeleteChoiceMessage = (
+  expenses: Array<{ title: string; amount: number }>,
+  dateLabelBn: string = 'আজকের'
+): string => {
+  const label = dateLabelBn.includes('আজ') ? 'আজকের' : dateLabelBn;
+  const items = expenses.map((e, idx) => {
+    const cat = detectExpenseCategory(e.title);
+    return `${enToBnDigits(idx + 1)}. ${cat.icon} ${e.title}: *${formatTaka(e.amount)}*`;
+  }).join('\n');
+
+  return `🗑️ *${label} কোন খরচটি ডিলিট করতে চান?*\n\n` +
+         `${items}\n\n` +
+         `💡 অনুগ্রহ করে লিখে জানান:\n` +
+         `• "১ নম্বরটা ডিলিট করো"\n` +
+         `• "শেষেরটা ডিলিট করো"\n` +
+         `• অথবা খরচের নাম লিখুন (যেমন: "${expenses[0]?.title || 'লাঞ্চ'} ডিলিট করো")`;
+};
+
+

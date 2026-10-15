@@ -822,8 +822,8 @@ Possible actions:
    - "filter"?: "today" | "all" (Set "today" if user specifically asks for today's reminders e.g. "আজ কি রিমাইন্ডার আছে", "আজকের রিমাইন্ডার", "aj ki reminder ache", "today's reminders". Otherwise set "all" or omit).
 
 2. delete_all_reminders:
-   When user asks to delete or clear all of their reminders.
-   Bengali examples: "সব রিমাইন্ডার ডিলিট করে দাও", "সব রিমাইন্ডার মুছে দাও", "সব ডিলিট করো", "delete all reminders", "clear all reminders".
+   CRITICAL REQUIREMENT: ONLY trigger this action when the user EXPLICITLY mentions "reminders" or "রিমাইন্ডার" AND explicitly wants to delete ALL of them (e.g. "সব রিমাইন্ডার ডিলিট করে দাও", "সব রিমাইন্ডার মুছে দাও", "delete all reminders", "clear all reminders").
+   NEVER trigger "delete_all_reminders" on generic phrases like "delete kore daw", "সব ডিলিট করো", "ডিলিট করে দাও", "delete", "মুছে দাও" when the word "reminder/রিমাইন্ডার" is absent. If the user sends a generic delete phrase without specifying what to delete, use "general_reply" to ask for clarification.
    Data: {}
 
 3. modify_reminder:
@@ -1340,9 +1340,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 2. Delete All Reminders Detection (Bengali, Banglish & English)
+    // CRITICAL: MUST explicitly include the word reminder/রিমাইন্ডার to prevent wiping reminders on generic delete phrases
     const isDeleteAllReminders =
-      /(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s*(?:রিমাইন্ডার|reminder)?\s*.*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|delete|clear|remove)/i.test(text) ||
-      /(?:ডিলিট|মুছে|delete|clear|remove)\s*(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s*(?:রিমাইন্ডার|reminder)?/i.test(text);
+      /(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s+(?:রিমাইন্ডার|reminder)\s*.*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|delete|clear|remove)/i.test(text) ||
+      /(?:ডিলিট|মুছে|delete|clear|remove)\s*(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s+(?:রিমাইন্ডার|reminder)/i.test(text);
 
     if (isDeleteAllReminders) {
       return {
