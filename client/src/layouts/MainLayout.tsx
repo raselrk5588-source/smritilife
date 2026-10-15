@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate, Moon, FolderArchive } from 'lucide-react';
+import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate, Moon, FolderArchive, MessageSquare } from 'lucide-react';
 import AIAssistantModal from '../components/AIAssistantModal';
 import WakeUpAlarmModal from '../components/WakeUpAlarmModal';
 import { Toaster } from 'react-hot-toast';
@@ -124,6 +124,18 @@ export default function MainLayout() {
               <span className="font-bold tracking-tight">{t('ভয়েস সহকারী', 'AI Voice')}</span>
             </button>
 
+            {/* Direct WhatsApp AI Button */}
+            <a
+              href={`https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="হোয়াটসঅ্যাপে এআই চ্যাট খুলুন"
+              className="flex items-center gap-1.5 px-3 py-1 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#0f7b57] rounded-full text-xs font-bold transition border border-[#25D366]/30 shrink-0"
+            >
+              <MessageSquare className="w-3.5 h-3.5 fill-current text-[#25D366]" />
+              <span className="hidden lg:inline">হোয়াটসঅ্যাপ এআই</span>
+            </a>
+
             {/* Web View Notification Button */}
             <Link 
               to="/app/notifications" 
@@ -181,6 +193,15 @@ export default function MainLayout() {
                   <span className="text-[11px] font-bold tracking-tight">রমজান</span>
                 </Link>
               )}
+              <a
+                href={`https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-8 h-8 bg-emerald-50 hover:bg-emerald-100 rounded-full flex items-center justify-center text-[#25D366] active:scale-95 transition border border-emerald-200/60"
+                title="হোয়াটসঅ্যাপ এআই চ্যাট"
+              >
+                <MessageSquare className="w-4 h-4 fill-current" />
+              </a>
               <button 
                 onClick={() => navigate('/app/notifications')} 
                 className="w-8 h-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 relative active:scale-95 transition border border-slate-200/60 cursor-pointer"

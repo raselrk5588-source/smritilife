@@ -931,6 +931,23 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
+        // --- STEP 0C-1: Handle /start smritilife or initial onboarding greetings ---
+        const isStartCommand =
+          /^\/(?:start|help)(?:\s+smritilife)?$/i.test(cleanText) ||
+          cleanText.toLowerCase() === '/start smritilife' ||
+          /^(?:hi|hello|hey|start|শুরু|হেলো|হাই|সালাম|আসসালামু\s*আলাইকুম)\s*(?:smritilife|স্মৃতি|life)?$/i.test(cleanText);
+
+        if (isStartCommand) {
+          const userName = user.name && user.name !== 'নতুন ব্যবহারকারী' ? user.name : '';
+          const salutation = user.honorific ? ` ${user.honorific}` : (userName ? ` ভাই` : '');
+          const greetingName = userName ? ` ${userName}` : '';
+
+          const startMsg = `🎉 *আসসালামু আলাইকুম${greetingName}! স্মৃতি লাইফে (Smriti Life) স্বাগতম!* 🤖✨\n\nআমি আপনার সার্বক্ষণিক এআই অ্যাসিস্ট্যান্ট। আপনার ২৪ ঘণ্টার চ্যাট সেশন সক্রিয় হয়েছে।\n\n📌 *আমাকে আপনি যেভাবে ব্যবহার করতে পারেন${salutation}:*\n⏰ *রিমাইন্ডার:* "কাল সকাল ১০টায় মিটিং মনে করিয়ে দিও"\n💰 *দৈনিক খরচ:* "আজ বাজারে ৬৫০ টাকা খরচ হয়েছে"\n📁 *ফাইল সেভ:* প্রেসক্রিপশন বা যেকোনো কাগজ পাঠালেই সেভ হয়ে যাবে\n📝 *নোট রাখা:* "আমার জরুরি তথ্য বা পাসওয়ার্ড মনে রাখো"\n\nকথা শুরু করতে যেকোনো রিমাইন্ডার দিন বা খরচ লিখে পাঠান! 😊`;
+
+          await sendMetaWhatsAppMessage(fromNumber, startMsg);
+          return;
+        }
+
         // --- STEP 0D: Handle Document Retrieval & Item Lifespan Tracking ("আমার প্রেসক্রিপশন দাও", "Tishu box ta kobe save kora hoyechilo", "সিলিন্ডার কয়দিন চলছে") ---
         const isDocListQuery = /^(?:\/docs|\/files|ফাইলগুলো|ডকুমেন্টগুলো|সব\s*ফাইল|লিস্ট\s*ফাইল)\b/i.test(cleanText) ||
           /(?:আমার|amr|amar)?\s*(?:কি\s*কি|কোন\s*কোন|সব|সকল|list)?\s*(?:ফাইল|ডকুমেন্ট|কাগজ|প্রেসক্রিপশন|রিপোর্ট|file|doc|document)\s*(?:আছে|দেখাও|দেখান|লিস্ট|list|সব\s*দেখাও)/i.test(cleanText);

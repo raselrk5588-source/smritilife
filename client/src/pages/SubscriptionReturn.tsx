@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle2, AlertTriangle, ArrowRight, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ArrowRight, RefreshCw, ShieldCheck, MessageSquare } from 'lucide-react';
 
 export default function SubscriptionReturn() {
   const [searchParams] = useSearchParams();
@@ -176,13 +176,23 @@ export default function SubscriptionReturn() {
               </div>
             )}
 
-            <div className="pt-2">
+            <div className="pt-2 space-y-3">
+              <a
+                href={`https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-[#25D366] hover:bg-[#1ebd59] text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <MessageSquare className="w-5 h-5 fill-current" />
+                <span>হোয়াটসঅ্যাপে এআই চালু করুন</span>
+              </a>
+
               <button
                 onClick={handleContinue}
-                className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group"
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-2xl transition flex items-center justify-center gap-2 group text-sm cursor-pointer"
               >
-                <span>এগিয়ে যান ({countdown}s)</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <span>ওয়েবসাইটে প্রবেশ করুন ({countdown}s)</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           </div>
