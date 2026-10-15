@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake } from 'lucide-react';
+import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake, FolderArchive } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AIAssistantModal from '../components/AIAssistantModal';
@@ -22,16 +22,22 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [notesCount, setNotesCount] = useState(0);
   const [remindersCount, setRemindersCount] = useState(0);
-
+  const [docsCount, setDocsCount] = useState(0);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [notesRes, remindersRes, specialDatesRes] = await Promise.all([
+        const [notesRes, remindersRes, specialDatesRes, docsRes] = await Promise.all([
           fetchWithAuth(`${import.meta.env.VITE_API_URL}/notes`),
           fetchWithAuth(`${import.meta.env.VITE_API_URL}/reminders`),
-          fetchWithAuth(`${import.meta.env.VITE_API_URL}/special-dates`)
+          fetchWithAuth(`${import.meta.env.VITE_API_URL}/special-dates`),
+          fetchWithAuth(`${import.meta.env.VITE_API_URL}/documents`)
         ]);
+
+        if (docsRes.ok) {
+          const docs = await docsRes.json();
+          setDocsCount(Array.isArray(docs) ? docs.length : 0);
+        }
         
         let allTasks: any[] = [];
         let allNotes: any[] = [];
@@ -276,40 +282,79 @@ export default function Home() {
         })()}
 
         {/* Quick Access Pills Grid */}
-        <div className="grid grid-cols-5 gap-1 md:gap-2">
-          <Link to="/app/notes" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          <Link to="/app/notes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center mb-1 relative">
-              <FileText className="w-3.5 h-3.5 md:w-5 md:h-5" />
+              <FileText className="w-4 h-4 md:w-5 md:h-5" />
               {notesCount > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{notesCount}</div>}
             </div>
-            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('নোট', 'Notes')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('নোট', 'Notes')}</span>
           </Link>
-          <Link to="/app/reminders" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
+          <Link to="/app/reminders" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center mb-1 relative">
-              <Calendar className="w-3.5 h-3.5 md:w-5 md:h-5" />
+              <Calendar className="w-4 h-4 md:w-5 md:h-5" />
               {remindersCount > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{remindersCount}</div>}
             </div>
-            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('রিমাইন্ডার', 'Reminders')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('রিমাইন্ডার', 'Reminders')}</span>
           </Link>
-          <Link to="/app/wishes" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
+          <Link to="/app/wishes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-pink-50 text-pink-500 rounded-xl flex items-center justify-center mb-1">
-              <Gift className="w-3.5 h-3.5 md:w-5 md:h-5" />
+              <Gift className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('বিশেষ দিন', 'Wishes')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('বিশেষ দিন', 'Wishes')}</span>
           </Link>
-          <Link to="/app/expenses" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+          <Link to="/app/expenses" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-teal-50 text-[#0A7756] rounded-xl flex items-center justify-center mb-1 relative">
-              <Wallet className="w-3.5 h-3.5 md:w-5 md:h-5" />
+              <Wallet className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('হিসাব খাতা', 'Expenses')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('হিসাব খাতা', 'Expenses')}</span>
           </Link>
-          <Link to="/app/debts" className="bg-white py-2 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+          <Link to="/app/debts" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-1 relative">
-              <Handshake className="w-3.5 h-3.5 md:w-5 md:h-5" />
+              <Handshake className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[9px] md:text-[10px] font-bold text-slate-700">{t('বাকি খাতা', 'Debts')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('বাকি খাতা', 'Debts')}</span>
+          </Link>
+          <Link to="/app/documents" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-1 relative">
+              <FolderArchive className="w-4 h-4 md:w-5 md:h-5" />
+              {docsCount > 0 && <div className="absolute -top-1 -right-1 bg-purple-600 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{docsCount}</div>}
+            </div>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('ফাইল ভল্ট', 'Vault')}</span>
           </Link>
         </div>
+
+        {/* Document Vault Feature Card */}
+        <Link 
+          to="/app/documents"
+          className="block bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 rounded-2xl md:rounded-3xl p-3 md:p-4 text-white shadow-md hover:shadow-lg transition-all group border border-purple-500/30"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                <FolderArchive className="w-4 h-4 md:w-5 md:h-5 text-purple-300" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-1.5 mb-0.5">
+                  <span className="text-[9px] uppercase tracking-wider font-extrabold text-purple-300 bg-purple-400/20 px-2 py-0.5 rounded-full border border-purple-400/30">
+                    {t('স্মৃতি ভল্ট', 'Memory Vault')}
+                  </span>
+                  <span className="text-[9px] text-purple-200 font-semibold hidden sm:inline">প্রেসক্রিপশন ও জরুরি ফাইল</span>
+                </div>
+                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
+                  {t('প্রেসক্রিপশন, রিপোর্ট বা ডকুমেন্ট সেভ করুন', 'Prescription, Reports & Documents')}
+                </h4>
+                <p className="text-[9px] md:text-xs text-purple-200/80 font-medium line-clamp-1">
+                  {t('হোয়াটসঅ্যাপে ছবি বা পিডিএফ পাঠিয়ে নাম বললেই স্মৃতি মনে রাখবে এবং চাওয়ামাত্র পাঠিয়ে দেবে', 'Send via WhatsApp or upload here, retrieve instantly')}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1 text-purple-300 text-xs font-bold pl-2 shrink-0">
+              <span className="hidden sm:inline">ভল্ট খুলুন</span>
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </Link>
 
         {/* Tasks and Calendar Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">

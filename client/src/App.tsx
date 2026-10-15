@@ -23,6 +23,7 @@ import CompleteProfile from './pages/CompleteProfile';
 import Ramadan from './pages/Ramadan';
 import Expenses from './pages/Expenses';
 import Debts from './pages/Debts';
+import Documents from './pages/Documents';
 
 function App() {
   return (
@@ -61,6 +62,7 @@ function App() {
           <Route path="ramadan" element={<Ramadan />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="debts" element={<Debts />} />
+          <Route path="documents" element={<Documents />} />
           <Route path="admin" element={<Profile />} /> {/* Re-mapped admin to Profile for the bottom nav link to work visually */}
         </Route>
 

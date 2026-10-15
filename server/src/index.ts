@@ -22,9 +22,11 @@ import adminRoutes from './routes/adminRoutes';
 import userRoutes from './routes/userRoutes';
 import whatsappRoutes from './routes/whatsappRoutes';
 import ramadanRoutes from './routes/ramadanRoutes';
+import path from 'path';
 import expenseRoutes from './routes/expenseRoutes';
 import debtRoutes from './routes/debtRoutes';
 import subscriptionRoutes from './routes/subscriptionRoutes';
+import documentRoutes from './routes/documentRoutes';
 import ErrorLog from './models/ErrorLog';
 
 dotenv.config();
@@ -36,7 +38,10 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// Serve static uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Connect Database
 connectDB();
@@ -64,6 +69,7 @@ app.use('/api/ramadan', ramadanRoutes);
 app.use('/api/expenses', protect, expenseRoutes);
 app.use('/api/debts', protect, debtRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/documents', protect, documentRoutes);
 
 app.get('/', (req, res) => {
   res.send('Smriti API is running...');

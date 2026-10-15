@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { Request, Response } from 'express';
 import User from '../models/User';
 import Reminder from '../models/Reminder';
@@ -6,12 +8,14 @@ import TodoList from '../models/TodoList';
 import Note from '../models/Note';
 import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
+import UserDocument from '../models/UserDocument';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
 import { parseExpenseInput, recordExpense, getExpenseSummary, getExpenseSummaryForDate, getExpenseSummaryForMonth, detectExpenseCategory, buildExpenseLoggedMessage, buildDailyExpenseQueryMessage, buildMonthlyExpenseQueryMessage } from '../services/expenseService';
 import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
+import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, formatDocumentListMessage } from '../services/documentService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -31,9 +35,19 @@ export interface WishPendingState {
   expiresAt: number;
 }
 
-// In-memory state tracking for active reminder prompts and wish prompts
+export interface DocumentPendingState {
+  mediaId: string;
+  mimeType: string;
+  filename: string;
+  buffer: Buffer;
+  isImage: boolean;
+  expiresAt: number;
+}
+
+// In-memory state tracking for active reminder prompts, wish prompts, and pending document uploads
 export const userReminderState = new Map<string, ReminderActionState>();
 export const userWishState = new Map<string, WishPendingState>();
+export const userDocPendingState = new Map<string, DocumentPendingState>();
 
 // Function to send interactive buttons via Meta API
 export const sendMetaWhatsAppButtons = async (
@@ -354,8 +368,8 @@ export const sendMetaWhatsAppMessage = async (to: string, text: string): Promise
   return false;
 };
 
-// Function to download voice audio from Meta API
-const downloadMetaAudio = async (mediaId: string): Promise<{ buffer: Buffer; mimeType: string } | null> => {
+// Function to download any media (audio, voice, image, document) from Meta API
+export const downloadMetaMedia = async (mediaId: string): Promise<{ buffer: Buffer; mimeType: string } | null> => {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   if (!token) return null;
 
@@ -370,11 +384,11 @@ const downloadMetaAudio = async (mediaId: string): Promise<{ buffer: Buffer; mim
     }
     const metaData = (await metaRes.json()) as any;
     const mediaUrl = metaData.url;
-    const mimeType = metaData.mime_type || 'audio/ogg';
+    const mimeType = metaData.mime_type || 'application/octet-stream';
 
     const fileRes = await fetch(mediaUrl, {
       headers: { 'Authorization': `Bearer ${token}` },
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(20000)
     });
     if (!fileRes.ok) {
       console.error('Failed to download media bytes:', fileRes.status);
@@ -383,8 +397,79 @@ const downloadMetaAudio = async (mediaId: string): Promise<{ buffer: Buffer; mim
     const arrayBuffer = await fileRes.arrayBuffer();
     return { buffer: Buffer.from(arrayBuffer), mimeType };
   } catch (error) {
-    console.error('Error downloading Meta audio file:', error);
+    console.error('Error downloading Meta media file:', error);
     return null;
+  }
+};
+const downloadMetaAudio = downloadMetaMedia;
+
+// Function to send a document or image to WhatsApp via Meta API
+export const sendMetaWhatsAppFile = async (
+  to: string,
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+  caption?: string
+): Promise<boolean> => {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneNumberId) return false;
+
+  let formattedTo = to.trim();
+  if (formattedTo.startsWith('+')) formattedTo = formattedTo.substring(1);
+  else if (formattedTo.startsWith('01')) formattedTo = `88${formattedTo}`;
+
+  const mediaId = await uploadBufferToMeta(buffer, filename, mimeType);
+  if (!mediaId) {
+    console.error('[WhatsAppFile] Failed to upload buffer to Meta');
+    return false;
+  }
+
+  const isImage = mimeType.startsWith('image/');
+  const type = isImage ? 'image' : 'document';
+  const bodyPayload: any = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: formattedTo,
+    type
+  };
+
+  if (isImage) {
+    bodyPayload.image = {
+      id: mediaId,
+      ...(caption ? { caption: caption.substring(0, 1024) } : {})
+    };
+  } else {
+    bodyPayload.document = {
+      id: mediaId,
+      filename: filename.substring(0, 255),
+      ...(caption ? { caption: caption.substring(0, 1024) } : {})
+    };
+  }
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(bodyPayload),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    const data = (await res.json()) as any;
+    if (res.ok) {
+      console.log(`✅ [WhatsAppFile] Sent ${type} (${filename}) to ${formattedTo}`);
+      return true;
+    } else {
+      console.error(`[WhatsAppFile] Error response from Meta:`, data);
+      return false;
+    }
+  } catch (err) {
+    console.error(`[WhatsAppFile] Network error:`, err);
+    return false;
   }
 };
 
@@ -474,6 +559,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         let audioMediaId = '';
         let audioMimeType = 'audio/ogg';
 
+        let isMediaDoc = false;
+        let isImage = false;
+        let isDocument = false;
+        let mediaDocId = '';
+        let mediaDocMimeType = '';
+        let mediaDocFilename = '';
+        let mediaDocCaption = '';
+
         if (message.type === 'text') {
           userMessage = message.text?.body || '';
         } else if (message.type === 'interactive') {
@@ -491,9 +584,25 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           isAudio = true;
           audioMediaId = message.audio?.id || message.voice?.id || '';
           audioMimeType = message.audio?.mime_type || message.voice?.mime_type || 'audio/ogg';
+        } else if (message.type === 'image') {
+          isMediaDoc = true;
+          isImage = true;
+          mediaDocId = message.image?.id || '';
+          mediaDocMimeType = message.image?.mime_type || 'image/jpeg';
+          mediaDocCaption = (message.image?.caption || '').trim();
+          mediaDocFilename = `image_${Date.now()}.jpg`;
+          userMessage = mediaDocCaption;
+        } else if (message.type === 'document') {
+          isMediaDoc = true;
+          isDocument = true;
+          mediaDocId = message.document?.id || '';
+          mediaDocMimeType = message.document?.mime_type || 'application/pdf';
+          mediaDocFilename = message.document?.filename || `doc_${Date.now()}.pdf`;
+          mediaDocCaption = (message.document?.caption || '').trim();
+          userMessage = mediaDocCaption;
         }
 
-        if (!fromNumber || (!userMessage && !isAudio && !buttonId && message.type !== 'contacts' && message.type !== 'location')) return;
+        if (!fromNumber || (!userMessage && !isAudio && !isMediaDoc && !buttonId && message.type !== 'contacts' && message.type !== 'location')) return;
 
         // Show native WhatsApp "typing..." status & read receipt while AI processes the request
         if (message.id) {
@@ -641,7 +750,137 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        // --- STEP 0C: Handle WhatsApp Native Document & Image Storage ---
+        if (isMediaDoc && mediaDocId) {
+          const media = await downloadMetaMedia(mediaDocId);
+          if (!media || !media.buffer) {
+            await sendMetaWhatsAppMessage(fromNumber, 'দুঃখিত, ফাইলটি ডাউনলোড করা সম্ভব হয়নি। অনুগ্রহ করে আবার পাঠান।');
+            return;
+          }
+
+          if (mediaDocCaption && mediaDocCaption.trim()) {
+            const rawTitle = mediaDocCaption.trim().replace(/^(এটা|ita|aita|eta|amr|amar|আমার)\s+/i, '').trim();
+            const title = rawTitle || (isImage ? 'প্রেসক্রিপশন / ছবি' : mediaDocFilename);
+            const { category, tags } = detectDocumentCategory(title + ' ' + mediaDocFilename);
+            const diskResult = await saveFileToDisk(media.buffer, mediaDocFilename, media.mimeType || mediaDocMimeType);
+
+            await UserDocument.create({
+              userId: user._id,
+              mobile: fromNumber,
+              title,
+              fileName: diskResult.fileName,
+              fileUrl: diskResult.fileUrl,
+              fileSize: diskResult.fileSize,
+              mimeType: media.mimeType || mediaDocMimeType,
+              category,
+              tags,
+              metaMediaId: mediaDocId,
+              fileData: media.buffer.toString('base64')
+            });
+
+            const salutation = user.honorific ? ` ${user.honorific}` : '';
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 *পরবর্তীতে ফাইলটি পেতে:* যেকোনো সময় লিখুন—\n👉 *"আমার ${title} দাও"* বা *"প্রেসক্রিপশনটা পাঠাও"*\nস্মৃতি তৎক্ষণাৎ আপনার ফাইলটি পাঠিয়ে দেবে!`
+            );
+            return;
+          } else {
+            userDocPendingState.set(fromNumber, {
+              mediaId: mediaDocId,
+              mimeType: media.mimeType || mediaDocMimeType,
+              filename: mediaDocFilename,
+              buffer: media.buffer,
+              isImage,
+              expiresAt: Date.now() + 10 * 60 * 1000
+            });
+
+            const salutation = user.honorific ? ` ${user.honorific}` : '';
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `📄 *আসসালামু আলাইকুম${salutation}! আপনার ${isImage ? 'ছবিটি' : 'ডকুমেন্টটি'} পেয়েছি।*\n\nএই ফাইলটি স্মৃতিতে কি নামে সেভ করে রাখবো?\n\n(যেমন লিখে পাঠান: *"আমার প্রেসক্রিপশন"*, *"আম্মুর ব্লাড টেস্ট রিপোর্ট"*, *"এনআইডি কার্ড"* ইত্যাদি)`
+            );
+            return;
+          }
+        }
+
         const cleanText = (userMessage || '').trim();
+
+        // If user had uploaded a document earlier and was asked for a title:
+        if (userDocPendingState.has(fromNumber)) {
+          const pending = userDocPendingState.get(fromNumber)!;
+          if (Date.now() > pending.expiresAt) {
+            userDocPendingState.delete(fromNumber);
+          } else if (cleanText && !cleanText.startsWith('/') && cleanText.length < 100) {
+            const rawTitle = cleanText.replace(/^(এটা|ita|aita|eta|amr|amar|আমার)\s+/i, '').trim();
+            const title = rawTitle || (pending.isImage ? 'সংরক্ষিত ছবি' : pending.filename);
+            const { category, tags } = detectDocumentCategory(title + ' ' + pending.filename);
+            const diskResult = await saveFileToDisk(pending.buffer, pending.filename, pending.mimeType);
+
+            await UserDocument.create({
+              userId: user._id,
+              mobile: fromNumber,
+              title,
+              fileName: diskResult.fileName,
+              fileUrl: diskResult.fileUrl,
+              fileSize: diskResult.fileSize,
+              mimeType: pending.mimeType,
+              category,
+              tags,
+              metaMediaId: pending.mediaId,
+              fileData: pending.buffer.toString('base64')
+            });
+
+            userDocPendingState.delete(fromNumber);
+
+            const salutation = user.honorific ? ` ${user.honorific}` : '';
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে সেভ করা হয়েছে${salutation}!* 📁\n\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 ভবিষ্যতে ফাইলটি প্রয়োজন হলে শুধু লিখবেন:\n👉 *"আমার ${title} দাও"*`
+            );
+            return;
+          }
+        }
+
+        // --- STEP 0D: Handle Document Retrieval & Listing ("আমার প্রেসক্রিপশন দাও", "রিপোর্ট পাঠাও", "সব ফাইল দেখাও") ---
+        const isDocListQuery = /^(?:\/docs|\/files|ফাইলগুলো|ডকুমেন্টগুলো|সব\s*ফাইল|লিস্ট\s*ফাইল)\b/i.test(cleanText) ||
+          /(?:আমার|amr|amar)?\s*(?:কি\s*কি|কোন\s*কোন|সব|সকল|list)?\s*(?:ফাইল|ডকুমেন্ট|কাগজ|প্রেসক্রিপশন|রিপোর্ট|file|doc|document)\s*(?:আছে|দেখাও|দেখান|লিস্ট|list|সব\s*দেখাও)/i.test(cleanText);
+
+        if (isDocListQuery) {
+          const docs = await UserDocument.find({ userId: user._id }).sort({ createdAt: -1 });
+          const listMsg = formatDocumentListMessage(docs);
+          await sendMetaWhatsAppMessage(fromNumber, listMsg);
+          return;
+        }
+
+        const isDocFetchQuery =
+          /(?:আমাকে|দাও|পাঠাও|পাঠান|দিবেন|দেখান|দেখাও|খুঁজে\s*দাও|chai|dao|pathao|pathan|dehao|dekhan|send|show|give|fetch)\s*(?:amar|amr|আমার|মায়ের|আম্মুর|বাবার|আব্বুর)?\s*(.+)/i.test(cleanText) ||
+          /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|prescription|রিপোর্ট|report|টেস্ট|test|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|ভাউচার|বিল|bill)\s*(?:দাও|পাঠাও|পাঠান|দিবেন|দেখান|চাই|dao|pathao|pathan|dehao|dekhan|chai)/i.test(cleanText) ||
+          /(?:আমার|আম্মুর|আব্বুর|মায়ের|বাবার)\s*(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid)\b/i.test(cleanText);
+
+        if (isDocFetchQuery) {
+          const doc = await findMatchingDocument(user._id.toString(), cleanText);
+          if (doc) {
+            let fileBuffer: Buffer | null = null;
+            const diskPath = path.join(__dirname, '../../uploads/documents', path.basename(doc.fileUrl));
+            if (fs.existsSync(diskPath)) {
+              fileBuffer = await fs.promises.readFile(diskPath);
+            } else if (doc.fileData) {
+              fileBuffer = Buffer.from(doc.fileData, 'base64');
+            }
+
+            if (fileBuffer) {
+              await sendMetaWhatsAppMessage(fromNumber, `📄 এই যে আপনার সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})`);
+              await sendMetaWhatsAppFile(
+                fromNumber,
+                fileBuffer,
+                doc.fileName,
+                doc.mimeType,
+                `📄 ${doc.title}`
+              );
+              return;
+            }
+          }
+        }
 
         // --- STEP 0: Handle WhatsApp Chat AI Training (/teach, /train, /rules, /unlearn) ---
         const teachMatch = cleanText.match(/^(?:\/teach|\/train|\/rule|ট্রেন|শেখাও|রুল)\s+(.+)$/is);
