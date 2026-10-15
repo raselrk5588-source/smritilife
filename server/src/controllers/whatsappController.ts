@@ -92,8 +92,11 @@ export const userExpenseContext = new Map<string, ExpenseContextState>();
 export interface PendingMedicineItem {
   name: string;
   routine: string[];
-  mealTiming: 'before' | 'after';
+  mealTiming: string;
   durationDays: number;
+  customTimes?: Record<string, string>;
+  endDate?: Date;
+  mealTimingText?: string;
 }
 
 export interface PendingMedicineState {
@@ -113,26 +116,31 @@ export function parseMedicinePrescriptionText(text: string): {
   const raw = text.trim();
   const lower = raw.toLowerCase();
 
-  const hasMedKeyword = /(?:ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|ট্যাবলেট|ক্যাপসুল|ডাক্তার|প্রেসক্রিপশন|নাপা|napa|প্যারাসিটামল|paracetamol|সেক্লো|seclo|অ্যান্টাসিড|antacid|গ্যাস্ট্রিক|গ্যাস|gas|gastric|ফ্ল্যাজিল|flagyl|অ্যামোক্সিসিলিন|amoxicillin|এজিথ্রোমাইসিন|azithromycin|ম্যাক্সপ্রো|maxpro|সারজেল|sergel|প্যানটনিক|pantonic|প্যানটোপ্রাজল|pantoprazole|অমিপ্রাজল|omeprazole|মন্টিন|montene|মোন্টাস|montas|হিস্টাসিন|histasin|ফেভেক্স|fexofenadine|ফেক্সো|ক্যালসিয়াম|calcium|ভিটামিন|vitamin|প্রেসার|ডায়াবেটিস|ইনসুলিন|সিরাপ|syrup)/i.test(lower);
+  const hasMedKeyword = /(?:ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|ট্যাবলেট|ক্যাপসুল|ডাক্তার|প্রেসক্রিপশন|osudh|osud|ousodh|ousud|oshudh|oshud|নাপা|napa|প্যারাসিটামল|paracetamol|সেক্লো|seclo|অ্যান্টাসিড|antacid|গ্যাস্ট্রিক|গ্যাস|gas|gastric|ফ্ল্যাজিল|flagyl|অ্যামোক্সিসিলিন|amoxicillin|এজিথ্রোমাইসিন|azithromycin|ম্যাক্সপ্রো|maxpro|সারজেল|sergel|প্যানটনিক|pantonic|প্যানটোপ্রাজল|pantoprazole|অমিপ্রাজল|omeprazole|মন্টিন|montene|মোন্টাস|montas|হিস্টাসিন|histasin|ফেভেক্স|fexofenadine|ফেক্সো|ক্যালসিয়াম|calcium|ভিটামিন|vitamin|প্রেসার|ডায়াবেটিস|ইনসুলিন|সিরাপ|syrup)/i.test(lower);
   
-  const hasDosagePattern = /(?:১\+১\+১|1\+1\+1|১\+০\+১|1\+0\+1|০\+১\+১|0\+1\+1|১\+০\+০|1\+0\+0|০\+০\+১|0\+0\+1|\b[১-৩1-3]\s*বেলা\b|\b[১-৩1-3]\s*bela\b|সকাল\s*(?:ও\s*)?দুপুর\s*(?:ও\s*)?রাত|সকাল\s*(?:ও\s*)?রাত|সকাল\s*(?:ও\s*)?দুপুর|দুপুর\s*(?:ও\s*)?রাত|sokal\s*dupur\s*rat|sokal\s*rat|sokal\s*dupur|dupur\s*rat)/i.test(lower);
+  const hasDosagePattern = /(?:১\+১\+১|1\+1\+1|১\+০\+১|1\+0\+1|০\+১\+১|0\+1\+1|১\+০\+০|1\+0\+0|০\+০\+১|0\+0\+1|\b[১-৩1-3]\s*বেলা\b|\b[১-৩1-3]\s*bela\b|\b[১-৩1-3]\s*bar\b|\b[১-৩1-3]\s*times\b|সকাল|দুপুর|রাত|sokal|dupur|rat|shokal|raat|bikele?|সন্ধ্যা)/i.test(lower);
   
-  const hasDuration = /(?:[০-৯\d]+)\s*(?:দিন|din|days?|সপ্তাহ|weeks?|মাস|months?)/i.test(lower);
+  const hasDuration = /(?:[০-৯\d]+)\s*(?:দিন|din|days?|সপ্তাহ|weeks?|মাস|months?)|(?:[০-৯\d]+)\s*(?:তারিখ|তারিখে|tarik|tarikh|october|november|december|january|february|march|april|may|june|july|august|september|অক্টোবর|নভেম্বর|ডিসেম্বর|জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর)?\s*(?:পর্যন্ত|porjonto|porjanto|till|until)|(?:পর্যন্ত|porjonto|porjanto|till|until)\s*(\d{1,2}|[০-৯]{1,2})/i.test(lower);
 
   // Must match either (medKeyword && (dosage || duration)) OR (dosage && duration)
   if (!((hasMedKeyword && (hasDosagePattern || hasDuration)) || (hasDosagePattern && hasDuration))) {
     return null;
   }
 
-  // Detect explicit start date
-  let hasStartDate = false;
-  let startDate: Date | undefined = undefined;
-  let startDateLabel = '';
+  const bnToEnMap: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+  const bnDigits: Record<string, string> = { '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪', '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯' };
+  const toBn = (n: number | string) => n.toString().replace(/\d/g, d => bnDigits[d] || d);
 
+  // Live Bangladesh Date
   const now = new Date();
   const dhakaStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
   const [curYear, curMonth, curDay] = dhakaStr.split('-').map(Number);
   const todayDhaka = new Date(Date.UTC(curYear, curMonth - 1, curDay, 0, 0, 0));
+
+  // Detect explicit start date
+  let hasStartDate = false;
+  let startDate: Date = todayDhaka;
+  let startDateLabel = 'আজ';
 
   if (/\b(?:আজ|আজকে|aj|ajke|today|এখন|akhon)\s*(?:থেকে|theke)?\b/i.test(lower)) {
     hasStartDate = true;
@@ -153,7 +161,6 @@ export function parseMedicinePrescriptionText(text: string): {
   } else {
     const dateMatch = lower.match(/(\d{1,2}|[০-৯]{1,2})\s*(?:তারিখ|তারিখে|tarik|tarikh)\s*(?:থেকে|theke)?/i);
     if (dateMatch) {
-      const bnDigits: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
       const dNum = parseInt(dateMatch[1].replace(/[০-৯]/g, m => bnDigits[m] || m), 10);
       if (dNum >= 1 && dNum <= 31) {
         hasStartDate = true;
@@ -169,7 +176,24 @@ export function parseMedicinePrescriptionText(text: string): {
     }
   }
 
-  const bnToEnMap: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+  // Detect target End Date (e.g. "27 tarikh porjonto", "27 October porjonto", "আগামী ২৭ তারিখ পর্যন্ত")
+  let explicitEndDate: Date | undefined = undefined;
+  const endMatch = lower.match(/(\d{1,2}|[০-৯]{1,2})\s*(?:তারিখ|তারিখে|tarik|tarikh|october|november|december|january|february|march|april|may|june|july|august|september|অক্টোবর|নভেম্বর|ডিসেম্বর|জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর)?\s*(?:পর্যন্ত|porjonto|porjanto|till|until)/i)
+    || lower.match(/(?:পর্যন্ত|porjonto|porjanto|till|until)\s*(\d{1,2}|[০-৯]{1,2})/i);
+
+  if (endMatch) {
+    const dNum = parseInt(endMatch[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m), 10);
+    if (dNum >= 1 && dNum <= 31) {
+      let tMonth = curMonth - 1;
+      let tYear = curYear;
+      if (dNum < curDay) {
+        tMonth += 1;
+        if (tMonth > 11) { tMonth = 0; tYear += 1; }
+      }
+      explicitEndDate = new Date(Date.UTC(tYear, tMonth, dNum, 0, 0, 0, 0));
+      hasStartDate = true; // When an explicit end date is given, start date defaults to today
+    }
+  }
 
   let rawSegments = raw
     .replace(/^(?:ডাক্তার|doctor|প্রেসক্রিপশন|prescription)[^\n:;,]*[:;,-]?\s*/i, '')
@@ -199,10 +223,14 @@ export function parseMedicinePrescriptionText(text: string): {
     } else if (monthMatch) {
       const numStr = monthMatch[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m);
       durationDays = (parseInt(numStr, 10) || 1) * 30;
+    } else if (explicitEndDate) {
+      durationDays = Math.max(1, Math.round((explicitEndDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     }
 
-    // Routine extraction
+    // Routine & custom slot times extraction
     let routine: string[] = [];
+    const customTimes: Record<string, string> = {};
+
     if (/১\+১\+১|1\+1\+1|৩\s*বেলা|3\s*bela|সকাল.*দুপুর.*রাত|sokal.*dupur.*rat|তিন\s*বেলা/i.test(segLower)) {
       routine = ['সকাল', 'দুপুর', 'রাত'];
     } else if (/১\+০\+১|1\+0\+1|২\s*বেলা|2\s*bela|সকাল.*রাত|sokal.*rat|দুই\s*বেলা/i.test(segLower)) {
@@ -221,28 +249,60 @@ export function parseMedicinePrescriptionText(text: string): {
       routine = ['সকাল', 'রাত'];
     }
 
-    // Meal timing extraction
-    let mealTiming: 'before' | 'after' = 'after';
-    if (/(?:খাবারের\s*আগে|খাওয়ার\s*আগে|khabarer\s*age|khawar\s*age|before\s*(?:food|meal))/i.test(segLower) ||
-        /(?:গ্যাস্ট্রিক|গ্যাস|seclo|সেক্লো|সারজেল|sergel|maxpro|ম্যাক্সপ্রো|pantoprazole|প্যানটনিক)/i.test(segLower)) {
-      mealTiming = 'before';
+    // Specific slot time overrides (e.g. "sokal 10 tay", "রাত ৯টায়")
+    const sokalTime = segLower.match(/(?:sokal|shokal|সকাল)\s*(\d{1,2}|[০-৯]{1,2})/i);
+    if (sokalTime) {
+      const h = parseInt(sokalTime[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m), 10);
+      if (h >= 1 && h <= 12) {
+        customTimes['সকাল'] = `${h.toString().padStart(2, '0')}:00`;
+      }
+    }
+    const ratTime = segLower.match(/(?:rat|raat|rate|রাত|রাতে)\s*(\d{1,2}|[০-৯]{1,2})/i);
+    if (ratTime) {
+      let h = parseInt(ratTime[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m), 10);
+      if (h < 12 && h >= 1) h += 12;
+      customTimes['রাত'] = `${h.toString().padStart(2, '0')}:00`;
     }
 
-    // Clean medicine name
-    let cleanName = seg
-      .replace(/^(?:ডাক্তার|doctor|আমাকে|আমারে|আমার)?\s*(?:দিছে|দিয়েছে|দিলো)?\s*/i, '')
-      .replace(/\b(?:আজ|আজকে|কাল|কালকে|পরশু|aj|ajke|kal|kalke|tomorrow|today)\s*(?:থেকে|theke)?\b/gi, '')
-      .replace(/(\d{1,2}|[০-৯]{1,2})\s*(?:তারিখ|তারিখে|tarik|tarikh)\s*(?:থেকে|theke)?/gi, '')
-      .replace(/([০-৯\d]+)\s*(?:দিন|din|days?|সপ্তাহ|weeks?|মাস|months?)/gi, '')
-      .replace(/১\+১\+১|1\+1\+1|১\+০\+১|1\+0\+1|০\+১\+১|0\+1\+1|১\+০\+০|1\+0\+0|০\+০\+১|0\+0\+1/gi, '')
-      .replace(/[১-৩1-3]\s*বেলা|[১-৩1-3]\s*bela|তিন\s*বেলা|দুই\s*বেলা/gi, '')
-      .replace(/\b(?:সকাল|দুপুর|রাত|sokal|dupur|rat|shokal|rate|sokale|dupure)\b/gi, '')
-      .replace(/(?:খাবারের|খাওয়ার|khabarer|khawar)\s*(?:আগে|পরে|age|pore)/gi, '')
-      .replace(/\b(?:before|after)\s*(?:food|meal)\b/gi, '')
-      .replace(/\b(?:khete\s*hbe|khete\s*hobe|খেতে\s*হবে|খাওয়া\s*লাগবে|খাবো|খাব|দেওয়া|দাও|দিও|diyo|dio|daw|dao|set\s*koro|reminder|রিমাইন্ডার|ওষুধ|মেডিসিন|ঔষধ|medicine|tablet|ট্যাবলেট)\b/gi, '')
-      .replace(/[0-9০-৯\.,:;!\?_\-\(\)]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    // Meal timing extraction with minutes (e.g. "khabar 30 minutes age", "খাবারের ৩০ মিনিট আগে")
+    let mealTiming = 'after';
+    let mealTimingText = 'খাবারের পরে';
+    const isBefore = /(?:খাবারের\s*আগে|খাওয়ার\s*আগে|khabarer\s*age|khawar\s*age|khabar\s*.*age|khawar\s*.*age|before\s*(?:food|meal))/i.test(segLower) ||
+                     /(?:গ্যাস্ট্রিক|গ্যাস|seclo|সেক্লো|সারজেল|sergel|maxpro|ম্যাক্সপ্রো|pantoprazole|প্যানটনিক)/i.test(segLower);
+
+    const minMatch = segLower.match(/(\d{1,2}|[০-৯]{1,2})\s*(?:minute|minutes|min|mins|mnt|মিনিট)\s*(?:age|pore|আগে|পরে)/i)
+      || segLower.match(/(?:age|pore|আগে|পরে)\s*(\d{1,2}|[০-৯]{1,2})\s*(?:minute|min|মিনিট)/i);
+
+    if (minMatch) {
+      const mNum = parseInt(minMatch[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m), 10);
+      if (mNum > 0 && mNum <= 120) {
+        mealTiming = isBefore ? `before:${mNum}` : `after:${mNum}`;
+        mealTimingText = isBefore ? `খাবারের ${toBn(mNum)} মিনিট আগে` : `খাবারের ${toBn(mNum)} মিনিট পরে`;
+      }
+    } else if (isBefore) {
+      mealTiming = 'before';
+      mealTimingText = 'খাবারের আগে';
+    }
+
+    // Clean medicine name preserving strength/dosage (e.g. "sanbur(30)" -> "Sanbur (30)", "napa 500" -> "Napa 500")
+    let cleanName = seg;
+    cleanName = cleanName.replace(/mone\s*koriye\s*di[ow]|মনে\s*করিয়ে\s*দিও/gi, '');
+    cleanName = cleanName.replace(/\b(?:aj\s*thake|আজ\s*থেকে|aj\s*theke|আজকে\s*থেকে)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:aj|ajke|kal|kalke|আজ|আজকে|কাল|কালকে)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:agami|আগামী)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:\d{1,2}|[০-৯]{1,2})\s*(?:tarikh|tarik|তারিখ|তারিখে|october|november|december|january|february|march|april|may|june|july|august|september|অক্টোবর|নভেম্বর|ডিসেম্বর|জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর)?\s*(?:porjonto|porjanto|পর্যন্ত)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:khete\s*hobe|খেতে\s*হবে|khete\s*hbe|khawa\s*lagbe|খাওয়া\s*লাগবে)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:khabar|khabarer|khawar|খাবারের|খাওয়ার)\s*(?:\d{1,2}|[০-৯]{1,2})?\s*(?:minutes?|mins?|মিনিট)?\s*(?:age|pore|আগে|পরে)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:before|after)\s*(?:food|meal)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:sokal|dupur|rat|shokal|raat|সকাল|দুপুর|রাত)\s*(?:\d{1,2}|[০-৯]{1,2})?\s*(?:tay|ta|টায়|টায়)?\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:\d{1,2}|[০-৯]{1,2})\s*(?:tay|ta|টায়|টায়)\b/gi, '');
+    cleanName = cleanName.replace(/\b[১-৩1-3]\s*(?:bela|বেলা)\s*(?:kore|করে)?\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:ey|ei|এই)?\s*(?:osudh|osud|oshudh|oshud|ওষুধ|ঔষধ|medicine|tablet|ট্যাবলেট)\s*(?:ta|টি|টা)?\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:r|ar|এবং|আর)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:doctor|ডাক্তার|আমাকে|আমারে|আমার|দিছে|দিয়েছে)\b/gi, '');
+    cleanName = cleanName.replace(/[.,:;!\?_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    cleanName = cleanName.replace(/([a-zA-Z\u0980-\u09FF]+)\((\d+)\)/g, '$1 ($2)');
+    if (cleanName.length > 0) cleanName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
 
     if (!cleanName || cleanName.length < 2) {
       cleanName = 'ওষুধ';
@@ -252,7 +312,10 @@ export function parseMedicinePrescriptionText(text: string): {
       name: cleanName,
       routine,
       mealTiming,
-      durationDays
+      mealTimingText,
+      durationDays,
+      customTimes,
+      endDate: explicitEndDate
     });
   }
 
@@ -280,31 +343,47 @@ export async function createMedicineRemindersFromPending(
     'Night': '21:00'
   };
 
+  const bnDigits: Record<string, string> = { '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪', '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯' };
+  const toBn = (n: number | string) => n.toString().replace(/\d/g, d => bnDigits[d] || d);
+
   const slotMedsMap: Record<string, Array<{
     name: string;
     mealTiming: string;
     durationDays: number;
     startDate: Date;
     endDate: Date;
+    customTime?: string;
   }>> = {
     'সকাল': [],
     'দুপুর': [],
     'রাত': []
   };
 
+  let maxDuration = 7;
+  let overallEndDate: Date | null = null;
+
   for (const med of medicines) {
     const duration = med.durationDays || 7;
+    if (duration > maxDuration) maxDuration = duration;
+
     const startD = new Date(startDate);
     startD.setHours(0, 0, 0, 0);
 
-    const endD = new Date(startD);
-    endD.setDate(endD.getDate() + duration - 1);
-    endD.setHours(23, 59, 59, 999);
+    const endD = med.endDate ? new Date(med.endDate) : new Date(startD);
+    if (!med.endDate) {
+      endD.setDate(endD.getDate() + duration - 1);
+    }
+    endD.setHours(0, 0, 0, 0);
+    if (!overallEndDate || endD > overallEndDate) {
+      overallEndDate = endD;
+    }
 
     for (const rItem of med.routine) {
       const slotKey = rItem.includes('সকাল') || rItem.toLowerCase().includes('morning') ? 'সকাল'
         : rItem.includes('দুপুর') || rItem.toLowerCase().includes('afternoon') ? 'দুপুর'
         : 'রাত';
+
+      const customTime = med.customTimes?.[slotKey];
 
       // Check if already in slot
       const existing = slotMedsMap[slotKey].find(m => m.name.toLowerCase() === med.name.toLowerCase());
@@ -313,13 +392,15 @@ export async function createMedicineRemindersFromPending(
         existing.durationDays = duration;
         existing.startDate = startD;
         existing.endDate = endD;
+        if (customTime) existing.customTime = customTime;
       } else {
         slotMedsMap[slotKey].push({
           name: med.name,
           mealTiming: med.mealTiming || 'after',
           durationDays: duration,
           startDate: startD,
-          endDate: endD
+          endDate: endD,
+          customTime
         });
       }
     }
@@ -340,7 +421,8 @@ export async function createMedicineRemindersFromPending(
     if (medsForSlot.length === 0) continue;
 
     const slotTitle = `${slotKey}ের ওষুধ`;
-    const slotTime = routineTimes[slotKey] || '08:30';
+    const slotCustomTime = medsForSlot.find(m => m.customTime)?.customTime;
+    const slotTime = slotCustomTime || routineTimes[slotKey] || '08:30';
 
     const existing = await Reminder.findOne({
       userId,
@@ -380,19 +462,35 @@ export async function createMedicineRemindersFromPending(
     }
 
     const itemsText = medsForSlot.map(m => {
-      const timing = m.mealTiming === 'before' ? 'খাবারের আগে' : 'খাবারের পরে';
-      return `   • ${m.name} (${m.durationDays} দিন, ${timing})`;
+      let timing = 'খাবারের পরে';
+      if (m.mealTiming?.includes(':')) {
+        const [dir, mins] = m.mealTiming.split(':');
+        timing = dir === 'before' ? `খাবারের ${toBn(mins)} মিনিট আগে` : `খাবারের ${toBn(mins)} মিনিট পরে`;
+      } else if (m.mealTiming === 'before') {
+        timing = 'খাবারের আগে';
+      }
+      return `   • ${m.name} (${toBn(m.durationDays)} দিন, ${timing})`;
     }).join('\n');
 
     slotSummaries.push(`${slotIcons[slotKey]} *${slotTitle}* (⏰ ${formatTime12Hour(slotTime)}):\n${itemsText}`);
   }
 
-  const startDateBn = startDate.toLocaleDateString('bn-BD', {
+  const startDayBn = startDate.toLocaleDateString('bn-BD', {
     day: 'numeric',
     month: 'long',
     weekday: 'long',
     timeZone: 'Asia/Dhaka'
   });
+
+  const endDayBn = overallEndDate ? overallEndDate.toLocaleDateString('bn-BD', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Asia/Dhaka'
+  }) : '';
+
+  const startDateBn = endDayBn
+    ? `${startDayBn} (মেয়াদ: ${toBn(maxDuration)} দিন, ${endDayBn} পর্যন্ত)`
+    : startDayBn;
 
   return {
     count: totalSlots,
@@ -2905,6 +3003,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const data = aiResponse.data || {};
             const itemIndex = typeof data.index === 'number' ? data.index : undefined;
             const query = (data.searchQuery || '').trim();
+
+            if (!data.time && !data.date && !data.newTitle) {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✏️ আপনি এই রিমাইন্ডারে কী পরিবর্তন করতে চান বলুন (যেমন: "নতুন সময় বিকাল ৫টায় দাও" বা "কালকের বদলে পরশু দাও")।`
+              );
+              break;
+            }
 
             const updateFields: any = {};
             if (data.time) updateFields.time = data.time;

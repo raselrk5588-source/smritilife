@@ -889,10 +889,14 @@ Possible actions:
       * "প্রতি মাসের ৫ তারিখে বাসা ভাড়া দেওয়ার রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "বাসা ভাড়া দেওয়া", "repeat": "Monthly", "time": "10:00" }
       * "প্রতি শুক্রবার দুপুর ১২:৩০ টায় জুমার নামাজের রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "জুমার নামাজ", "repeat": "Weekly", "time": "12:30" }
       * "Agami robi bare rubel bhai r mamun er bhai er UCB te bank account kore dite hobe dupur 12 tay" -> action: "create_reminder", data: { "title": "রুবেল ভাই এবং মামুনের ভাইয়ের ইউসিবি ব্যাংকে অ্যাকাউন্ট খোলা", "time": "12:00", "repeat": "Once" }
-      * "আগামী রবিবার দুপুর ১২টায় ব্যাংকে যেতে হবে" -> action: "create_reminder", data: { "title": "ব্যাংকে যাওয়া", "time": "12:00", "repeat": "Once" }
-      * "সোমবারে বিকাল ৪টায় মিটিং" -> action: "create_reminder", data: { "title": "মিটিং", "time": "16:00", "repeat": "Once" }
-    Fields in "data":
-    - "title": string
+     - Medicine & Prescription Reminders (CRITICAL DOSAGE & POTENCY RULES):
+       * Medicine potency/strength: If user mentions a medicine like "sanbur(30)", "Sunbur(30)", "Napa 500", "Seclo 20", the number (30, 500, 20) is the DOSAGE or STRENGTH of the medicine (e.g. 30mg / 30 capsules). NEVER convert it to "৩০ নং ওষুধ" or "item 30"! Always keep the medicine name exactly as "Sunbur (30)" or "Sanbur (30)".
+       * Meal timing: If user says "khabar 30 minutes age", preserve "খাবারের ৩০ মিনিট আগে".
+       * When user says "2 bela kore", category is "medicine" and routine is Morning & Night.
+       * When user specifies an end date (e.g. "27 tarikh porjonto", "27 October porjonto"), set the date accordingly.
+     Fields in "data":
+     - "title": string
+     - "category"?: "medicine" | "wakeup" | "General" | "meeting" | "event"
     - "recipientNames"?: string[] (e.g. ["রনি", "Bou"] if sent to specific contacts from contact list)
     - "recipientName"?: string (single recipient name, e.g. "রনি")
     - "recipientPhone"?: string (single phone number if mentioned)
