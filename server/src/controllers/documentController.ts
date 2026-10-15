@@ -109,6 +109,53 @@ export const getDocumentById = async (req: Request, res: Response) => {
   }
 };
 
+const getDiskPath = (fileUrl: string): string | null => {
+  if (!fileUrl) return null;
+  const base = path.basename(fileUrl);
+  const candidates = [
+    path.join(__dirname, '../../uploads/documents', base),
+    path.join(__dirname, '../uploads/documents', base),
+    path.join(process.cwd(), 'uploads/documents', base),
+    path.join(process.cwd(), 'server/uploads/documents', base)
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+};
+
+/**
+ * View / Stream document inline (for image preview or PDF view)
+ */
+export const viewDocument = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const doc = await UserDocument.findOne({ _id: req.params.id, userId });
+
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    const diskPath = getDiskPath(doc.fileUrl);
+    if (diskPath) {
+      res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.fileName)}"`);
+      return fs.createReadStream(diskPath).pipe(res);
+    }
+
+    if (doc.fileData) {
+      const buffer = Buffer.from(doc.fileData, 'base64');
+      res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.fileName)}"`);
+      return res.send(buffer);
+    }
+
+    res.status(404).json({ success: false, message: 'File not found on storage' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /**
  * Download document file
  */
@@ -121,16 +168,15 @@ export const downloadDocument = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Document not found' });
     }
 
-    const diskPath = path.join(__dirname, '../../uploads/documents', path.basename(doc.fileUrl));
-
-    if (fs.existsSync(diskPath)) {
+    const diskPath = getDiskPath(doc.fileUrl);
+    if (diskPath) {
       return res.download(diskPath, doc.fileName);
     }
 
     // Fallback: decode base64 if disk file was moved/deleted
     if (doc.fileData) {
       const buffer = Buffer.from(doc.fileData, 'base64');
-      res.setHeader('Content-Type', doc.mimeType);
+      res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.fileName)}"`);
       return res.send(buffer);
     }

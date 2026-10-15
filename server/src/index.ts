@@ -23,6 +23,7 @@ import userRoutes from './routes/userRoutes';
 import whatsappRoutes from './routes/whatsappRoutes';
 import ramadanRoutes from './routes/ramadanRoutes';
 import path from 'path';
+import fs from 'fs';
 import expenseRoutes from './routes/expenseRoutes';
 import debtRoutes from './routes/debtRoutes';
 import subscriptionRoutes from './routes/subscriptionRoutes';
@@ -41,7 +42,12 @@ app.use(cors());
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // Serve static uploads
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+app.use('/api/uploads', express.static(uploadsDir));
 
 // Connect Database
 connectDB();

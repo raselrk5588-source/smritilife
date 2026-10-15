@@ -8,9 +8,13 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
   let token;
 
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.query && req.query.token) {
+    token = String(req.query.token);
+  }
 
+  if (token) {
+    try {
       const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
 
       const user = await User.findById(decoded.id).select('-password');

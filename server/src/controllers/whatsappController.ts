@@ -841,7 +841,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
-        // --- STEP 0D: Handle Document Retrieval & Listing ("আমার প্রেসক্রিপশন দাও", "রিপোর্ট পাঠাও", "সব ফাইল দেখাও") ---
+        // --- STEP 0D: Handle Document Retrieval & Listing ("আমার প্রেসক্রিপশন দাও", "amar bottol daw", "রিপোর্ট পাঠাও", "সব ফাইল দেখাও") ---
         const isDocListQuery = /^(?:\/docs|\/files|ফাইলগুলো|ডকুমেন্টগুলো|সব\s*ফাইল|লিস্ট\s*ফাইল)\b/i.test(cleanText) ||
           /(?:আমার|amr|amar)?\s*(?:কি\s*কি|কোন\s*কোন|সব|সকল|list)?\s*(?:ফাইল|ডকুমেন্ট|কাগজ|প্রেসক্রিপশন|রিপোর্ট|file|doc|document)\s*(?:আছে|দেখাও|দেখান|লিস্ট|list|সব\s*দেখাও)/i.test(cleanText);
 
@@ -852,34 +852,64 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        const isDocFetchQuery =
-          /(?:আমাকে|দাও|পাঠাও|পাঠান|দিবেন|দেখান|দেখাও|খুঁজে\s*দাও|chai|dao|pathao|pathan|dehao|dekhan|send|show|give|fetch)\s*(?:amar|amr|আমার|মায়ের|আম্মুর|বাবার|আব্বুর)?\s*(.+)/i.test(cleanText) ||
-          /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|prescription|রিপোর্ট|report|টেস্ট|test|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|ভাউচার|বিল|bill)\s*(?:দাও|পাঠাও|পাঠান|দিবেন|দেখান|চাই|dao|pathao|pathan|dehao|dekhan|chai)/i.test(cleanText) ||
-          /(?:আমার|আম্মুর|আব্বুর|মায়ের|বাবার)\s*(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid)\b/i.test(cleanText);
+        const hasFetchIntent =
+          /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|lagbe|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText);
 
-        if (isDocFetchQuery) {
+        const isShortQuery = cleanText.split(/\s+/).length <= 4;
+        const userDocsCount = await UserDocument.countDocuments({ userId: user._id });
+
+        if (userDocsCount > 0 && (hasFetchIntent || isShortQuery)) {
           const doc = await findMatchingDocument(user._id.toString(), cleanText);
           if (doc) {
+            console.log(`[WhatsAppDoc] Found matching document "${doc.title}" for query: "${cleanText}"`);
             let fileBuffer: Buffer | null = null;
-            const diskPath = path.join(__dirname, '../../uploads/documents', path.basename(doc.fileUrl));
-            if (fs.existsSync(diskPath)) {
-              fileBuffer = await fs.promises.readFile(diskPath);
-            } else if (doc.fileData) {
+            const baseName = path.basename(doc.fileUrl);
+            const candidates = [
+              path.join(__dirname, '../../uploads/documents', baseName),
+              path.join(__dirname, '../uploads/documents', baseName),
+              path.join(process.cwd(), 'uploads/documents', baseName),
+              path.join(process.cwd(), 'server/uploads/documents', baseName)
+            ];
+            for (const c of candidates) {
+              if (fs.existsSync(c)) {
+                try {
+                  fileBuffer = await fs.promises.readFile(c);
+                  break;
+                } catch (e) {}
+              }
+            }
+            if (!fileBuffer && doc.fileData) {
               fileBuffer = Buffer.from(doc.fileData, 'base64');
             }
 
             if (fileBuffer) {
               await sendMetaWhatsAppMessage(fromNumber, `📄 এই যে আপনার সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})`);
-              await sendMetaWhatsAppFile(
+              const sent = await sendMetaWhatsAppFile(
                 fromNumber,
                 fileBuffer,
                 doc.fileName,
                 doc.mimeType,
                 `📄 ${doc.title}`
               );
+              if (!sent) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `⚠️ ফাইলটি হোয়াটসঅ্যাপে সরাসরি পাঠানো সম্ভব হয়নি। অনুগ্রহ করে ওয়েব পোর্টাল থেকে ডাউনলোড করুন: ${process.env.APP_URL || 'https://smriti.life'}/app/documents`
+                );
+              }
               return;
             }
           }
+        }
+
+        // If user explicitly asked for a known document type but doesn't have it saved:
+        const isExplicitDocRequest = hasFetchIntent && /(?:প্রেসক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|বিল|bill|দলিল|পাসপোর্ট|passport|কাগজ|ডকুমেন্ট|document)\b/i.test(cleanText);
+        if (isExplicitDocRequest) {
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `📁 ভাই, এই নামে কোনো ফাইল আপনার স্মৃতি মেমোরিতে সেভ করা নেই।\n\nআপনি ফাইলটি (ছবি বা PDF) আমাকে পাঠিয়ে ক্যাপশনে নামটি লিখলে আমি মেমোরিতে সেভ করে রাখবো এবং পরবর্তীতে চাওয়ামাত্র পাঠিয়ে দেবো!`
+          );
+          return;
         }
 
         // --- STEP 0: Handle WhatsApp Chat AI Training (/teach, /train, /rules, /unlearn) ---

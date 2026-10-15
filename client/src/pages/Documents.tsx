@@ -52,6 +52,8 @@ export default function Documents() {
 
   // Preview modal state
   const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const categories = [
     { id: 'All', label: 'সব ফাইল', icon: FolderOpen },
@@ -172,8 +174,69 @@ export default function Documents() {
     }
   };
 
-  const handleDownload = (doc: DocumentItem) => {
-    window.open(`${import.meta.env.VITE_API_URL}/documents/${doc._id}/download`, '_blank');
+  const handleDownload = async (doc: DocumentItem) => {
+    try {
+      toast.loading('ফাইল ডাউনলোড হচ্ছে...', { id: 'docDownload' });
+
+      // If base64 is already loaded in doc
+      if (doc.fileData) {
+        const link = document.createElement('a');
+        link.href = `data:${doc.mimeType};base64,${doc.fileData}`;
+        link.download = doc.fileName || `${doc.title}.${doc.mimeType?.includes('pdf') ? 'pdf' : 'jpg'}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('ডাউনলোড সম্পন্ন!', { id: 'docDownload' });
+        return;
+      }
+
+      // Fetch file with authorization
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/documents/${doc._id}/download`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.fileName || `${doc.title}.${doc.mimeType?.includes('pdf') ? 'pdf' : 'jpg'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('ডাউনলোড সম্পন্ন!', { id: 'docDownload' });
+    } catch (err) {
+      console.error('Download error:', err);
+      // Fallback: direct window open with query token
+      const token = localStorage.getItem('token');
+      window.open(`${import.meta.env.VITE_API_URL}/documents/${doc._id}/download?token=${token || ''}`, '_blank');
+      toast.dismiss('docDownload');
+    }
+  };
+
+  const handlePreview = async (doc: DocumentItem) => {
+    setPreviewDoc(doc);
+    setPreviewBlobUrl(null);
+    setIsPreviewLoading(true);
+
+    if (doc.fileData) {
+      setPreviewBlobUrl(`data:${doc.mimeType};base64,${doc.fileData}`);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/documents/${doc._id}/view`);
+      if (res.ok) {
+        const blob = await res.blob();
+        setPreviewBlobUrl(window.URL.createObjectURL(blob));
+      } else {
+        toast.error('ফাইল প্রদর্শন করা যায়নি');
+      }
+    } catch (err) {
+      console.error('Preview error:', err);
+      toast.error('ফাইল লোড হতে সমস্যা হয়েছে');
+    } finally {
+      setIsPreviewLoading(false);
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -375,15 +438,13 @@ export default function Documents() {
                       <Download className="w-3.5 h-3.5" />
                       <span>ডাউনলোড</span>
                     </button>
-                    {isImage && (
-                      <button
-                        onClick={() => setPreviewDoc(doc)}
-                        className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs transition"
-                        title="দেখুন"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handlePreview(doc)}
+                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs transition flex items-center justify-center"
+                      title="দেখুন"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
                   </div>
                   <button
                     onClick={() => handleDelete(doc._id, doc.title)}
@@ -507,26 +568,62 @@ export default function Documents() {
         </div>
       )}
 
-      {/* Image Preview Modal */}
+      {/* File Preview Modal (Image & PDF) */}
       {previewDoc && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-4 overflow-hidden relative shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h4 className="font-bold text-sm text-slate-800 truncate">{previewDoc.title}</h4>
-              <button onClick={() => setPreviewDoc(null)} className="p-1 text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-4 overflow-hidden relative shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                  {previewDoc.category}
+                </span>
+                <h4 className="font-bold text-sm text-slate-800 truncate">{previewDoc.title}</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownload(previewDoc)}
+                  className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#0A7756] text-xs font-bold rounded-lg flex items-center gap-1 transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>ডাউনলোড</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setPreviewDoc(null);
+                    setPreviewBlobUrl(null);
+                  }}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <div className="p-2 flex justify-center max-h-[70vh] overflow-auto">
-              <img
-                src={previewDoc.fileUrl.startsWith('http') ? previewDoc.fileUrl : `${import.meta.env.VITE_API_URL}${previewDoc.fileUrl.replace('/api', '')}`}
-                alt={previewDoc.title}
-                className="rounded-xl max-h-[60vh] object-contain"
-                onError={(e) => {
-                  // Fallback to download endpoint if static direct path fails
-                  (e.target as HTMLImageElement).src = `${import.meta.env.VITE_API_URL}/documents/${previewDoc._id}/download`;
-                }}
-              />
+
+            <div className="p-2 flex-1 flex items-center justify-center min-h-[300px] overflow-auto">
+              {isPreviewLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#0A7756]" />
+                  <span className="text-xs font-medium">ফাইল প্রস্তুত হচ্ছে...</span>
+                </div>
+              ) : previewBlobUrl ? (
+                previewDoc.mimeType.includes('pdf') ? (
+                  <iframe
+                    src={previewBlobUrl}
+                    className="w-full h-[65vh] rounded-xl border border-slate-200"
+                    title={previewDoc.title}
+                  />
+                ) : (
+                  <img
+                    src={previewBlobUrl}
+                    alt={previewDoc.title}
+                    className="rounded-xl max-h-[65vh] object-contain shadow-sm"
+                  />
+                )
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  ফাইলটি প্রদর্শনে সমস্যা হচ্ছে। অনুগ্রহ করে ডাউনলোড করুন।
+                </div>
+              )}
             </div>
           </div>
         </div>

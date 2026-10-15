@@ -195,58 +195,103 @@ export async function findMatchingDocument(
   userId: string,
   query: string
 ): Promise<IUserDocument | null> {
+  const userDocs = await UserDocument.find({ userId }).sort({ createdAt: -1 });
+  if (!userDocs || userDocs.length === 0) return null;
+
   const clean = query
     .replace(/[?,।!]/g, '')
     .trim()
     .toLowerCase();
 
-  // Strip common request intent words
-  const searchKeywords = clean
-    .replace(
-      /(?:আমাকে|দাও|পাঠাও|পাঠান|দিবেন|দেখান|দেখাও|খুঁজে\s*দাও|chai|dao|pathao|pathan|dehao|dekhan|send|show|give|fetch|আমার|amr|amar)/gi,
-      ''
-    )
-    .trim();
+  // Common synonym / transliteration dictionary
+  const synonymMap: Record<string, string[]> = {
+    'বোতল': ['bottol', 'botol', 'bottle'],
+    'bottol': ['বোতল', 'botol', 'bottle'],
+    'botol': ['বোতল', 'bottol', 'bottle'],
+    'bottle': ['বোতল', 'bottol', 'botol'],
+    'প্রেসক্রিপশন': ['prescription', 'প্রেস্ক্রিপশন', 'prescrip'],
+    'prescription': ['প্রেসক্রিপশন', 'প্রেস্ক্রিপশন', 'prescrip'],
+    'রিপোর্ট': ['report', 'টেস্ট', 'test'],
+    'report': ['রিপোর্ট', 'টেস্ট', 'test'],
+    'এনআইডি': ['nid', 'ভোটার', 'national id', 'স্মার্ট কার্ড', 'স্মার্টকার্ড'],
+    'nid': ['এনআইডি', 'ভোটার', 'national id', 'স্মার্ট কার্ড'],
+    'সার্টিফিকেট': ['certificate', 'সনদ'],
+    'certificate': ['সার্টিফিকেট', 'সনদ'],
+    'বিল': ['bill', 'ইনভয়েস', 'invoice', 'ভাউচার', 'voucher', 'রিসিপ্ট', 'receipt'],
+    'bill': ['বিল', 'ইনভয়েস', 'invoice', 'ভাউচার', 'voucher', 'রিসিপ্ট', 'receipt'],
+    'রিসিপ্ট': ['receipt', 'বিল', 'bill', 'ভাউচার'],
+    'receipt': ['রিসিপ্ট', 'বিল', 'bill', 'ভাউচার']
+  };
 
-  if (!searchKeywords) {
-    // If just "file dao" or "document dao", return latest document
-    return await UserDocument.findOne({ userId }).sort({ createdAt: -1 });
+  // 1. Direct Title Containment: Check if user's query contains any document's title
+  for (const doc of userDocs) {
+    const docTitle = doc.title.toLowerCase().trim();
+    if (!docTitle) continue;
+
+    // Direct substring in query (e.g. "amar bottol daw" contains "bottol")
+    if (clean.includes(docTitle)) {
+      return doc;
+    }
+
+    // Check synonyms for docTitle
+    const syns = synonymMap[docTitle];
+    if (syns) {
+      for (const syn of syns) {
+        if (clean.includes(syn)) return doc;
+      }
+    }
   }
 
-  // 1. Direct regex on title
-  let match = await UserDocument.findOne({
-    userId,
-    title: { $regex: new RegExp(escapeRegex(searchKeywords), 'i') }
-  }).sort({ createdAt: -1 });
+  // 2. Word Token Matching: Strip stopwords and check matching meaningful words
+  const stopWords = new Set([
+    'আমাকে', 'দাও', 'দিস', 'দিবেন', 'দেন', 'পাঠাও', 'পাঠান', 'দেখাও', 'দেখান',
+    'চাই', 'খুঁজে', 'খুঁজো', 'কোথায়', 'আছে', 'আমার', 'মায়ের', 'আম্মুর', 'বাবার',
+    'আব্বুর', 'ভাই', 'একটু', 'টা', 'টি', 'dao', 'daw', 'dis', 'diben', 'den',
+    'pathao', 'pathan', 'dehao', 'dekhaw', 'dekhan', 'chai', 'cay', 'lagbe',
+    'khojo', 'khujo', 'kothay', 'ase', 'ache', 'amar', 'amr', 'bhai', 'ekto',
+    'ta', 'ti', 'send', 'give', 'show', 'fetch', 'file', 'doc', 'document',
+    'pic', 'image', 'photo', 'chobi', 'কাগজ'
+  ]);
 
-  if (match) return match;
+  const queryWords = clean
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\w\u0980-\u09FF]/g, ''))
+    .filter((w) => w.length >= 2 && !stopWords.has(w));
 
-  // 2. Search category or tags
-  const { category, tags } = detectDocumentCategory(searchKeywords);
+  for (const word of queryWords) {
+    // Check against each doc title
+    for (const doc of userDocs) {
+      const docTitle = doc.title.toLowerCase();
+      if (docTitle.includes(word) || word.includes(docTitle)) {
+        return doc;
+      }
+      // Check word synonyms
+      const syns = synonymMap[word];
+      if (syns && syns.some((s) => docTitle.includes(s))) {
+        return doc;
+      }
+      // Check tags
+      if (doc.tags && doc.tags.some((t) => t.toLowerCase().includes(word))) {
+        return doc;
+      }
+    }
+  }
+
+  // 3. Category match based on keywords
+  const { category, tags } = detectDocumentCategory(clean);
   if (category !== 'Other') {
-    match = await UserDocument.findOne({
-      userId,
-      $or: [{ category }, { tags: { $in: tags } }]
-    }).sort({ createdAt: -1 });
-    if (match) return match;
+    const catMatch = userDocs.find(
+      (d) => d.category === category || (d.tags && d.tags.some((t) => tags.includes(t)))
+    );
+    if (catMatch) return catMatch;
   }
 
-  // 3. Search word-by-word
-  const words = searchKeywords.split(/\s+/).filter((w) => w.length > 2);
-  if (words.length > 0) {
-    const wordRegexes = words.map((w) => ({ title: { $regex: new RegExp(escapeRegex(w), 'i') } }));
-    match = await UserDocument.findOne({
-      userId,
-      $or: wordRegexes
-    }).sort({ createdAt: -1 });
-    if (match) return match;
+  // 4. If query is a generic document request and user only has 1 document, return it
+  if (userDocs.length === 1 && queryWords.length === 0) {
+    return userDocs[0];
   }
 
   return null;
-}
-
-function escapeRegex(text: string) {
-  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 }
 
 /**
