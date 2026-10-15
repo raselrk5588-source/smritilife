@@ -144,6 +144,48 @@ export default function AdminDashboard() {
   const [editingTemplate, setEditingTemplate] = useState<WishTemplate | null>(null);
   const [tempFormData, setTempFormData] = useState({ name: '', category: '', content: '', type: 'Text' });
 
+  // Demo User Modal State
+  const [showDemoUserModal, setShowDemoUserModal] = useState(false);
+  const [demoForm, setDemoForm] = useState({ mobile: '', name: 'Demo Tester' });
+  const [isSubmittingDemo, setIsSubmittingDemo] = useState(false);
+
+  const handleCreateDemoUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!demoForm.mobile.trim()) {
+      toast.error('মোবাইল নম্বর লিখুন');
+      return;
+    }
+    try {
+      setIsSubmittingDemo(true);
+      const headers = {
+        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+        'Content-Type': 'application/json'
+      };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/users/create-demo`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(demoForm)
+      });
+      const resData = await res.json();
+      if (res.ok && resData.success) {
+        toast.success(resData.message || 'ডেমো ইউজার সক্রিয় হয়েছে!');
+        setShowDemoUserModal(false);
+        setDemoForm({ mobile: '', name: 'Demo Tester' });
+        // Refresh users list
+        const usersRes = await fetch(`${import.meta.env.VITE_API_URL}/admin/users`, { headers });
+        if (usersRes.ok) {
+          const uData = await usersRes.json();
+          setUsers(uData.users);
+        }
+      } else {
+        toast.error(resData.message || 'ব্যর্থ হয়েছে');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'সার্ভার এরর');
+    } finally {
+      setIsSubmittingDemo(false);
+    }
+  };
 
   const navigate = useNavigate();
 
@@ -836,6 +878,13 @@ export default function AdminDashboard() {
                     ইউজার ম্যানেজমেন্ট
                   </h2>
                   <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => setShowDemoUserModal(true)}
+                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#0A7756] to-emerald-600 hover:from-[#086146] hover:to-emerald-700 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-700/20 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 stroke-[3]" />
+                      <span>+ নতুন ডেমো ইউজার</span>
+                    </button>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Filter className="h-4 w-4 text-slate-400" />
@@ -1645,6 +1694,75 @@ export default function AdminDashboard() {
                 {editingTemplate ? 'আপডেট করুন' : 'সংরক্ষণ করুন'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Demo User Modal */}
+      {showDemoUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <Users className="w-5 h-5 text-[#0A7756]" />
+                নতুন ডেমো / টেস্ট ইউজার
+              </h2>
+              <button 
+                onClick={() => setShowDemoUserModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-xs text-emerald-800 bg-emerald-50 p-3.5 rounded-xl border border-emerald-100 mb-5 leading-relaxed">
+              💡 এই নম্বরে ১ বছরের ফুল সাবস্ক্রিপশন পাস সক্রিয় হবে। বিকাশ পেমেন্ট ছাড়াই সরাসরি ওয়েবসাইট ও হোয়াটসঅ্যাপে বট টেস্ট করতে পারবে। (লগইন টেস্ট OTP কোড: <b>1234</b> বা <b>0000</b>)
+            </div>
+            
+            <form onSubmit={handleCreateDemoUser} className="space-y-4 mb-2">
+              <div>
+                <label className="text-sm font-bold text-slate-600 mb-1.5 block">
+                  মোবাইল নম্বর <span className="text-rose-500">*</span>
+                </label>
+                <input 
+                  type="tel" 
+                  value={demoForm.mobile} 
+                  onChange={e => setDemoForm({...demoForm, mobile: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-mono font-medium focus:outline-none focus:border-[#0A7756]"
+                  placeholder="যেমন: 017XXXXXXXX"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-bold text-slate-600 mb-1.5 block">
+                  নাম (ঐচ্ছিক)
+                </label>
+                <input 
+                  type="text" 
+                  value={demoForm.name} 
+                  onChange={e => setDemoForm({...demoForm, name: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#0A7756]"
+                  placeholder="যেমন: Demo Tester"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowDemoUserModal(false)}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition"
+                >
+                  বাতিল
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSubmittingDemo}
+                  className="flex-1 py-3 bg-[#0A7756] hover:bg-[#086146] text-white font-bold rounded-xl transition shadow-lg shadow-[#0A7756]/20 disabled:opacity-50"
+                >
+                  {isSubmittingDemo ? 'অ্যাক্টিভ হচ্ছে...' : 'অ্যাক্টিভ করুন'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

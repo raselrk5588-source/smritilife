@@ -4,6 +4,7 @@ import Note from '../models/Note';
 import Activity from '../models/Activity';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
+import Subscription from '../models/Subscription';
 
 import SystemLog from '../models/SystemLog';
 import WishTemplate from '../models/WishTemplate';
@@ -104,6 +105,82 @@ export const toggleSubscription = async (req: Request, res: Response) => {
     await user.save();
     
     res.json({ success: true, isSubscribed: user.isSubscribed, message: 'Subscription updated' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Create or activate a demo user with full subscription pass
+export const createDemoUser = async (req: Request, res: Response) => {
+  try {
+    const { mobile, name } = req.body;
+    if (!mobile || !String(mobile).trim()) {
+      return res.status(400).json({ success: false, message: 'মোবাইল নম্বর দেওয়া আবশ্যক' });
+    }
+
+    let cleanMobile = String(mobile).trim().replace(/[^\d]/g, '');
+    if (cleanMobile.startsWith('880')) {
+      cleanMobile = cleanMobile.substring(2);
+    }
+    if (cleanMobile.length < 10) {
+      return res.status(400).json({ success: false, message: 'সঠিক মোবাইল নম্বর লিখুন (যেমন: 017XXXXXXXX)' });
+    }
+
+    const userName = name?.trim() || 'Demo Tester';
+
+    let user = await User.findOne({
+      $or: [
+        { mobile: cleanMobile },
+        { whatsapp: cleanMobile },
+        { mobile: '88' + cleanMobile },
+        { whatsapp: '88' + cleanMobile }
+      ]
+    });
+
+    if (!user) {
+      user = await User.create({
+        name: userName,
+        email: `${cleanMobile}@smritilife.com`,
+        mobile: cleanMobile,
+        whatsapp: cleanMobile,
+        isSubscribed: true,
+        deviceIds: [],
+        district: 'Dhaka',
+        honorific: 'ভাই'
+      });
+    } else {
+      user.name = userName;
+      user.isSubscribed = true;
+      user.mobile = cleanMobile;
+      user.whatsapp = cleanMobile;
+      await user.save();
+    }
+
+    // Ensure Subscription record exists with SUBSCRIBED status
+    let sub = await Subscription.findOne({
+      $or: [{ userId: user._id }, { msisdn: cleanMobile }]
+    });
+
+    if (!sub) {
+      await Subscription.create({
+        userId: user._id,
+        msisdn: cleanMobile,
+        requestId: `DEMO_${Date.now()}`,
+        requestTime: new Date().toISOString(),
+        amount: 190,
+        status: 'SUBSCRIBED',
+        paymentOption: 'Admin Demo Pass'
+      });
+    } else {
+      sub.status = 'SUBSCRIBED';
+      await sub.save();
+    }
+
+    res.json({
+      success: true,
+      message: `ডেমো ইউজার (${cleanMobile}) সফলভাবে অ্যাক্টিভ করা হয়েছে!`,
+      user
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

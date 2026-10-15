@@ -1,5 +1,5 @@
 import express from 'express';
-import { setupAdmin, loginAdmin, getAnalytics, getUsers, toggleSubscription, getTemplates, createTemplate, updateTemplate, deleteTemplate, getSettings, updateSettings, getAllReminders, deleteAnyReminder, getAllWishes, deleteAnyWish, getErrorLogs, logClientError, getTrainingRules, createTrainingRule, updateTrainingRule, deleteTrainingRule } from '../controllers/adminController';
+import { setupAdmin, loginAdmin, getAnalytics, getUsers, toggleSubscription, createDemoUser, getTemplates, createTemplate, updateTemplate, deleteTemplate, getSettings, updateSettings, getAllReminders, deleteAnyReminder, getAllWishes, deleteAnyWish, getErrorLogs, logClientError, getTrainingRules, createTrainingRule, updateTrainingRule, deleteTrainingRule } from '../controllers/adminController';
 
 const router = express.Router();
 
@@ -7,6 +7,7 @@ router.post('/setup', setupAdmin);
 router.post('/login', loginAdmin);
 router.get('/analytics', getAnalytics);
 router.get('/users', getUsers);
+router.post('/users/create-demo', createDemoUser);
 router.put('/users/:id/subscribe', toggleSubscription);
 
 router.get('/templates', getTemplates);
