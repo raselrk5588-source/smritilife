@@ -19,12 +19,20 @@ export default function MainLayout() {
       navigate('/');
     }
     
-    // Scale up the application by 120% for web/mobile view to make it more legible
-    // This affects all 'rem' based Tailwind classes (size, margin, padding, text)
-    document.documentElement.style.fontSize = '120%';
+    // Scale up the application by 120% only for mobile view (< 768px) to make text readable on phone
+    // On PC/desktop (>= 768px), use standard 100% to keep proportions sharp and avoid overflow
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        document.documentElement.style.fontSize = '120%';
+      } else {
+        document.documentElement.style.fontSize = '';
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
     
     return () => {
-      // Reset when leaving the main app to not affect the landing page
+      window.removeEventListener('resize', handleResize);
       document.documentElement.style.fontSize = '';
     };
   }, [navigate]);
@@ -46,7 +54,6 @@ export default function MainLayout() {
   const navItems = [
     { path: '/app', icon: Home, label: t('হোম', 'Home') },
     { path: '/app/notes', icon: FileText, label: t('নোট', 'Notes') },
-    // Center is Voice Assistant (FAB)
     { path: '/app/reminders', icon: Bell, label: t('রিমাইন্ডার', 'Reminders') },
     { path: '/app/wishes', icon: Gift, label: t('বিশেষ দিন', 'Wishes') },
     { path: '/app/documents', icon: FolderArchive, label: t('ডকুমেন্ট ভল্ট', 'Documents') },
@@ -57,87 +64,90 @@ export default function MainLayout() {
     <div className="flex flex-col min-h-screen bg-[#f6f8f9] font-sans">
       
       {/* Web View Top Navigation (Premium Consumer Glassmorphism Style) */}
-      <header className="hidden md:flex bg-white/90 backdrop-blur-md text-slate-800 sticky top-0 z-50 h-[70px] items-center px-6 lg:px-12 border-b border-slate-200/70 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)] justify-between transition-all">
-        {/* Brand Logo & Name */}
-        <Link to="/app" className="flex items-center space-x-3 group mr-4 select-none">
-          <div className="relative w-10 h-10 rounded-full flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
-            <img 
-              src="/robot-icon.png" 
-              alt="SmritiLife AI" 
-              className="w-full h-full rounded-full object-cover shadow-md shadow-[#0A7756]/20 ring-2 ring-emerald-500/30" 
-            />
-            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center space-x-1.5">
-              <span className="text-xl font-black tracking-tight text-slate-900">
-                Smriti<span className="text-[#0A7756]">Life</span>
-              </span>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">স্মৃতি লাইফ</span>
+      <header className="hidden md:flex bg-white/95 backdrop-blur-md text-slate-800 sticky top-0 z-50 h-[64px] items-center border-b border-slate-200/80 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] transition-all">
+        <div className="w-full max-w-6xl mx-auto px-4 lg:px-6 flex items-center justify-between gap-3">
+          {/* Brand Logo & Name */}
+          <Link to="/app" className="flex items-center space-x-2.5 group select-none shrink-0">
+            <div className="relative w-9 h-9 rounded-full flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
+              <img 
+                src="/robot-icon.png" 
+                alt="SmritiLife AI" 
+                className="w-full h-full rounded-full object-cover shadow-sm ring-2 ring-emerald-500/25" 
+              />
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
             </div>
-            <span className="text-[10px] text-slate-400 font-medium tracking-wide">স্মার্ট ব্যক্তিগত সহকারী</span>
-          </div>
-        </Link>
-        
-        {/* Center Navigation Tabs (Pill Container) */}
-        <nav className="flex items-center bg-slate-100/80 p-1.5 rounded-full border border-slate-200/60 shadow-inner">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.path === '/app' && location.pathname === '/app/');
-            return (
-              <Link 
-                key={item.path}
-                to={item.path} 
-                className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 border-none ${
-                  isActive 
-                    ? 'bg-white text-[#0A7756] shadow-sm shadow-slate-200' 
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                }`}
-              >
-                <item.icon className={`w-4 h-4 ${isActive ? 'text-[#0A7756] stroke-[2.5]' : 'text-slate-500 stroke-[2]'}`} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Right Action Controls: Voice Assistant, Notifications, Profile */}
-        <div className="flex items-center space-x-3.5">
-          {/* AI Voice Assistant Button */}
-          <button 
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-[#0A7756] via-emerald-600 to-teal-600 text-white font-semibold shadow-md shadow-emerald-700/20 hover:shadow-lg hover:shadow-emerald-700/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 border-none cursor-pointer"
-          >
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-80"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
-            </span>
-            <Mic className="w-4 h-4 stroke-[2.5]" />
-            <span className="text-sm font-bold tracking-tight">{t('ভয়েস সহকারী', 'AI Voice')}</span>
-          </button>
-
-          {/* Web View Notification Button */}
-          <Link 
-            to="/app/notifications" 
-            title={t('বিজ্ঞপ্তি', 'Notifications')}
-            className="relative w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 hover:text-[#0A7756] transition-colors border border-slate-200/80 shadow-xs"
-          >
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white"></span>
+            <div className="flex flex-col">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-lg font-black tracking-tight text-slate-900 leading-none">
+                  Smriti<span className="text-[#0A7756]">Life</span>
+                </span>
+                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200/60">স্মৃতি লাইফ</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium tracking-wide leading-tight mt-0.5">স্মার্ট ব্যক্তিগত সহকারী</span>
+            </div>
           </Link>
           
-          {/* User Profile Pill */}
-          <Link 
-            to="/app/profile" 
-            className="flex items-center space-x-2.5 pl-1.5 pr-3 py-1 bg-slate-50 hover:bg-slate-100/90 transition-all rounded-full border border-slate-200/80 shadow-xs group"
-          >
-            <div className="w-8 h-8 bg-gradient-to-tr from-[#0A7756] to-emerald-500 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-xs ring-2 ring-white">
-              {(localStorage.getItem('userName') || 'User').charAt(0).toUpperCase()}
-            </div>
-            <span className="text-xs font-bold text-slate-700 group-hover:text-[#0A7756] max-w-[80px] truncate hidden lg:inline-block">
-              {localStorage.getItem('userName') || 'প্রোফাইল'}
-            </span>
-          </Link>
+          {/* Center Navigation Tabs (Sleek Segmented Bar) */}
+          <nav className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 shadow-inner">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path || (item.path === '/app' && location.pathname === '/app/');
+              return (
+                <Link 
+                  key={item.path}
+                  to={item.path} 
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border-none whitespace-nowrap ${
+                    isActive 
+                      ? 'bg-white text-[#0A7756] shadow-xs font-bold' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  }`}
+                >
+                  <item.icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#0A7756] stroke-[2.2]' : 'text-slate-500 stroke-[1.8]'}`} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Right Action Controls: Voice Assistant, Notifications, Profile */}
+          <div className="flex items-center space-x-2.5 shrink-0">
+            {/* AI Voice Assistant Button */}
+            <button 
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#0A7756] via-emerald-600 to-teal-600 text-white font-semibold text-xs shadow-xs hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 border-none cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-80"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+              </span>
+              <Mic className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="font-bold tracking-tight">{t('ভয়েস সহকারী', 'AI Voice')}</span>
+            </button>
+
+            {/* Web View Notification Button */}
+            <Link 
+              to="/app/notifications" 
+              title={t('বিজ্ঞপ্তি', 'Notifications')}
+              className="relative w-8 h-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 hover:text-[#0A7756] transition-colors border border-slate-200/80 shadow-2xs shrink-0"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full ring-1.5 ring-white"></span>
+            </Link>
+            
+            {/* User Profile Pill */}
+            <Link 
+              to="/app/profile" 
+              className="flex items-center space-x-2 pl-1 pr-2.5 py-0.5 bg-slate-50 hover:bg-slate-100/90 transition-all rounded-full border border-slate-200/80 shadow-2xs group shrink-0"
+              title={userName}
+            >
+              <div className="w-7 h-7 bg-gradient-to-tr from-[#0A7756] to-emerald-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-xs ring-1 ring-white">
+                {(userName || 'User').charAt(0).toUpperCase()}
+              </div>
+              <span className="text-xs font-semibold text-slate-700 group-hover:text-[#0A7756] max-w-[110px] truncate inline-block">
+                {userName || 'প্রোফাইল'}
+              </span>
+            </Link>
+          </div>
         </div>
       </header>
 
