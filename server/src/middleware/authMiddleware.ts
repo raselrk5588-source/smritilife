@@ -15,9 +15,17 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
 
       const user = await User.findById(decoded.id).select('-password');
       
-      if (user) {
-        req.user = { id: user.id };
+      if (!user) {
+        return res.status(401).json({ message: 'User not found' });
       }
+
+      // Check device authorization (max 2 devices)
+      const deviceId = req.headers['x-device-id'] as string;
+      if (deviceId && user.deviceIds && user.deviceIds.length > 0 && !user.deviceIds.includes(deviceId)) {
+        return res.status(401).json({ message: 'আপনার অ্যাকাউন্টটি অন্য ডিভাইস থেকে লগইন করায় এই ডিভাইসটি লগআউট হয়েছে।' });
+      }
+
+      req.user = { id: user.id };
 
       next();
     } catch (error) {

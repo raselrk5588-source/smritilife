@@ -43,7 +43,7 @@ export default function Auth() {
         const data = await res.json();
         
         if (data.requireOtp === false && data.token) {
-          // Bypass OTP
+          // Bypass OTP (Device already recognized)
           localStorage.setItem('token', data.token);
           toast.success('সরাসরি লগইন সফল হয়েছে!', { id: 'authCheck' });
           localStorage.setItem('isAuthenticated', 'true');
@@ -52,18 +52,16 @@ export default function Auth() {
           localStorage.setItem('userMobile', data.user.mobile);
           navigate('/app');
         } else {
-          toast.success('আপনার নম্বরে OTP পাঠানো হয়েছে!', { id: 'authCheck' });
+          toast.success(data.message || 'আপনার WhatsApp নম্বরে OTP পাঠানো হয়েছে!', { id: 'authCheck', duration: 4000 });
           setShowOtp(true);
         }
       } catch (err: any) {
         console.error("Auth check error:", err);
-        // Fallback to requiring OTP
-        toast.success('আপনার নম্বরে OTP পাঠানো হয়েছে!', { id: 'authCheck' });
-        setShowOtp(true);
+        toast.error('সার্ভারে সমস্যা হয়েছে, আবার চেষ্টা করুন।', { id: 'authCheck' });
       }
     } else {
       // Step 2: Verify OTP via API
-      toast.loading('লগইন হচ্ছে...', { id: 'authCheck' });
+      toast.loading('যাচাই করা হচ্ছে...', { id: 'authCheck' });
       try {
         const url = `${import.meta.env.VITE_API_URL}/users/login`;
         const res = await fetch(url, {
@@ -77,7 +75,7 @@ export default function Auth() {
         try {
           data = JSON.parse(text);
         } catch (e) {
-          toast.error(`Invalid JSON from server. URL: ${url}, Status: ${res.status}, Body: ${text.substring(0, 50)}`, { id: 'authCheck', duration: 8000 });
+          toast.error(`Invalid response: ${text.substring(0, 50)}`, { id: 'authCheck', duration: 6000 });
           return;
         }
         
@@ -100,17 +98,17 @@ export default function Auth() {
             setTimeout(() => navigate('/paywall'), 1500);
           }
         } else {
-          toast.error(data.message || 'OTP ভুল হয়েছে!', { id: 'authCheck' });
+          toast.error(data.message || 'OTP ভুল হয়েছে বা মেয়াদ শেষ হয়েছে!', { id: 'authCheck' });
         }
       } catch (err: any) {
         console.error("Auth fetch error:", err);
-        toast.error(`Fetch error: ${err.message}`, { id: 'authCheck', duration: 8000 });
+        toast.error(`Fetch error: ${err.message}`, { id: 'authCheck', duration: 6000 });
       }
     }
   };
 
   return (
-    <div className="bg-slate-50 min-h-screen flex flex-col relative overflow-hidden">
+    <div className="bg-slate-50 min-h-screen flex flex-col relative overflow-hidden font-sans">
       {/* Header Background */}
       <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-b from-[#0A7756] to-[#12A57A] rounded-b-[40px] z-0 shadow-lg">
         <div className="absolute inset-0 bg-cover opacity-20" style={{ backgroundImage: "url('/theme-bg.png')", backgroundPosition: "center" }}></div>
@@ -136,7 +134,18 @@ export default function Auth() {
 
           <form onSubmit={handleAuthSubmit} className="space-y-5">
             <div>
-              <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">মোবাইল নম্বর</label>
+              <div className="flex justify-between items-center mb-1.5 ml-1">
+                <label className="text-xs font-bold text-slate-500">মোবাইল নম্বর</label>
+                {showOtp && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowOtp(false); setOtp(''); }}
+                    className="text-xs text-[#0A7756] hover:underline font-bold"
+                  >
+                    নম্বর পরিবর্তন করুন
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Phone className="h-5 w-5 text-slate-400" />
@@ -147,14 +156,25 @@ export default function Auth() {
                   onChange={(e) => setMobile(e.target.value)}
                   disabled={showOtp}
                   placeholder="017XXXXXXX"
-                  className={`w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-2 focus:ring-[#0A7756]/20 transition-all ${showOtp ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  className={`w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-2 focus:ring-[#0A7756]/20 transition-all ${showOtp ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`}
                 />
               </div>
             </div>
 
             {showOtp && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1 text-center">OTP কোড (আপনার মোবাইলে পাঠানো হয়েছে)</label>
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl mb-4 text-center">
+                  <p className="text-xs font-bold text-emerald-800">
+                    📲 আপনার WhatsApp-এ ৪ ডিজিটের OTP পাঠানো হয়েছে
+                  </p>
+                  <p className="text-[11px] text-emerald-600 mt-0.5">
+                    কোডটি ৩ মিনিটের মধ্যে প্রবেশ করান।
+                  </p>
+                </div>
+
+                <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1 text-center">
+                  OTP কোড দিন
+                </label>
                 <div className="relative max-w-[200px] mx-auto">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <ShieldCheck className="h-5 w-5 text-[#0A7756]" />
@@ -163,22 +183,29 @@ export default function Auth() {
                     type="text"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
-                    placeholder="1234"
+                    placeholder="••••"
                     maxLength={4}
-                    className="w-full bg-slate-50 border-2 border-[#0A7756]/30 rounded-2xl pl-12 pr-4 py-3.5 text-center text-xl font-bold text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-2 focus:ring-[#0A7756]/20 transition-all tracking-[0.5em]"
+                    autoFocus
+                    className="w-full bg-slate-50 border-2 border-[#0A7756]/40 rounded-2xl pl-12 pr-4 py-3.5 text-center text-xl font-black text-slate-800 focus:outline-none focus:border-[#0A7756] focus:ring-2 focus:ring-[#0A7756]/20 transition-all tracking-[0.5em]"
                   />
                 </div>
-                <p className="text-center text-xs text-slate-400 font-medium mt-3">
-                  (ডেমো টেস্টের জন্য "1234" অথবা "0000" ব্যবহার করুন)
-                </p>
+                <div className="text-center mt-3">
+                  <button
+                    type="button"
+                    onClick={(e) => { setShowOtp(false); handleAuthSubmit(e); }}
+                    className="text-xs text-slate-400 hover:text-slate-600 font-medium underline"
+                  >
+                    কোড পাননি? আবার পাঠান
+                  </button>
+                </div>
               </div>
             )}
 
             <button
               type="submit"
-              className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 mt-4"
+              className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 mt-4"
             >
-              {showOtp ? 'ভেরিফাই করুন' : 'OTP পাঠান'}
+              {showOtp ? 'ভেরিফাই ও লগইন করুন' : 'WhatsApp-এ OTP পাঠান'}
             </button>
           </form>
         </div>

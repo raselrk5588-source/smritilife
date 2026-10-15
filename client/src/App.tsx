@@ -16,6 +16,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminLogin from './pages/AdminLogin';
 import ViewWish from './pages/ViewWish';
 import Paywall from './pages/Paywall';
+import SubscriptionReturn from './pages/SubscriptionReturn';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import CompleteProfile from './pages/CompleteProfile';
@@ -42,8 +43,9 @@ function App() {
         <Route path="/w/:id" element={<ViewWish />} />
         <Route path="/wish/:id" element={<ViewWish />} />
         
-        {/* Subscription Paywall (Public) */}
+        {/* Subscription Paywall & Return Routes */}
         <Route path="/paywall" element={<Paywall />} />
+        <Route path="/subscription-return" element={<SubscriptionReturn />} />
         
         {/* Consumer App */}
         <Route path="/app" element={<MainLayout />}>

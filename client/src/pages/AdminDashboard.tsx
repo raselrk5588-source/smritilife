@@ -49,6 +49,10 @@ interface SystemSettings {
   smsGatewayKey: string;
   freeUserReminderLimit: number;
   proUserReminderLimit: number;
+  bdappsApiKey?: string;
+  bdappsApiSecret?: string;
+  bdappsRedirectUrl?: string;
+  subscriptionFee?: number;
 }
 
 interface AdminReminder {
@@ -105,7 +109,8 @@ export default function AdminDashboard() {
   const [reminders, setReminders] = useState<AdminReminder[]>([]);
   const [wishes, setWishes] = useState<AdminWish[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({
-    openaiApiKey: '', geminiApiKey: '', whatsappApiToken: '', twilioAccountSid: '', twilioPhoneNumber: '', smsGatewayKey: '', freeUserReminderLimit: 5, proUserReminderLimit: 100
+    openaiApiKey: '', geminiApiKey: '', whatsappApiToken: '', twilioAccountSid: '', twilioPhoneNumber: '', smsGatewayKey: '', freeUserReminderLimit: 5, proUserReminderLimit: 100,
+    bdappsApiKey: '', bdappsApiSecret: '', bdappsRedirectUrl: '', subscriptionFee: 190
   });
   const [errorLogs, setErrorLogs] = useState<ErrorLogData[]>([]);
   const [trainingRules, setTrainingRules] = useState<AITrainingRuleData[]>([]);
@@ -1212,6 +1217,60 @@ export default function AdminDashboard() {
                       <div>
                         <label className="text-sm font-bold text-slate-600 mb-1.5 block">SMS Gateway API Key</label>
                         <input type="password" value={settings.smsGatewayKey} onChange={(e) => setSettings({...settings, smsGatewayKey: e.target.value})} placeholder="SMS API Key..." className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#0A7756]" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* bdapps bKash Charging SDK Section */}
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-md bg-[#e2136e] text-white text-xs font-black flex items-center justify-center">b</span>
+                      bdapps bKash Charging SDK সেটিংস
+                    </h3>
+                    <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                      <div className="p-3 bg-pink-50 border border-pink-100 rounded-xl text-xs text-pink-900 leading-relaxed">
+                        💡 <b>bdapps গাইড:</b> bdapps পোর্টালের <i>General → Advanced</i> থেকে <b>Enable Charging SDK</b> অন করার পর পাওয়া <b>API Key</b> ও <b>API Secret</b> এখানে সেট করুন।
+                      </div>
+                      <div>
+                        <label className="text-sm font-bold text-slate-600 mb-1.5 block">bdapps API Key</label>
+                        <input
+                          type="text"
+                          value={settings.bdappsApiKey || ''}
+                          onChange={(e) => setSettings({...settings, bdappsApiKey: e.target.value})}
+                          placeholder="YOUR_APPLICATION_API_KEY"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#e2136e]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-bold text-slate-600 mb-1.5 block">bdapps API Secret</label>
+                        <input
+                          type="password"
+                          value={settings.bdappsApiSecret || ''}
+                          onChange={(e) => setSettings({...settings, bdappsApiSecret: e.target.value})}
+                          placeholder="YOUR_APPLICATION_API_SECRET"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#e2136e]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-bold text-slate-600 mb-1.5 block">Redirect URL</label>
+                          <input
+                            type="text"
+                            value={settings.bdappsRedirectUrl || ''}
+                            onChange={(e) => setSettings({...settings, bdappsRedirectUrl: e.target.value})}
+                            placeholder="https://smritilife.com/subscription-return"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#e2136e]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-bold text-slate-600 mb-1.5 block">মাসিক সাবস্ক্রিপশন ফি (টাকা)</label>
+                          <input
+                            type="number"
+                            value={settings.subscriptionFee || 190}
+                            onChange={(e) => setSettings({...settings, subscriptionFee: Number(e.target.value)})}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#e2136e]"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

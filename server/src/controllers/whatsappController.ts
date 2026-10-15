@@ -307,14 +307,18 @@ export const sendMetaWhatsAppListMenu = async (
 };
 
 // Function to send a message via Meta API
-const sendMetaWhatsAppMessage = async (to: string, text: string) => {
+export const sendMetaWhatsAppMessage = async (to: string, text: string): Promise<boolean> => {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token || !phoneNumberId) {
     console.error('WhatsApp API credentials missing in .env');
-    return;
+    return false;
   }
+
+  let formattedTo = to.trim();
+  if (formattedTo.startsWith('+')) formattedTo = formattedTo.substring(1);
+  else if (formattedTo.startsWith('01')) formattedTo = `88${formattedTo}`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -326,7 +330,7 @@ const sendMetaWhatsAppMessage = async (to: string, text: string) => {
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: to,
+          to: formattedTo,
           type: 'text',
           text: { body: text }
         }),
@@ -336,16 +340,18 @@ const sendMetaWhatsAppMessage = async (to: string, text: string) => {
       const data = await response.json();
       if (!response.ok) {
         console.error('Error sending Meta message:', data);
+        if (attempt === 2) return false;
       } else {
-        console.log(`✅ Meta WhatsApp Reply sent to ${to}: "${text}"`);
+        console.log(`✅ Meta WhatsApp Reply sent to ${formattedTo}: "${text}"`);
+        return true;
       }
-      return;
     } catch (error) {
       console.error(`Attempt ${attempt} error sending Meta message:`, error);
-      if (attempt === 2) break;
+      if (attempt === 2) return false;
       await new Promise(r => setTimeout(r, 1000));
     }
   }
+  return false;
 };
 
 // Function to download voice audio from Meta API

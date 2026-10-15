@@ -9,6 +9,10 @@ export interface ISystemSettings extends Document {
   smsGatewayKey: string;
   freeUserReminderLimit: number;
   proUserReminderLimit: number;
+  bdappsApiKey?: string;
+  bdappsApiSecret?: string;
+  bdappsRedirectUrl?: string;
+  subscriptionFee?: number;
 }
 
 const SystemSettingsSchema: Schema = new Schema(
@@ -21,6 +25,10 @@ const SystemSettingsSchema: Schema = new Schema(
     smsGatewayKey: { type: String, default: '' },
     freeUserReminderLimit: { type: Number, default: 5 },
     proUserReminderLimit: { type: Number, default: 100 },
+    bdappsApiKey: { type: String, default: '' },
+    bdappsApiSecret: { type: String, default: '' },
+    bdappsRedirectUrl: { type: String, default: '' },
+    subscriptionFee: { type: Number, default: 190 },
   },
   { timestamps: true }
 );

@@ -1,9 +1,13 @@
 export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('token');
+  const deviceId = localStorage.getItem('deviceId');
   
   const headers = new Headers(options.headers || {});
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (deviceId) {
+    headers.set('X-Device-Id', deviceId);
   }
   
   // Only set Content-Type to JSON if it's not FormData (which sets its own boundary)
