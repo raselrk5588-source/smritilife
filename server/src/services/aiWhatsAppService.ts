@@ -724,18 +724,22 @@ Possible actions:
      * "I love you message daw rasel k" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love you", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }
      * "Bou k message daw i love you" -> action: "create_reminder", data: { "recipientNames": ["Bou"], "customMessage": "i love you", "sendNow": true, "title": "মেসেজ পাঠানো (Bou)" }
      * "akta message daw roni,bou k j kal amra ghurte jabo" -> action: "create_reminder", data: { "recipientNames": ["roni", "bou"], "customMessage": "kal amra ghurte jabo", "sendNow": true }
-     * "sobai k message daw kal meeting" -> action: "create_reminder", data: { "broadcastAll": true, "customMessage": "kal meeting", "sendNow": true }
-   Fields in "data":
-   - "title": string
-   - "recipientNames"?: string[] (e.g. ["রনি", "Bou"] if sent to specific contacts from contact list)
-   - "recipientName"?: string (single recipient name, e.g. "রনি")
-   - "recipientPhone"?: string (single phone number if mentioned)
-   - "recipientPhones"?: string[] (array of numbers if multiple numbers mentioned)
-   - "broadcastAll"?: boolean (true if user asks to send to everyone/all contacts: "সবাইকে মেসেজ দাও", "sobaike message dao", "send to all")
-   - "customMessage"?: string (The actual message to be sent to them, e.g. "kal amra ghurte jabo")
-   - "date": string (YYYY-MM-DD)
-   - "time": string (HH:mm)
-   - "sendNow"?: boolean (true if user wants it sent immediately or didn't specify a future hour/minute)
+    - Recurring Reminders (Monthly, Weekly, Daily):
+      * "amake poti mas ar 2 tarik a akta reminder diow Boss k report joma dite hobe" বা "প্রতি মাসের ২ তারিখে বসকে রিপোর্ট দেওয়ার রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "Boss কে রিপোর্ট জমা দেওয়া", "repeat": "Monthly", "date": "2026-11-02", "time": "10:00" }
+      * "প্রতি মাসের ৫ তারিখে বাসা ভাড়া দেওয়ার রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "বাসা ভাড়া দেওয়া", "repeat": "Monthly", "time": "10:00" }
+      * "প্রতি শুক্রবার দুপুর ১২:৩০ টায় জুমার নামাজের রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "জুমার নামাজ", "repeat": "Weekly", "time": "12:30" }
+    Fields in "data":
+    - "title": string
+    - "recipientNames"?: string[] (e.g. ["রনি", "Bou"] if sent to specific contacts from contact list)
+    - "recipientName"?: string (single recipient name, e.g. "রনি")
+    - "recipientPhone"?: string (single phone number if mentioned)
+    - "recipientPhones"?: string[] (array of numbers if multiple numbers mentioned)
+    - "broadcastAll"?: boolean (true if user asks to send to everyone/all contacts: "সবাইকে মেসেজ দাও", "sobaike message dao", "send to all")
+    - "customMessage"?: string (The actual message to be sent to them, e.g. "kal amra ghurte jabo")
+    - "date": string (YYYY-MM-DD)
+    - "time": string (HH:mm)
+    - "repeat"?: "Once" | "Daily" | "Weekly" | "Monthly" (Set "Monthly" for "প্রতি মাসে", "প্রতি মাসের X তারিখে", "monthly", "poti mas"; set "Daily" for "প্রতিদিন", "daily"; set "Weekly" for "প্রতি সপ্তাহে", "weekly"; default "Once")
+    - "sendNow"?: boolean (true if user wants it sent immediately or didn't specify a future hour/minute)
 
 7. manage_todolist:
    When the user wants to create, view, add items to, or complete items in a To-Do list, Shopping list, or Checklist!

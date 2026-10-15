@@ -1159,7 +1159,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         if (buttonId.startsWith('rem_done_')) {
           const remId = buttonId.replace('rem_done_', '');
           cancelAlarmRinger(remId);
-          const reminder = await Reminder.findByIdAndUpdate(remId, { status: 'Completed' }, { new: true });
+          const reminder = await Reminder.findById(remId);
+          if (reminder && reminder.repeat && reminder.repeat !== 'Once') {
+            await Reminder.findByIdAndUpdate(remId, { status: 'Pending' });
+          } else {
+            await Reminder.findByIdAndUpdate(remId, { status: 'Completed' });
+          }
           userReminderState.delete(user._id.toString());
           const title = reminder?.title || 'কাজটি';
           const salutation = user.honorific ? ` ${user.honorific}` : '';
@@ -1363,7 +1368,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
         if (activeState && isYesIntent) {
           cancelAlarmRinger(activeState.reminderId);
-          await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Completed' });
+          const activeRem = await Reminder.findById(activeState.reminderId);
+          if (activeRem && activeRem.repeat && activeRem.repeat !== 'Once') {
+            await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Pending' });
+          } else {
+            await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Completed' });
+          }
           userReminderState.delete(user._id.toString());
           const isSehri = /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i.test(activeState.title);
           if (isSehri) {
@@ -2176,16 +2186,22 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                                    /ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|নাপা|গ্যাস্ট্রিক|প্যারাসিটামল|প্রেসার|ডায়াবেটিস/i.test(customMsg || '') ||
                                    /ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|নাপা|গ্যাস্ট্রিক|প্যারাসিটামল|প্রেসার|ডায়াবেটিস/i.test(cleanText);
 
-                const isDaily = isMedicine || 
+                const isMonthly = /প্রতি\s*মাসের?|প্রতিমাস|মাসিক|monthly|every\s*month|poti\s*mas|proti\s*mas|poti\s*mash|proti\s*mash/i.test(cleanText) ||
+                                  aiResponse.data.repeat === 'Monthly';
+
+                const isWeekly = /প্রতি\s*সপ্তাহ|সাপ্তাহিক|weekly|every\s*week|protisoptaho|proti\s*shoptaho/i.test(cleanText) ||
+                                 aiResponse.data.repeat === 'Weekly';
+
+                const isDaily = (!isMonthly && !isWeekly) && (isMedicine || 
                                 /প্রতিদিন|দৈনিক|রোজ|রোজই|daily|everyday|every\s*day|protidin|potidin|roj|sob\s*din|shob\s*din/i.test(cleanText) ||
-                                aiResponse.data.repeat === 'Daily';
+                                aiResponse.data.repeat === 'Daily');
 
                 const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(cleanTitle) ||
                                 /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(cleanText);
 
                 const isWakeup = isSehri || aiResponse.data.category === 'wakeup' || aiResponse.data.category === 'alarm' || /ঘুম|ঘুমের|ঘুমিয়ে|ঘুমাবো|ঘুমাব|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ডাকা|ডেকে দিও|ডেকে দাও|ডাকবা|উঠাবা|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(cleanTitle) || /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|ডেকে|ঘুম ভাঙা/i.test(cleanText);
                 const finalCategory = isMedicine ? 'medicine' : (isWakeup ? 'wakeup' : (aiResponse.data.category || 'General'));
-                const finalRepeat = isDaily ? 'Daily' : (aiResponse.data.repeat || 'Once');
+                const finalRepeat = isMonthly ? 'Monthly' : (isWeekly ? 'Weekly' : (isDaily ? 'Daily' : (aiResponse.data.repeat || 'Once')));
 
                 let finalTitle = cleanTitle;
                 if (isSehri && (!finalTitle || /^(সেহরি|সাহরি|রমজান|romjan|sahari|sehri)$/i.test(finalTitle.trim()) || finalTitle.length < 5)) {
@@ -2198,11 +2214,41 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   formattedTime = '04:00 AM';
                 }
 
+                // Calculate accurate target date for monthly recurring reminders
+                let calculatedDate = reminderDate;
+                if (isMonthly) {
+                  const bnToEnMap: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+                  const textNormalized = cleanText.replace(/[০-৯]/g, (m) => bnToEnMap[m] || m);
+                  const dayMatch = textNormalized.match(/(?:প্রতি\s*মাসের?|poti\s*mas(?:[\s_]*ar)?|proti\s*mas(?:[\s_]*er)?)\s*(\d{1,2})\s*(?:তারিখ|তারিখে|tarik|tarikh|date)?/i) ||
+                                   textNormalized.match(/\b(\d{1,2})\s*(?:তারিখ|তারিখে|tarik|tarikh)\b/i);
+
+                  const now = new Date();
+                  const dhakaStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+                  const [curYear, curMonth, curDay] = dhakaStr.split('-').map(Number);
+
+                  let targetDay = dayMatch ? parseInt(dayMatch[1], 10) : (reminderDate.getDate() || 1);
+                  if (targetDay < 1 || targetDay > 31) targetDay = 1;
+
+                  let targetMonth = curMonth - 1; // 0-indexed in JS Date
+                  let targetYear = curYear;
+
+                  // If this month's target day has already passed today, start from next month
+                  if (targetDay < curDay) {
+                    targetMonth += 1;
+                    if (targetMonth > 11) {
+                      targetMonth = 0;
+                      targetYear += 1;
+                    }
+                  }
+
+                  calculatedDate = new Date(Date.UTC(targetYear, targetMonth, targetDay, 0, 0, 0));
+                }
+
                 await Reminder.create({
                   userId: user._id,
                   title: finalTitle,
                   description: customMsg,
-                  date: reminderDate,
+                  date: calculatedDate,
                   time: reminderTime,
                   priority: 'Medium',
                   category: finalCategory,
@@ -2215,10 +2261,24 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 if (isSehri) {
                   const repeatStr = finalRepeat === 'Daily' ? 'প্রতিদিন ' : '';
                   reply = `🌙🔔 আপনার সেহরি ওয়েক-আপ অ্যালার্ম "${finalTitle}" ${repeatStr}ভোর ${formattedTime}-এ সফলভাবে সেট করা হয়েছে! নির্ধারিত সময়ে আপনাকে ঘুম থেকে তোলার জন্য উচ্চশব্দে রিং অ্যালার্ম বাজবে।`;
-                } else if (!reply || reply.includes('সেট করা হয়েছে')) {
+                } else {
                   const icon = isMedicine ? '💊' : (isWakeup ? '⏰🔔' : '⏰');
-                  const repeatStr = finalRepeat === 'Daily' ? 'প্রতিদিন ' : '';
-                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার "${finalTitle}" ${repeatStr}সময় ${formattedTime}-এ সফলভাবে সেট করা হয়েছে! নির্ধারিত সময়ে ঘুম ভাঙানোর জন্য অ্যালার্ম বাজবে।`;
+                  let repeatStr = '';
+                  let dateInfo = '';
+
+                  if (finalRepeat === 'Daily') {
+                    repeatStr = 'প্রতিদিন ';
+                  } else if (finalRepeat === 'Weekly') {
+                    repeatStr = 'প্রতি সপ্তাহে ';
+                  } else if (finalRepeat === 'Monthly') {
+                    const dNum = calculatedDate.getDate();
+                    const dBn = dNum.toString().replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[parseInt(d, 10)]);
+                    repeatStr = `প্রতি মাসের ${dBn} তারিখে `;
+                    const firstDateBn = calculatedDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+                    dateInfo = `\n📅 *প্রথম রিমাইন্ডার:* ${firstDateBn}`;
+                  }
+
+                  reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার *"${finalTitle}"* ${repeatStr}সময় *${formattedTime}*-এ সফলভাবে সেট করা হয়েছে!${dateInfo}\n\n💡 স্মৃতি প্রতি মাসের নির্ধারিত তারিখে স্বয়ংক্রিয়ভাবে আপনাকে মনে করিয়ে দেবে।`;
                 }
 
                 await sendMetaWhatsAppMessage(fromNumber, reply);

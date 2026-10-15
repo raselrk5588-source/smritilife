@@ -249,15 +249,37 @@ export const startReminderScheduler = () => {
             }
           }
 
-          // If recurring (Daily or medicine), advance date to tomorrow and set status back to Pending
-          if (reminder.repeat === 'Daily' || reminder.category === 'medicine') {
+          // Handle recurring reminders (Daily, Weekly, Monthly, Yearly)
+          if (reminder.repeat && reminder.repeat !== 'Once') {
+            const nextDate = new Date(reminder.date || new Date());
+
+            if (reminder.repeat === 'Daily' || reminder.category === 'medicine') {
+              nextDate.setDate(nextDate.getDate() + 1);
+            } else if (reminder.repeat === 'Weekly') {
+              nextDate.setDate(nextDate.getDate() + 7);
+            } else if (reminder.repeat === 'Monthly') {
+              const currentDay = nextDate.getDate();
+              nextDate.setMonth(nextDate.getMonth() + 1);
+              // Handle months with fewer days (e.g. 31st to 30th/28th)
+              if (nextDate.getDate() !== currentDay) {
+                nextDate.setDate(0);
+              }
+            } else if (reminder.repeat === 'Yearly') {
+              nextDate.setFullYear(nextDate.getFullYear() + 1);
+            }
+
+            await Reminder.findByIdAndUpdate(reminder._id, {
+              date: nextDate,
+              status: 'Pending'
+            });
+            console.log(`🔄 [ReminderScheduler] Recurring (${reminder.repeat}) reminder "${reminder.title}" advanced to: ${nextDate.toISOString().split('T')[0]}`);
+          } else if (reminder.category === 'medicine') {
             const nextDate = new Date(reminder.date || new Date());
             nextDate.setDate(nextDate.getDate() + 1);
             await Reminder.findByIdAndUpdate(reminder._id, {
               date: nextDate,
               status: 'Pending'
             });
-            console.log(`🔄 [ReminderScheduler] Recurring reminder "${reminder.title}" advanced to next day: ${nextDate.toISOString().split('T')[0]}`);
           }
         }
       }
