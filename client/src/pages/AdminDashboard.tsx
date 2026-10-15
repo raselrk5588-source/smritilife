@@ -116,8 +116,8 @@ export default function AdminDashboard() {
     openaiApiKey: '', geminiApiKey: '', whatsappApiToken: '', twilioAccountSid: '', twilioPhoneNumber: '', smsGatewayKey: '', freeUserReminderLimit: 5, proUserReminderLimit: 100,
     bdappsApiKey: '', bdappsApiSecret: '', bdappsRedirectUrl: '', subscriptionFee: 190,
     isMaintenanceMode: false,
-    maintenanceTitle: 'সিস্টেম আপগ্রেড ও রক্ষণাবেক্ষণ চলছে',
-    maintenanceMessage: 'স্মৃতিকে আরও দ্রুত ও উন্নত করতে বর্তমানে সিস্টেম আপগ্রেডের কাজ চলছে। খুব শীঘ্রই আমরা আবার পুরোদমে ফিরে আসছি। আপনার সাময়িক অসুবিধার জন্য আন্তরিকভাবে দুঃখিত।',
+    maintenanceTitle: 'SmritiLive • সিস্টেম আপডেট চলছে',
+    maintenanceMessage: 'SmritiLive-কে আরও দ্রুত ও উন্নত করতে বর্তমানে সিস্টেম আপগ্রেডের কাজ চলছে। খুব শীঘ্রই আমরা আবার পুরোদমে ফিরে আসছি। আপনার সাময়িক অসুবিধার জন্য আন্তরিকভাবে দুঃখিত।',
     maintenanceEstimatedTime: '১৫-২০ মিনিট'
   });
   const [errorLogs, setErrorLogs] = useState<ErrorLogData[]>([]);

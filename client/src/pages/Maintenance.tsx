@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wrench, Clock, RefreshCw, MessageCircle, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Wrench, Clock, RefreshCw, MessageCircle } from 'lucide-react';
 
 interface MaintenanceProps {
   title?: string;
@@ -10,8 +9,8 @@ interface MaintenanceProps {
 }
 
 export default function Maintenance({
-  title = 'স্মৃতি • সিস্টেম আপডেট চলছে',
-  message = 'স্মৃতিকে আরও দ্রুত ও উন্নত করার কাজ চলছে। কিছুক্ষণের মধ্যেই সিস্টেমটি পুরোপুরি সচল হবে।',
+  title = 'SmritiLive • সিস্টেম আপডেট চলছে',
+  message = 'SmritiLive-কে আরও দ্রুত ও উন্নত করার কাজ চলছে। কিছুক্ষণের মধ্যেই সিস্টেমটি পুরোপুরি সচল হবে।',
   estimatedTime = '১৫ - ২০ মিনিট',
   onRefresh
 }: MaintenanceProps) {
@@ -111,16 +110,9 @@ export default function Maintenance({
         </div>
       </div>
 
-      {/* Footer / Admin bypass link */}
-      <div className="mt-5 max-w-[390px] w-full flex items-center justify-between text-[11px] text-slate-500 px-2">
-        <span>© 2026 স্মৃতি (Smriti)</span>
-        <Link
-          to="/admin/login"
-          className="text-slate-400 hover:text-emerald-400 transition flex items-center gap-1 font-medium"
-        >
-          <span>এডমিন লগইন</span>
-          <ArrowRight className="w-3 h-3" />
-        </Link>
+      {/* Footer */}
+      <div className="mt-5 max-w-[390px] w-full flex items-center justify-center text-[11px] text-slate-500 px-2 text-center">
+        <span>© 2026 SmritiLive • সর্বস্বত্ব সংরক্ষিত</span>
       </div>
     </div>
   );
