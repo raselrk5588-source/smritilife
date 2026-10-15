@@ -123,10 +123,10 @@ export const loginWithOtp = async (req: Request, res: Response) => {
     let user = await User.findOne({ mobile: cleanMobile });
 
     if (!user) {
-      if (cleanMobile === '01734042131') {
+      if (cleanMobile === '01734042131' || cleanMobile === '01747718615') {
         user = new User({
-          name: 'Roni Sikder',
-          email: 'ronisikder49@gmail.com',
+          name: cleanMobile === '01734042131' ? 'Roni Sikder' : 'Demo Tester',
+          email: cleanMobile === '01734042131' ? 'ronisikder49@gmail.com' : `${cleanMobile}@smritilife.com`,
           mobile: cleanMobile,
           whatsapp: cleanMobile,
           isSubscribed: true,
@@ -144,8 +144,9 @@ export const loginWithOtp = async (req: Request, res: Response) => {
       }
       await user.save();
     } else {
-      if (cleanMobile === '01734042131' && !user.isSubscribed) {
+      if ((cleanMobile === '01734042131' || cleanMobile === '01747718615') && !user.isSubscribed) {
         user.isSubscribed = true;
+        await user.save();
       }
     }
 
