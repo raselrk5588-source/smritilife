@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import SystemSettings from '../models/SystemSettings';
 import AITrainingRule from '../models/AITrainingRule';
@@ -874,6 +875,7 @@ Only return the JSON. No markdown formatting like \`\`\`json.
 
 // In-memory cache for dynamic AI training rules (2-minute TTL to prevent DB hits on every message)
 let cachedRulesPrompt: { prompt: string; expiresAt: number } | null = null;
+let activeFastModel = 'gemini-3.5-flash-lite';
 
 export const invalidateRulesCache = () => {
   cachedRulesPrompt = null;
@@ -917,6 +919,86 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
+    // FAST-PATH 2: Instant local parsing for clear, unambiguous actions (<5ms response)
+    const relMins = matchRelativeDuration(cleanMsg);
+
+    // 2A: Wake-up / Alarm relative duration (e.g. "5 mnt por amake uthi diow", "20 mnt por deke diow")
+    const isWakeupIntent = /ঘুম|deke|daki|utha|uthi|uthe|tule|wake|alarm|অ্যালার্ম|ডেকে|তুলে|উঠা|উঠিয়ে/i.test(cleanMsg);
+    if (relMins !== null && isWakeupIntent) {
+      const parsedTime = parseBengaliTime(cleanMsg);
+      const targetDate = parseRelativeDate(cleanMsg, parsedTime);
+      const dStr = targetDate.toISOString().split('T')[0];
+      return {
+        action: 'create_reminder',
+        data: {
+          title: 'ঘুম থেকে ওঠা (ওয়েক-আপ অ্যালার্ম)',
+          category: 'wakeup',
+          isAlarm: true,
+          relativeMinutes: relMins,
+          date: dStr,
+          time: parsedTime
+        },
+        replyText: `⏰ ঠিক আছে${salutationPrefix}! ঠিক ${relMins} মিনিট পর (${formatTime12Hour(parsedTime)}-এ) আপনাকে ঘুম থেকে ডাকার জন্য অ্যালার্ম বাজবে।`
+      };
+    }
+
+    // 2B: Relative task reminder (e.g. "20 minute por reminder dao bazar jete hobe", "১০ মিনিট পর ওষুধ খাওয়ার রিমাইন্ডার দাও")
+    if (relMins !== null && /(?:reminder|রিমাইন্ডার|মনে\s*করিয়ে)/i.test(cleanMsg)) {
+      const parsedTime = parseBengaliTime(cleanMsg);
+      const targetDate = parseRelativeDate(cleanMsg, parsedTime);
+      const dStr = targetDate.toISOString().split('T')[0];
+
+      let taskTitle = cleanMsg
+        .replace(/(\d+|[০-৯]+)\s*(?:minute|minutes|min|mins|mnt|mnts|mint|mints|m|মিনিট(?:ের)?|মি\.)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, '')
+        .replace(/(?:adha|adho|আধা|অর্ধেক|der|দেড়|দেড়|\d+|[০-৯]+)\s*(?:ghont[ao]|ghant[ao]|hour|hours|hr|hrs|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after)?/gi, '')
+        .replace(/(?:amake|আমাকে|akta|একটা|reminder|রিমাইন্ডার|diow|dio|dao|দাও|দিও|dite|দিতে|hobe|হবে|mone\s*koriye|মনে\s*করিয়ে|koro|করো|set|সেট)/gi, '')
+        .trim();
+      if (!taskTitle || taskTitle.length < 2) taskTitle = 'জরুরি কাজ';
+
+      return {
+        action: 'create_reminder',
+        data: {
+          title: taskTitle,
+          category: 'General',
+          relativeMinutes: relMins,
+          date: dStr,
+          time: parsedTime
+        },
+        replyText: `⏰ ঠিক আছে${salutationPrefix}! ${relMins} মিনিট পর (${formatTime12Hour(parsedTime)}-এ) আপনার "${taskTitle}" রিমাইন্ডারটি সেট করা হয়েছে।`
+      };
+    }
+
+    // 2C: Instant list reminders
+    if (/^(?:\/reminders|list\s*reminders)\b/i.test(cleanMsg) ||
+        /(?:রিমাইন্ডার\s*লিস্ট|রিমাইন্ডারগুলো|সব\s*রিমাইন্ডার|রিমাইন্ডার\s*দেখাও|রিমাইন্ডার\s*দেখান)/i.test(cleanMsg) ||
+        /(?:কি\s*কি|সব|সকল|list)?\s*(?:রিমাইন্ডার|reminder)\s*(?:আছে|দেখাও|দেখান|লিস্ট)/i.test(cleanMsg)) {
+      return { action: 'list_reminders' };
+    }
+
+    // 2D: Instant delete all reminders
+    if (/(?:সব|সকল|all)\s*(?:রিমাইন্ডার|reminder)\s*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|delete|clear)/i.test(cleanMsg)) {
+      return { action: 'delete_all_reminders' };
+    }
+
+    // 2E: Instant list notes
+    if (/^(?:\/notes|list\s*notes)\b/i.test(cleanMsg) ||
+        /(?:সব\s*নোট|নোটগুলো|নোটগুলা|নোট\s*লিস্ট)/i.test(cleanMsg) ||
+        /(?:সব|সকল|list)?\s*(?:নোট|note)\s*(?:দেখাও|দেখান|আছে|লিস্ট)/i.test(cleanMsg)) {
+      return { action: 'get_note', data: { searchQuery: 'সব' } };
+    }
+
+    // 2F: Common specific note queries
+    if (/(?:রক্তের\s*গ্রুপ|blood\s*group)/i.test(cleanMsg)) {
+      return { action: 'get_note', data: { searchQuery: 'রক্তের গ্রুপ' } };
+    }
+    if (/(?:ওয়াইফাই|wifi)\s*(?:পাসওয়ার্ড|password)/i.test(cleanMsg)) {
+      return { action: 'get_note', data: { searchQuery: 'ওয়াইফাই পাসওয়ার্ড' } };
+    }
+    if (/(?:বাসার\s*ঠিকানা|অফিসের\s*ঠিকানা|home\s*address|office\s*address)/i.test(cleanMsg)) {
+      const q = /অফিস|office/i.test(cleanMsg) ? 'অফিসের ঠিকানা' : 'বাসার ঠিকানা';
+      return { action: 'get_note', data: { searchQuery: q } };
+    }
+
     // Fetch settings to get API key
     let apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -941,8 +1023,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     try {
       if (cachedRulesPrompt && cachedRulesPrompt.expiresAt > Date.now()) {
         dynamicRulesPrompt = cachedRulesPrompt.prompt;
-      } else {
-        const activeRules = await AITrainingRule.find({ isActive: true }).sort({ createdAt: -1 }).limit(25);
+      } else if (mongoose.connection && mongoose.connection.readyState === 1) {
+        const activeRules = await AITrainingRule.find({ isActive: true }).sort({ createdAt: -1 }).limit(25).maxTimeMS(1000);
         if (activeRules.length > 0) {
           const rulesList = activeRules.map((r, i) => {
             let text = `${i + 1}. ${r.rule}`;
@@ -952,7 +1034,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
           }).join('\n');
           dynamicRulesPrompt = `\n\n### ADMIN CUSTOM TRAINING RULES (MANDATORY TO FOLLOW):\n${rulesList}\n`;
         }
-        cachedRulesPrompt = { prompt: dynamicRulesPrompt, expiresAt: Date.now() + 2 * 60 * 1000 };
+        cachedRulesPrompt = { prompt: dynamicRulesPrompt, expiresAt: Date.now() + 10 * 60 * 1000 };
       }
     } catch (dbErr) {
       console.warn("Could not load dynamic AI training rules:", dbErr);
@@ -991,13 +1073,16 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n${liveClockPrompt}\n${dynamicRulesPrompt}\n${honorificPrompt}`;
 
-    // Candidate models: Start with the lowest-latency, highest-stability models (~1.4s response)
-    const candidateModels = [
-      'gemini-3.1-flash-lite',
+    // Candidate models: Adaptive ordering with fastest active model first
+    const baseCandidateModels = [
       'gemini-3.5-flash-lite',
-      'gemini-flash-lite-latest',
-      'gemini-flash-latest',
-      'gemini-3.5-flash'
+      'gemini-3.5-flash',
+      'gemini-3-flash-preview',
+      'gemini-2.5-flash'
+    ];
+    const candidateModels = [
+      activeFastModel,
+      ...baseCandidateModels.filter((m) => m !== activeFastModel)
     ];
     let parsedResponse: any = null;
 
@@ -1010,11 +1095,16 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       try {
         const model = genAI.getGenerativeModel({ 
           model: modelName,
-          systemInstruction: fullSystemInstruction
+          systemInstruction: fullSystemInstruction,
+          generationConfig: {
+            maxOutputTokens: 1024,
+            temperature: 0.1
+          }
         });
-        const chat = model.startChat({ history });
+        const trimmedHistory = history.length > 4 ? history.slice(-4) : history;
+        const chat = model.startChat({ history: trimmedHistory });
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 5000)
+          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 10000)
         );
         const result: any = await Promise.race([
           chat.sendMessage(userMessage),
@@ -1026,9 +1116,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
         history.push({ role: 'user', parts: [{ text: userMessage }] });
         history.push({ role: 'model', parts: [{ text: cleanJson }] });
-        if (history.length > 10) {
-          chatHistories.set(whatsappNumber, history.slice(history.length - 10));
+        if (history.length > 6) {
+          chatHistories.set(whatsappNumber, history.slice(-6));
         }
+        activeFastModel = modelName; // Save successful fast model for future requests
         break; // Successfully got response
       } catch (modelErr: any) {
         console.warn(`Gemini Model ${modelName} failed:`, modelErr.message || modelErr);
@@ -1623,11 +1714,11 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const candidateModels = [
-      'gemini-3.1-flash-lite',
-      'gemini-3.5-flash-lite',
-      'gemini-flash-lite-latest',
-      'gemini-flash-latest',
-      'gemini-3.5-flash'
+      activeFastModel,
+      'gemini-3.5-flash',
+      'gemini-3-flash-preview',
+      'gemini-2.5-flash',
+      'gemini-3.5-flash-lite'
     ];
 
     const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
@@ -1656,10 +1747,14 @@ Remember to return ONLY the raw JSON object.`;
       try {
         const model = genAI.getGenerativeModel({
           model: modelName,
-          systemInstruction: fullSystemInstruction
+          systemInstruction: fullSystemInstruction,
+          generationConfig: {
+            maxOutputTokens: 350,
+            temperature: 0.1
+          }
         });
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 6000)
+          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 7000)
         );
         const result: any = await Promise.race([
           model.generateContent([prompt, audioPart]),
