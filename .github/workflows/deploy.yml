@@ -59,17 +59,20 @@ jobs:
             mkdir -p /var/www/roni/smritilife.com/static
             cp client/public/maintenance.html /var/www/roni/smritilife.com/static/maintenance.html || true
 
-            # Build Docker images first while old containers are still running (drops downtime from 3 mins to 2 secs)
-            docker-compose build
-            docker-compose up -d --remove-orphans
+            # Cleanly restart all docker containers with fresh build
+            docker-compose down --remove-orphans || true
+            docker-compose up -d --build --remove-orphans
             
+            # Print running containers in deployment log
+            docker ps
+
             echo "Configuring Nginx Reverse Proxy with Custom Maintenance Fallback..."
             sudo bash -c 'cat > /etc/nginx/sites-available/smritilife.com << "EOF"
             server {
                 listen 80;
                 server_name smritilife.com www.smritilife.com;
 
-                # Custom branded maintenance page for 502/503/504 errors
+                # Custom branded maintenance page for 502/503/504 errors on website
                 error_page 502 503 504 /maintenance.html;
                 location = /maintenance.html {
                     root /var/www/roni/smritilife.com/static;
@@ -93,7 +96,6 @@ jobs:
                     proxy_set_header Connection "upgrade";
                     proxy_set_header Host $host;
                     proxy_cache_bypass $http_upgrade;
-                    proxy_intercept_errors on;
                 }
             }
             EOF'
