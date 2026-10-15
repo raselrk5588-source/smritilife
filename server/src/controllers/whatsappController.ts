@@ -9,6 +9,8 @@ import Note from '../models/Note';
 import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
 import UserDocument from '../models/UserDocument';
+import SystemSettings from '../models/SystemSettings';
+import { getMaintenanceStatus, updateMaintenanceCache } from '../services/maintenanceService';
 import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, invalidateRulesCache } from '../services/aiWhatsAppService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
@@ -636,6 +638,24 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         if (!fromNumber || (!userMessage && !isAudio && !isMediaDoc && !buttonId && message.type !== 'contacts' && message.type !== 'location')) return;
+
+        // Check Maintenance Mode
+        const maintStatus = await getMaintenanceStatus();
+        if (maintStatus.isMaintenanceMode) {
+          const rawTrim = (userMessage || '').trim();
+          if (/^\/maint(?:enance)?\s+off$/i.test(rawTrim)) {
+            updateMaintenanceCache({ isMaintenanceMode: false });
+            await SystemSettings.updateOne({}, { $set: { isMaintenanceMode: false } });
+            await sendMetaWhatsAppMessage(fromNumber, '✅ মেইনটেন্যান্স মোড সফলভাবে বন্ধ করা হয়েছে। স্মৃতি এখন সবার জন্য পুরোদমে লাইভ!');
+            return;
+          }
+
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🛠️ *${maintStatus.maintenanceTitle}*\n\n${maintStatus.maintenanceMessage}\n\n⏳ *আনুমানিক সময়:* ${maintStatus.maintenanceEstimatedTime}\n\nসিস্টেম সচল হওয়া মাত্রই আপনি পুনরায় সব ফিচার স্বাভাবিকভাবে ব্যবহার করতে পারবেন। আপনার সহযোগিতার জন্য ধন্যবাদ! 🙏`
+          );
+          return;
+        }
 
         // Show native WhatsApp "typing..." status & read receipt while AI processes the request
         if (message.id) {

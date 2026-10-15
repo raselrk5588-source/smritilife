@@ -11,6 +11,7 @@ import Admin from '../models/Admin';
 import SystemSettings from '../models/SystemSettings';
 import ErrorLog from '../models/ErrorLog';
 import AITrainingRule from '../models/AITrainingRule';
+import { updateMaintenanceCache } from '../services/maintenanceService';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
@@ -208,6 +209,16 @@ export const updateSettings = async (req: Request, res: Response) => {
       Object.assign(settings, req.body);
       await settings.save();
     }
+    
+    // Immediately update in-memory maintenance cache
+    updateMaintenanceCache({
+      isMaintenanceMode: Boolean(settings.isMaintenanceMode),
+      maintenanceTitle: settings.maintenanceTitle,
+      maintenanceMessage: settings.maintenanceMessage,
+      maintenanceEstimatedTime: settings.maintenanceEstimatedTime,
+      maintenanceAllowedIps: settings.maintenanceAllowedIps
+    });
+
     res.json({ success: true, settings });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

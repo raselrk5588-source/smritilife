@@ -24,13 +24,15 @@ import Ramadan from './pages/Ramadan';
 import Expenses from './pages/Expenses';
 import Debts from './pages/Debts';
 import Documents from './pages/Documents';
+import MaintenanceGuard from './components/MaintenanceGuard';
 
 function App() {
   return (
     <SettingsProvider>
       <Toaster position="top-center" toastOptions={{ style: { fontSize: '12px', fontWeight: 'bold' } }} />
       <Router>
-        <Routes>
+        <MaintenanceGuard>
+          <Routes>
         {/* Public Marketing Page */}
         <Route path="/" element={<Landing />} />
 
@@ -72,6 +74,7 @@ function App() {
           <Route index element={<AdminDashboard />} />
         </Route>
       </Routes>
+      </MaintenanceGuard>
     </Router>
     </SettingsProvider>
   );

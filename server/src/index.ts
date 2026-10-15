@@ -57,8 +57,14 @@ startReminderScheduler();
 
 import { getPublicWish } from './controllers/wishController';
 import { protect } from './middleware/authMiddleware';
+import { maintenanceMiddleware } from './middleware/maintenanceMiddleware';
+import maintenanceRoutes from './routes/maintenanceRoutes';
+
+// Global Maintenance Mode check
+app.use(maintenanceMiddleware);
 
 // Routes
+app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/users', userRoutes);
 app.get('/api/wishes/public/:id', getPublicWish);
 app.use('/api/notes', protect, noteRoutes);

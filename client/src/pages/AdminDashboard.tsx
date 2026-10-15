@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle, Brain } from 'lucide-react';
+import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle, Brain, Wrench, Power, ExternalLink, RefreshCw } from 'lucide-react';
 import { fetchWithAuth } from '../utils/api';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
@@ -53,6 +53,10 @@ interface SystemSettings {
   bdappsApiSecret?: string;
   bdappsRedirectUrl?: string;
   subscriptionFee?: number;
+  isMaintenanceMode?: boolean;
+  maintenanceTitle?: string;
+  maintenanceMessage?: string;
+  maintenanceEstimatedTime?: string;
 }
 
 interface AdminReminder {
@@ -110,7 +114,11 @@ export default function AdminDashboard() {
   const [wishes, setWishes] = useState<AdminWish[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({
     openaiApiKey: '', geminiApiKey: '', whatsappApiToken: '', twilioAccountSid: '', twilioPhoneNumber: '', smsGatewayKey: '', freeUserReminderLimit: 5, proUserReminderLimit: 100,
-    bdappsApiKey: '', bdappsApiSecret: '', bdappsRedirectUrl: '', subscriptionFee: 190
+    bdappsApiKey: '', bdappsApiSecret: '', bdappsRedirectUrl: '', subscriptionFee: 190,
+    isMaintenanceMode: false,
+    maintenanceTitle: 'সিস্টেম আপগ্রেড ও রক্ষণাবেক্ষণ চলছে',
+    maintenanceMessage: 'স্মৃতিকে আরও দ্রুত ও উন্নত করতে বর্তমানে সিস্টেম আপগ্রেডের কাজ চলছে। খুব শীঘ্রই আমরা আবার পুরোদমে ফিরে আসছি। আপনার সাময়িক অসুবিধার জন্য আন্তরিকভাবে দুঃখিত।',
+    maintenanceEstimatedTime: '১৫-২০ মিনিট'
   });
   const [errorLogs, setErrorLogs] = useState<ErrorLogData[]>([]);
   const [trainingRules, setTrainingRules] = useState<AITrainingRuleData[]>([]);
@@ -325,6 +333,34 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleToggleMaintenance = async (turnOn: boolean) => {
+    try {
+      const updated = {
+        ...settings,
+        isMaintenanceMode: turnOn
+      };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        },
+        body: JSON.stringify(updated)
+      });
+      const result = await res.json();
+      if (result.success) {
+        setSettings(updated);
+        if (turnOn) {
+          toast.success('⚠️ মেইনটেন্যান্স মোড চালু করা হয়েছে। সাধারণ ইউজাররা এখন Under Maintenance স্ক্রিন দেখতে পাবে।', { duration: 5000 });
+        } else {
+          toast.success('✅ মেইনটেন্যান্স মোড বন্ধ করা হয়েছে। সিস্টেম এখন সাধারণ ব্যবহারকারীদের জন্য পুরোদমে লাইভ!', { duration: 5000 });
+        }
+      }
+    } catch (e) {
+      toast.error('মেইনটেন্যান্স স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে');
+    }
+  };
+
   const handleDeleteReminder = async (id: string) => {
     if (!window.confirm('আপনি কি নিশ্চিত যে এই রিমাইন্ডারটি মুছতে চান?')) return;
     try {
@@ -528,10 +564,15 @@ export default function AdminDashboard() {
 
           <button 
             onClick={() => setActiveTab('settings')}
-            className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
           >
-            <Settings className="w-5 h-5" />
-            <span>সিস্টেম সেটিংস</span>
+            <div className="flex items-center space-x-3">
+              <Settings className="w-5 h-5" />
+              <span>সিস্টেম সেটিংস</span>
+            </div>
+            {settings.isMaintenanceMode && (
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 animate-pulse">ON</span>
+            )}
           </button>
 
           <button 
@@ -577,6 +618,39 @@ export default function AdminDashboard() {
       <main className="flex-1 p-6 lg:p-10 h-screen overflow-y-auto">
         <div className="max-w-6xl mx-auto space-y-8 pb-20">
           
+          {/* Global Maintenance Alert Banner */}
+          {settings.isMaintenanceMode && (
+            <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-red-500/15 border-2 border-amber-500/40 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl shadow-amber-500/5">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/30">
+                  <Wrench className="w-6 h-6 animate-spin" style={{ animationDuration: '10s' }} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-black text-amber-950 text-base sm:text-lg">সিস্টেম মেইনটেন্যান্স মোডে সক্রিয়!</span>
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-500 text-white tracking-wider">ACTIVE</span>
+                  </div>
+                  <p className="text-xs text-amber-900/80 mt-0.5 font-medium">সাধারণ ইউজাররা এখন Under Maintenance স্ক্রিন দেখতে পাচ্ছেন (কোনো 502 এরর নেই)। আপনি এডমিন প্যানেল থেকে সমস্ত কাজ করতে পারছেন।</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+                <button
+                  onClick={() => handleToggleMaintenance(false)}
+                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-5 py-3 rounded-xl shadow-md transition active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  মেইনটেন্যান্স বন্ধ করুন (Go Live)
+                </button>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className="w-full sm:w-auto bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs sm:text-sm px-4 py-3 rounded-xl transition"
+                >
+                  কনফিগার
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'dashboard' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -1171,6 +1245,108 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="space-y-8">
+                  {/* Maintenance Mode Control Card */}
+                  <div className={`p-6 sm:p-7 rounded-3xl border-2 transition-all ${settings.isMaintenanceMode ? 'bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/15 border-amber-400 shadow-xl shadow-amber-500/10' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-200/80">
+                      <div className="flex items-center gap-3.5">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${settings.isMaintenanceMode ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'bg-slate-200 text-slate-700'}`}>
+                          <Wrench className={`w-6 h-6 ${settings.isMaintenanceMode ? 'animate-spin' : ''}`} style={{ animationDuration: '10s' }} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2.5">
+                            <h3 className="text-lg font-black text-slate-800">সিস্টেম মেইনটেন্যান্স কন্ট্রোল (Maintenance Mode)</h3>
+                            <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${settings.isMaintenanceMode ? 'bg-amber-500 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                              {settings.isMaintenanceMode ? 'MAINTENANCE ON' : 'LIVE (NORMAL)'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                            {settings.isMaintenanceMode 
+                              ? '⚠️ মেইনটেন্যান্স চালু আছে। সাধারণ ইউজাররা Under Working স্ক্রিন দেখতে পাচ্ছে।'
+                              : 'অ্যাপ্লিকেশন আপডেট বা ডেপ্লয়মেন্টের সময় এটি অন রাখলে ইউজাররা 502 এরর না পেয়ে সুন্দর মেইনটেন্যান্স নোটিশ দেখতে পাবে।'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMaintenance(!settings.isMaintenanceMode)}
+                          className={`px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-md transition active:scale-95 ${
+                            settings.isMaintenanceMode
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                              : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                          }`}
+                        >
+                          <Power className="w-4 h-4" />
+                          {settings.isMaintenanceMode ? 'মেইনটেন্যান্স বন্ধ করুন (Go Live)' : 'মেইনটেন্যান্স মোড চালু করুন'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 mb-1.5 block">মেইনটেন্যান্স শিরোনাম (Title)</label>
+                        <input
+                          type="text"
+                          value={settings.maintenanceTitle || ''}
+                          onChange={(e) => setSettings({ ...settings, maintenanceTitle: e.target.value })}
+                          placeholder="যেমন: সিস্টেম আপগ্রেড ও রক্ষণাবেক্ষণ চলছে"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#0A7756]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 mb-1.5 block">ব্যবহারকারীদের জন্য বার্তা (Notice Message)</label>
+                        <textarea
+                          rows={2}
+                          value={settings.maintenanceMessage || ''}
+                          onChange={(e) => setSettings({ ...settings, maintenanceMessage: e.target.value })}
+                          placeholder="ইউজাররা যে বার্তাটি স্ক্রিনে দেখতে পাবে..."
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#0A7756]"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                        <div>
+                          <label className="text-sm font-bold text-slate-700 mb-1.5 block">আনুমানিক সময় (Estimated Duration)</label>
+                          <input
+                            type="text"
+                            value={settings.maintenanceEstimatedTime || ''}
+                            onChange={(e) => setSettings({ ...settings, maintenanceEstimatedTime: e.target.value })}
+                            placeholder="যেমন: ১৫ - ২০ মিনিট"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#0A7756]"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-slate-400 mr-1">দ্রুত সেট:</span>
+                          {['১০ মিনিট', '২০ মিনিট', '৩০ মিনিট', '১ ঘণ্টা', '২ ঘণ্টা'].map((t) => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => setSettings({ ...settings, maintenanceEstimatedTime: t })}
+                              className="text-xs font-bold px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-[#0A7756] text-slate-600 hover:text-[#0A7756] transition"
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex justify-between items-center text-xs">
+                        <a
+                          href="/maintenance.html"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#0A7756] hover:underline font-bold flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          মেইনটেন্যান্স স্ক্রিনের প্রিভিউ দেখুন (Preview)
+                        </a>
+                        <span className="text-slate-400">💡 এডমিন অ্যাকাউন্টে কোনো বাধা ছাড়া যে কোনো সময় ড্যাশবোর্ডে ঢোকা যাবে।</span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Limits Section */}
                   <div>
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500"/> ইউজার রিমাইন্ডার লিমিট</h3>
