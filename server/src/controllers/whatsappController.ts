@@ -2963,8 +2963,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             if (isToday) {
               const dhakaDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
-              const todayStart = new Date(`${dhakaDateStr}T00:00:00.000Z`);
-              const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999Z`);
+              const todayStart = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+              const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
               queryFilter.date = { $gte: todayStart, $lte: todayEnd };
             }
 

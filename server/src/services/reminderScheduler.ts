@@ -78,7 +78,7 @@ const sendWhatsAppAlert = async (to: string, message: string) => {
 };
 
 export const startReminderScheduler = () => {
-  console.log('⏰ Starting Smriti Reminder Scheduler (Polling every 30 seconds for Bangladesh time)...');
+  console.log('⏰ Starting Smriti Reminder Scheduler (Clock-aligned to exact :00 minute boundaries)...');
 
   const checkAndDispatchReminders = async () => {
     if (mongoose.connection.readyState !== 1) return;
@@ -97,24 +97,25 @@ export const startReminderScheduler = () => {
         timeZone: 'Asia/Dhaka'
       }); // Format: "YYYY-MM-DD" e.g. "2026-10-11"
 
-      // Today's start and end date for comparison
-      const todayStart = new Date(`${dhakaDateStr}T00:00:00.000Z`);
-      const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999Z`);
+      // Today's start and end date for comparison in Bangladesh Time (UTC+6)
+      const todayStart = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+      const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
 
-      // Find pending reminders due for today with time <= currentTime
+      // Find pending reminders due for today with time <= currentTime and not already dispatched today
       const dueReminders = await Reminder.find({
         status: 'Pending',
         date: { $lte: todayEnd },
-        time: { $lte: dhakaTimeStr }
+        time: { $lte: dhakaTimeStr },
+        lastDispatchedDate: { $ne: dhakaDateStr }
       });
 
       if (dueReminders.length > 0) {
         for (const reminder of dueReminders) {
           const isSelf = !reminder.recipientPhone;
-          // Atomically claim the reminder: For self-reminders, set to 'Snoozed' awaiting Yes/No confirmation
+          // Atomically claim the reminder and lock against duplicate dispatch on the same day
           const claimed = await Reminder.findOneAndUpdate(
-            { _id: reminder._id, status: 'Pending' },
-            { $set: { status: isSelf ? 'Snoozed' : 'Completed' } }
+            { _id: reminder._id, status: 'Pending', lastDispatchedDate: { $ne: dhakaDateStr } },
+            { $set: { status: isSelf ? 'Snoozed' : 'Completed', lastDispatchedDate: dhakaDateStr } }
           );
           if (!claimed) continue;
 
@@ -419,8 +420,8 @@ export const startReminderScheduler = () => {
       const isNightlyWindow = (dhakaHour === 20 && dhakaMinute >= 30) || (dhakaHour === 21 && dhakaMinute <= 30);
       if (!isNightlyWindow) return;
 
-      const todayStart = new Date(`${dhakaDateStr}T00:00:00.000Z`);
-      const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999Z`);
+      const todayStart = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+      const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
 
       const eligibleUsers = await User.find({
         isSubscribed: true,
@@ -653,16 +654,27 @@ export const startReminderScheduler = () => {
   };
 
   // Run on startup
-  setTimeout(checkAndDispatchReminders, 5000);
-  setTimeout(checkAndSendNightlyFollowUp, 15000);
-  setTimeout(checkAndDispatchRamadanAlerts, 10000);
+  setTimeout(checkAndDispatchReminders, 2000);
+  setTimeout(checkAndSendNightlyFollowUp, 10000);
+  setTimeout(checkAndDispatchRamadanAlerts, 3000);
 
-  // Poll every 30 seconds for reminders
-  setInterval(checkAndDispatchReminders, 30000);
+  // Clock-aligned dispatcher: Synchronized strictly to clock boundaries (:00.000, :15.000, :30.000, :45.000)
+  // Guarantees that at the exact minute turnover (e.g. 12:00:00), reminders fire immediately with zero second delay!
+  const scheduleClockAlignedTicks = () => {
+    const now = Date.now();
+    const msUntilNextMark = 15000 - (now % 15000);
+
+    setTimeout(() => {
+      checkAndDispatchReminders();
+      checkAndDispatchRamadanAlerts();
+      scheduleClockAlignedTicks();
+    }, msUntilNextMark);
+  };
+
+  scheduleClockAlignedTicks();
+
   // Check nightly follow-up every 2 minutes
   setInterval(checkAndSendNightlyFollowUp, 120000);
   // Check active alarm ringers every 5 seconds (for rapid 15s rings)
   setInterval(checkAndFireAlarmRingers, 5000);
-  // Check Ramadan Sehri & Iftar alerts every 30 seconds
-  setInterval(checkAndDispatchRamadanAlerts, 30000);
 };

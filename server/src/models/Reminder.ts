@@ -26,6 +26,7 @@ export interface IReminder extends Document {
   mealTiming?: string;
   medicineRoutine?: string;
   medicines?: IMedicineItem[];
+  lastDispatchedDate?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,7 +57,8 @@ const ReminderSchema: Schema = new Schema(
     durationDays: { type: Number },
     mealTiming: { type: String },
     medicineRoutine: { type: String },
-    medicines: [MedicineItemSchema]
+    medicines: [MedicineItemSchema],
+    lastDispatchedDate: { type: String }
   },
   { timestamps: true }
 );
