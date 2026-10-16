@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle, Brain, Wrench, Power, ExternalLink, RefreshCw } from 'lucide-react';
+import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle, Brain, Wrench, Power, ExternalLink, RefreshCw, Menu, X } from 'lucide-react';
 import { fetchWithAuth } from '../utils/api';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
@@ -138,6 +138,13 @@ export default function AdminDashboard() {
 
   const [wishSearchTerm, setWishSearchTerm] = useState('');
   const [wishDateFilter, setWishDateFilter] = useState('');
+
+  // Mobile Drawer State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const handleTabSelect = (tab: any) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
 
   // Template Modal State
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -524,124 +531,170 @@ export default function AdminDashboard() {
   
   if (!data) return <div className="text-red-500 text-center p-10">Failed to load analytics data.</div>;
 
+  const navItems = [
+    { id: 'dashboard', label: 'ড্যাশবোর্ড', icon: LayoutDashboard },
+    { id: 'users', label: 'ইউজার লিস্ট', icon: Users, count: data.totalUsers },
+    { id: 'revenue', label: 'গ্রোথ ও রেভিনিউ', icon: TrendingUp },
+    { id: 'templates', label: 'উইশ টেমপ্লেট', icon: MessageSquare },
+    { id: 'logs', label: 'সিস্টেম লগস', icon: Activity },
+    { id: 'reminders', label: 'রিমাইন্ডার', icon: Bell },
+    { id: 'wishes', label: 'উইশ কার্ড', icon: Star },
+    { id: 'settings', label: 'সিস্টেম সেটিংস', icon: Settings, badge: settings.isMaintenanceMode ? 'ON' : undefined, badgeColor: 'bg-amber-500 text-slate-950 animate-pulse' },
+    { id: 'training', label: 'AI Rules', icon: Brain, count: trainingRules.length, isPurple: true },
+    { id: 'errors', label: 'এরর লগস', icon: AlertCircle, count: errorLogs.length, isRed: true }
+  ];
+
+  const currentTab = navItems.find(item => item.id === activeTab) || navItems[0];
+
   return (
-    <div className="bg-[#f6f8f9] min-h-screen font-sans flex flex-col md:flex-row">
-      
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col shadow-2xl relative z-40 md:min-h-screen">
-        <div className="absolute inset-0 z-0 bg-cover opacity-10" style={{ backgroundImage: "url('/theme-bg.png')", backgroundPosition: "center" }}></div>
-        <div className="relative z-10 p-6 pt-10 border-b border-white/10">
+    <div className="bg-[#f6f8f9] min-h-screen font-sans flex flex-col md:flex-row relative">
+
+      {/* Mobile Top App Bar */}
+      <header className="md:hidden sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between text-white shadow-lg">
+        <div className="flex items-center gap-2.5">
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 -ml-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition text-white"
+            aria-label="Toggle navigation menu"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5 text-emerald-400" /> : <Menu className="w-5 h-5 text-white" />}
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="bg-[#0A7756] p-1.5 rounded-lg shadow-sm">
+              <ShieldCheck className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <span className="font-bold text-sm tracking-wide block leading-tight">স্মৃতি অ্যাডমিন</span>
+              <span className="text-[10px] text-emerald-400 font-bold leading-none">
+                {currentTab.label}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link 
+            to="/app" 
+            className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-semibold flex items-center gap-1 transition"
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span>অ্যাপ</span>
+          </Link>
+          <button 
+            onClick={handleLogout} 
+            className="p-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 transition"
+            title="লগআউট"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Horizontal Quick-Scroll Tabs */}
+      <div className="md:hidden flex items-center gap-1.5 overflow-x-auto py-2.5 px-3 bg-slate-900/90 border-b border-white/5 sticky top-[53px] z-30 shadow-sm [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:none">
+        {navItems.map((item) => {
+          const isActive = activeTab === item.id;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => handleTabSelect(item.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                isActive 
+                  ? item.isPurple ? 'bg-purple-600 text-white shadow-md' : item.isRed ? 'bg-red-600 text-white shadow-md' : 'bg-[#0A7756] text-white shadow-md'
+                  : 'bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span>{item.label}</span>
+              {item.count !== undefined && item.count > 0 && (
+                <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/20' : 'bg-white/10'}`}>
+                  {item.count}
+                </span>
+              )}
+              {item.badge && (
+                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${item.badgeColor || 'bg-amber-500 text-slate-950'}`}>
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Mobile Slide-Over Backdrop */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
+        />
+      )}
+
+      {/* Sidebar (Slide-in Drawer on mobile, Static on desktop) */}
+      <aside className={`
+        fixed md:static inset-y-0 left-0 z-50
+        w-[280px] sm:w-72 md:w-64
+        bg-slate-900 text-white flex flex-col shadow-2xl
+        transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        h-full md:min-h-screen
+      `}>
+        <div className="absolute inset-0 z-0 bg-cover opacity-10 pointer-events-none" style={{ backgroundImage: "url('/theme-bg.png')", backgroundPosition: "center" }}></div>
+        
+        {/* Drawer Header with Close Button for Mobile */}
+        <div className="relative z-10 p-5 pt-6 md:pt-8 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm">
               <ShieldCheck className="w-6 h-6 text-[#0A7756]" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-wide">অ্যাডমিন</h1>
+              <h1 className="text-lg md:text-xl font-bold tracking-wide">অ্যাডমিন</h1>
               <p className="text-xs text-white/70 font-medium">কন্ট্রোল প্যানেল</p>
             </div>
           </div>
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="md:hidden p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
         
-        <nav className="relative z-10 flex-1 px-4 py-6 space-y-2">
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            <span>ড্যাশবোর্ড</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('users')}
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${activeTab === 'users' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <div className="flex items-center space-x-3">
-              <Users className="w-5 h-5" />
-              <span>ইউজার লিস্ট</span>
-            </div>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'users' ? 'bg-white/20' : 'bg-white/10'}`}>{data.totalUsers}</span>
-          </button>
+        <nav className="relative z-10 flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            const Icon = item.icon;
+            let activeBg = 'bg-[#0A7756] shadow-lg text-white font-bold';
+            if (item.isPurple) activeBg = 'bg-purple-600 shadow-lg text-white font-bold';
+            if (item.isRed) activeBg = 'bg-red-600 shadow-lg text-white font-bold';
 
-          <button 
-            onClick={() => setActiveTab('revenue')}
-            className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all ${activeTab === 'revenue' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <TrendingUp className="w-5 h-5" />
-            <span>গ্রোথ ও রেভিনিউ</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('templates')}
-            className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all ${activeTab === 'templates' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <MessageSquare className="w-5 h-5" />
-            <span>উইশ টেমপ্লেট</span>
-          </button>
+            let hoverBg = 'hover:bg-white/5 text-slate-300 font-medium';
+            if (item.isPurple) hoverBg = 'hover:bg-purple-500/10 text-slate-300 hover:text-purple-300 font-medium';
+            if (item.isRed) hoverBg = 'hover:bg-red-500/10 text-slate-300 hover:text-red-400 font-medium';
 
-          <button 
-            onClick={() => setActiveTab('logs')}
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${activeTab === 'logs' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <div className="flex items-center space-x-3">
-              <Activity className="w-5 h-5" />
-              <span>সিস্টেম লগস</span>
-            </div>
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('reminders')}
-            className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all ${activeTab === 'reminders' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <Bell className="w-5 h-5" />
-            <span>রিমাইন্ডার ম্যানেজমেন্ট</span>
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('wishes')}
-            className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all ${activeTab === 'wishes' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <Star className="w-5 h-5" />
-            <span>উইশ ম্যানেজমেন্ট</span>
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-[#0A7756] shadow-lg text-white font-bold' : 'hover:bg-white/5 text-slate-300 font-medium'}`}
-          >
-            <div className="flex items-center space-x-3">
-              <Settings className="w-5 h-5" />
-              <span>সিস্টেম সেটিংস</span>
-            </div>
-            {settings.isMaintenanceMode && (
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 animate-pulse">ON</span>
-            )}
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('training')}
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${activeTab === 'training' ? 'bg-purple-600 shadow-lg text-white font-bold' : 'hover:bg-purple-500/10 text-slate-300 hover:text-purple-300 font-medium'}`}
-          >
-            <div className="flex items-center space-x-3">
-              <Brain className="w-5 h-5 text-purple-400" />
-              <span>AI ট্রেইনিং (Rules)</span>
-            </div>
-            {trainingRules.length > 0 && (
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'training' ? 'bg-white/20' : 'bg-purple-500/20 text-purple-300'}`}>{trainingRules.length}</span>
-            )}
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('errors')}
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${activeTab === 'errors' ? 'bg-red-600 shadow-lg text-white font-bold' : 'hover:bg-red-500/10 text-slate-300 hover:text-red-400 font-medium'}`}
-          >
-            <div className="flex items-center space-x-3">
-              <AlertCircle className="w-5 h-5" />
-              <span>এরর লগস (Errors)</span>
-            </div>
-            {errorLogs.length > 0 && (
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'errors' ? 'bg-white/20' : 'bg-red-500/20 text-red-400'}`}>{errorLogs.length}</span>
-            )}
-          </button>
+            return (
+              <button 
+                key={item.id}
+                onClick={() => handleTabSelect(item.id)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${isActive ? activeBg : hoverBg}`}
+              >
+                <div className="flex items-center space-x-3">
+                  <Icon className={`w-5 h-5 ${item.isPurple ? 'text-purple-400' : ''}`} />
+                  <span>{item.label}</span>
+                </div>
+                {item.count !== undefined && item.count > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20' : item.badgeColor || 'bg-white/10'}`}>
+                    {item.count}
+                  </span>
+                )}
+                {item.badge && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${item.badgeColor || 'bg-amber-500 text-slate-950'}`}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
         
         <div className="relative z-10 p-4 border-t border-white/10 space-y-2">
@@ -657,8 +710,8 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 p-6 lg:p-10 h-screen overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8 pb-20">
+      <main className="flex-1 p-3.5 sm:p-6 lg:p-10 min-h-screen md:h-screen md:overflow-y-auto w-full max-w-full overflow-x-hidden">
+        <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-20">
           
           {/* Global Maintenance Alert Banner */}
           {settings.isMaintenanceMode && (
@@ -701,51 +754,51 @@ export default function AdminDashboard() {
               </h2>
               
               {/* Subscriber Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('ALL'); }}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('ALL'); }}>
                   <div>
-                    <p className="text-sm font-bold text-slate-500">মোট ইউজার</p>
-                    <h3 className="text-3xl font-extrabold text-slate-800 mt-1">{data.totalUsers}</h3>
+                    <p className="text-xs sm:text-sm font-bold text-slate-500">মোট ইউজার</p>
+                    <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.totalUsers}</h3>
                   </div>
-                  <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center">
-                    <Users className="w-7 h-7" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center">
+                    <Users className="w-6 h-6 sm:w-7 sm:h-7" />
                   </div>
                 </div>
-                <div className="bg-white p-6 rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('SUBSCRIBED'); }}>
+                <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('SUBSCRIBED'); }}>
                   <div>
-                    <p className="text-sm font-bold text-slate-500">অ্যাক্টিভ সাবস্ক্রাইবার</p>
-                    <h3 className="text-3xl font-extrabold text-slate-800 mt-1">{data.activeSubscribers || 0}</h3>
+                    <p className="text-xs sm:text-sm font-bold text-slate-500">অ্যাক্টিভ সাবস্ক্রাইবার</p>
+                    <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.activeSubscribers || 0}</h3>
                   </div>
-                  <div className="w-14 h-14 rounded-2xl bg-green-50 text-green-600 border border-green-100 flex items-center justify-center">
-                    <CheckCircle className="w-7 h-7" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-green-50 text-green-600 border border-green-100 flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 sm:w-7 sm:h-7" />
                   </div>
                 </div>
-                <div className="bg-white p-6 rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('UNSUBSCRIBED'); }}>
+                <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('UNSUBSCRIBED'); }}>
                   <div>
-                    <p className="text-sm font-bold text-slate-500">ইনঅ্যাক্টিভ</p>
-                    <h3 className="text-3xl font-extrabold text-slate-800 mt-1">{data.inactiveSubscribers || 0}</h3>
+                    <p className="text-xs sm:text-sm font-bold text-slate-500">ইনঅ্যাক্টিভ</p>
+                    <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.inactiveSubscribers || 0}</h3>
                   </div>
-                  <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center">
-                    <XCircle className="w-7 h-7" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center">
+                    <XCircle className="w-6 h-6 sm:w-7 sm:h-7" />
                   </div>
                 </div>
               </div>
 
               {/* Content KPIs */}
-              <h3 className="text-lg font-bold text-slate-800 mb-4">কন্টেন্ট স্ট্যাটিসটিক্স</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-3 sm:mb-4">কন্টেন্ট স্ট্যাটিসটিক্স</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
                 {[
                   { label: 'মোট নোটস', count: data.totalNotes, icon: FileText, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
                   { label: 'রিমাইন্ডার', count: data.totalReminders, icon: Bell, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100' },
                   { label: 'উইশ কার্ড', count: data.totalWishes, icon: Gift, color: 'text-pink-600', bg: 'bg-pink-50', border: 'border-pink-100' },
                   { label: 'অ্যাক্টিভিটি', count: data.totalActivities, icon: Activity, color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-100' }
                 ].map((item, idx) => (
-                  <div key={idx} className="bg-white p-6 rounded-[24px] shadow-sm border border-slate-100 flex flex-col items-center text-center">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${item.bg} ${item.color} ${item.border} border`}>
-                      <item.icon className="w-7 h-7" />
+                  <div key={idx} className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                    <div className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center mb-3 sm:mb-4 ${item.bg} ${item.color} ${item.border} border`}>
+                      <item.icon className="w-5 h-5 sm:w-7 sm:h-7" />
                     </div>
-                    <h3 className="text-2xl font-extrabold text-slate-800 mb-1">{item.count}</h3>
-                    <p className="text-sm font-bold text-slate-500">{item.label}</p>
+                    <h3 className="text-xl sm:text-2xl font-extrabold text-slate-800 mb-0.5">{item.count}</h3>
+                    <p className="text-xs sm:text-sm font-bold text-slate-500">{item.label}</p>
                   </div>
                 ))}
               </div>
@@ -754,41 +807,41 @@ export default function AdminDashboard() {
 
           {activeTab === 'revenue' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex justify-between items-center mb-8">
+              <div className="flex justify-between items-center mb-6 sm:mb-8">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-                    <TrendingUp className="w-8 h-8 text-[#0A7756]" /> 
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-800 flex items-center gap-2.5 sm:gap-3">
+                    <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-[#0A7756]" /> 
                     গ্রোথ ও রেভিনিউ
                   </h2>
-                  <p className="text-slate-500 font-medium mt-1 ml-11">সিস্টেমের বর্তমান আর্থিক এবং ব্যবহারকারী বৃদ্ধির পরিসংখ্যান</p>
+                  <p className="text-slate-500 font-medium text-xs sm:text-base mt-1 ml-8 sm:ml-11">সিস্টেমের বর্তমান আর্থিক এবং ব্যবহারকারী বৃদ্ধির পরিসংখ্যান</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
                 
                 {/* Revenue Overview (Takes 5 columns on large screens) */}
                 <div className="lg:col-span-5 flex flex-col space-y-6">
-                  <div className="bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0A7756] rounded-[36px] p-8 shadow-2xl relative overflow-hidden text-white flex-1 flex flex-col justify-between group">
+                  <div className="bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0A7756] rounded-[24px] sm:rounded-[36px] p-5 sm:p-8 shadow-2xl relative overflow-hidden text-white flex-1 flex flex-col justify-between group">
                     <div className="absolute -right-10 -top-10 w-48 h-48 bg-emerald-500 rounded-full blur-[80px] opacity-30 group-hover:opacity-50 transition-opacity duration-700"></div>
                     <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-blue-500 rounded-full blur-[80px] opacity-20 group-hover:opacity-40 transition-opacity duration-700"></div>
                     
                     <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-8">
-                        <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/10">
-                          <DollarSign className="w-6 h-6 text-emerald-400" />
+                      <div className="flex items-center justify-between mb-6 sm:mb-8">
+                        <div className="bg-white/10 p-2.5 sm:p-3 rounded-2xl backdrop-blur-md border border-white/10">
+                          <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
                         </div>
-                        <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold tracking-wider backdrop-blur-md border border-white/5 uppercase">
+                        <span className="px-3 py-1 bg-white/10 rounded-full text-[10px] sm:text-xs font-bold tracking-wider backdrop-blur-md border border-white/5 uppercase">
                           বার্ষিক প্রজেকশন
                         </span>
                       </div>
                       
                       <div>
-                        <p className="text-white/60 font-bold mb-2 uppercase tracking-wide text-sm">মোট প্রত্যাশিত রেভিনিউ</p>
-                        <h3 className="text-5xl font-black tracking-tight mb-2 drop-shadow-md">
+                        <p className="text-white/60 font-bold mb-1 sm:mb-2 uppercase tracking-wide text-xs sm:text-sm">মোট প্রত্যাশিত রেভিনিউ</p>
+                        <h3 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight mb-2 drop-shadow-md">
                           ৳ {totalRevenue.toLocaleString('bn-BD')}
                         </h3>
-                        <div className="flex items-center gap-2 text-emerald-400 font-bold bg-emerald-400/10 inline-flex px-3 py-1.5 rounded-lg border border-emerald-400/20">
-                          <TrendingUp className="w-4 h-4" />
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold bg-emerald-400/10 inline-flex px-3 py-1.5 rounded-lg border border-emerald-400/20 text-xs sm:text-sm">
+                          <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           <span>প্রতি ইউজার ৳ ৫০০</span>
                         </div>
                       </div>
@@ -871,16 +924,16 @@ export default function AdminDashboard() {
 
           {activeTab === 'users' && (
             <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-              <div className="bg-white rounded-[32px] p-8 shadow-xl border border-slate-100">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-                  <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                    <Users className="w-7 h-7 text-[#0A7756]" /> 
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-4 sm:p-6 md:p-8 shadow-xl border border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <Users className="w-6 h-6 sm:w-7 sm:h-7 text-[#0A7756]" /> 
                     ইউজার ম্যানেজমেন্ট
                   </h2>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button
                       onClick={() => setShowDemoUserModal(true)}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#0A7756] to-emerald-600 hover:from-[#086146] hover:to-emerald-700 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-700/20 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 bg-gradient-to-r from-[#0A7756] to-emerald-600 hover:from-[#086146] hover:to-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-700/20 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
                     >
                       <Plus className="w-4 h-4 stroke-[3]" />
                       <span>+ নতুন ডেমো ইউজার</span>
@@ -892,7 +945,7 @@ export default function AdminDashboard() {
                       <select
                         value={userFilterStatus}
                         onChange={(e) => setUserFilterStatus(e.target.value as any)}
-                        className="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-1 focus:ring-[#0A7756] appearance-none"
+                        className="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-1 focus:ring-[#0A7756] appearance-none"
                       >
                         <option value="ALL">সব ইউজার</option>
                         <option value="SUBSCRIBED">অ্যাক্টিভ সাবস্ক্রাইবার</option>
@@ -901,21 +954,21 @@ export default function AdminDashboard() {
                     </div>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-slate-400" />
+                        <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
                       </div>
                       <input
                         type="text"
                         placeholder="নাম বা মোবাইল নম্বর খুঁজুন..."
                         value={userSearchTerm}
                         onChange={(e) => setUserSearchTerm(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-1 focus:ring-[#0A7756] transition-all w-full sm:w-64"
+                        className="bg-slate-50 border border-slate-200 rounded-xl pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-1 focus:ring-[#0A7756] transition-all w-full sm:w-64"
                       />
                     </div>
                   </div>
                 </div>
                 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                <div className="overflow-x-auto -mx-2 sm:mx-0">
+                  <table className="w-full text-left border-collapse min-w-[620px]">
                     <thead>
                       <tr className="border-b-2 border-slate-100 text-xs text-slate-400 font-bold uppercase tracking-wider">
                         <th className="pb-4 px-4">নাম ও ফোন</th>
@@ -1041,22 +1094,22 @@ export default function AdminDashboard() {
 
           {activeTab === 'logs' && (
             <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-              <div className="bg-white rounded-[32px] p-8 shadow-xl border border-slate-100 flex flex-col h-[75vh]">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-                  <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                    <Activity className="w-7 h-7 text-indigo-600" /> 
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-4 sm:p-6 md:p-8 shadow-xl border border-slate-100 flex flex-col min-h-[500px] md:h-[75vh]">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <Activity className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" /> 
                     সিস্টেম ও ডেলিভারি লগস
                   </h2>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Search className="h-5 w-5 text-slate-400" />
+                      <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
                     </div>
                     <input
                       type="text"
                       placeholder="লগ মেসেজ খুঁজুন..."
                       value={logSearchTerm}
                       onChange={(e) => setLogSearchTerm(e.target.value)}
-                      className="bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full sm:w-80"
+                      className="bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full sm:w-80"
                     />
                   </div>
                 </div>
@@ -1106,32 +1159,32 @@ export default function AdminDashboard() {
 
           {activeTab === 'reminders' && (
             <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-              <div className="bg-white rounded-[32px] p-8 shadow-xl border border-slate-100 flex flex-col h-[75vh]">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-4 sm:p-6 md:p-8 shadow-xl border border-slate-100 flex flex-col min-h-[500px] md:h-[75vh]">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                      <Bell className="w-7 h-7 text-[#0A7756]" /> 
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                      <Bell className="w-6 h-6 sm:w-7 sm:h-7 text-[#0A7756]" /> 
                       রিমাইন্ডার ম্যানেজমেন্ট
                     </h2>
-                    <p className="text-sm text-slate-500 font-medium mt-1 ml-9">সিস্টেমের সমস্ত ইউজারের রিমাইন্ডারসমূহ</p>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1 ml-8 sm:ml-9">সিস্টেমের সমস্ত ইউজারের রিমাইন্ডারসমূহ</p>
                   </div>
                   
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="relative flex-1">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input 
                         type="text" 
                         placeholder="নাম, মোবাইল বা টাইটেল খুঁজুন..." 
                         value={reminderSearchTerm}
                         onChange={(e) => setReminderSearchTerm(e.target.value)}
-                        className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#0A7756] w-full sm:w-64"
+                        className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#0A7756] w-full sm:w-64"
                       />
                     </div>
                     <input 
                       type="date"
                       value={reminderDateFilter}
                       onChange={(e) => setReminderDateFilter(e.target.value)}
-                      className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#0A7756]"
+                      className="px-3 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#0A7756] w-full sm:w-auto"
                     />
                   </div>
                 </div>
@@ -1168,32 +1221,32 @@ export default function AdminDashboard() {
 
           {activeTab === 'wishes' && (
             <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-              <div className="bg-white rounded-[32px] p-8 shadow-xl border border-slate-100 flex flex-col h-[75vh]">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-4 sm:p-6 md:p-8 shadow-xl border border-slate-100 flex flex-col min-h-[500px] md:h-[75vh]">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                      <Star className="w-7 h-7 text-[#0A7756]" /> 
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                      <Star className="w-6 h-6 sm:w-7 sm:h-7 text-[#0A7756]" /> 
                       উইশ ম্যানেজমেন্ট
                     </h2>
-                    <p className="text-sm text-slate-500 font-medium mt-1 ml-9">সিস্টেমের সমস্ত ইউজারের উইশসমূহ</p>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1 ml-8 sm:ml-9">সিস্টেমের সমস্ত ইউজারের উইশসমূহ</p>
                   </div>
                   
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="relative flex-1">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input 
                         type="text" 
                         placeholder="নাম, মোবাইল বা প্রাপক খুঁজুন..." 
                         value={wishSearchTerm}
                         onChange={(e) => setWishSearchTerm(e.target.value)}
-                        className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#0A7756] w-full sm:w-64"
+                        className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#0A7756] w-full sm:w-64"
                       />
                     </div>
                     <input 
                       type="date"
                       value={wishDateFilter}
                       onChange={(e) => setWishDateFilter(e.target.value)}
-                      className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#0A7756]"
+                      className="px-3 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#0A7756] w-full sm:w-auto"
                     />
                   </div>
                 </div>
@@ -1236,14 +1289,14 @@ export default function AdminDashboard() {
 
           {activeTab === 'errors' && (
             <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-              <div className="bg-white rounded-[32px] p-8 shadow-xl border border-red-100 flex flex-col h-[85vh]">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-4 sm:p-6 md:p-8 shadow-xl border border-red-100 flex flex-col min-h-[500px] md:h-[85vh]">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold text-red-600 flex items-center gap-2">
-                      <AlertCircle className="w-7 h-7" /> 
+                    <h2 className="text-xl sm:text-2xl font-bold text-red-600 flex items-center gap-2">
+                      <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7" /> 
                       সিস্টেম এরর লগস
                     </h2>
-                    <p className="text-sm text-slate-500 font-medium mt-1 ml-9">সিস্টেমের ফ্রন্টএন্ড এবং ব্যাকএন্ডের সকল এরর</p>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1 ml-8 sm:ml-9">সিস্টেমের ফ্রন্টএন্ড এবং ব্যাকএন্ডের সকল এরর</p>
                   </div>
                 </div>
                 
@@ -1284,13 +1337,13 @@ export default function AdminDashboard() {
 
           {activeTab === 'settings' && (
             <div className="animate-in fade-in slide-in-from-bottom-8 duration-500">
-              <div className="bg-white rounded-[32px] p-8 shadow-xl border border-slate-100 max-w-4xl mx-auto">
-                <div className="mb-8 border-b border-slate-100 pb-6">
-                  <h2 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
-                    <Settings className="w-8 h-8 text-[#0A7756]" /> 
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-4 sm:p-6 md:p-8 shadow-xl border border-slate-100 max-w-4xl mx-auto">
+                <div className="mb-6 sm:mb-8 border-b border-slate-100 pb-5 sm:pb-6">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 flex items-center gap-3">
+                    <Settings className="w-7 h-7 sm:w-8 sm:h-8 text-[#0A7756]" /> 
                     সিস্টেম সেটিংস ও API
                   </h2>
-                  <p className="text-slate-500 font-medium mt-2">এখানে আপনি থার্ড-পার্টি API Keys এবং সিস্টেমের লিমিটেশন সেট করতে পারবেন।</p>
+                  <p className="text-slate-500 font-medium text-xs sm:text-sm mt-1 sm:mt-2">এখানে আপনি থার্ড-পার্টি API Keys এবং সিস্টেমের লিমিটেশন সেট করতে পারবেন।</p>
                 </div>
 
                 <div className="space-y-8">
