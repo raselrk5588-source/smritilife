@@ -25,12 +25,14 @@ import Expenses from './pages/Expenses';
 import Debts from './pages/Debts';
 import Documents from './pages/Documents';
 import MaintenanceGuard from './components/MaintenanceGuard';
+import VisitorTracker from './components/VisitorTracker';
 
 function App() {
   return (
     <SettingsProvider>
       <Toaster position="top-center" toastOptions={{ style: { fontSize: '12px', fontWeight: 'bold' } }} />
       <Router>
+        <VisitorTracker />
         <MaintenanceGuard>
           <Routes>
         {/* Public Marketing Page */}

@@ -1,8 +1,67 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle, Brain, Wrench, Power, ExternalLink, RefreshCw, Menu, X } from 'lucide-react';
+import { Users, FileText, Bell, Gift, Activity, ShieldCheck, CheckCircle, XCircle, Clock, AlertTriangle, Search, LayoutDashboard, LogOut, Filter, TrendingUp, DollarSign, Calendar, MessageSquare, Plus, Trash2, Edit3, Settings, Star, AlertCircle, Brain, Wrench, Power, ExternalLink, RefreshCw, Menu, X, Globe, Eye, Smartphone, Laptop, Tablet, ArrowUpRight, ChevronRight, BarChart3, Compass } from 'lucide-react';
 import { fetchWithAuth } from '../utils/api';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
+
+interface VisitorSummary {
+  totalPageViews: number;
+  uniqueVisitors: number;
+  totalSessions: number;
+  todayPageViews: number;
+  todayUniqueVisitors: number;
+  todaySessions: number;
+}
+
+interface DailyVisitorStat {
+  date: string;
+  pageViews: number;
+  uniqueVisitors: number;
+  sessions: number;
+}
+
+interface DeviceStat {
+  device: string;
+  count: number;
+  percentage: number;
+}
+
+interface TopPageStat {
+  path: string;
+  views: number;
+  uniqueVisitors: number;
+}
+
+interface TopReferrerStat {
+  referrer: string;
+  count: number;
+}
+
+interface RecentVisitLog {
+  _id: string;
+  visitorId: string;
+  path: string;
+  pageTitle?: string;
+  device: string;
+  browser: string;
+  os: string;
+  ip: string;
+  dateStr: string;
+  createdAt: string;
+  isUniqueDailyVisit: boolean;
+}
+
+interface VisitorAnalyticsData {
+  summary: VisitorSummary;
+  period: string;
+  startDate: string;
+  endDate: string;
+  dailyStats: DailyVisitorStat[];
+  deviceBreakdown: DeviceStat[];
+  topPages: TopPageStat[];
+  topReferrers: TopReferrerStat[];
+  recentVisits: RecentVisitLog[];
+}
 
 interface SystemLog {
   _id: string;
@@ -125,8 +184,15 @@ export default function AdminDashboard() {
   const [newRuleInput, setNewRuleInput] = useState('');
   const [newRuleExample, setNewRuleExample] = useState('');
   
-  // Tabs: 'dashboard', 'users', 'logs', 'revenue', 'templates', 'reminders', 'wishes', 'settings', 'errors', 'training'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'logs' | 'revenue' | 'templates' | 'reminders' | 'wishes' | 'settings' | 'errors' | 'training'>('dashboard');
+  // Tabs: 'dashboard', 'visitors', 'users', 'logs', 'revenue', 'templates', 'reminders', 'wishes', 'settings', 'errors', 'training'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'visitors' | 'users' | 'logs' | 'revenue' | 'templates' | 'reminders' | 'wishes' | 'settings' | 'errors' | 'training'>('dashboard');
+
+  // Visitor Analytics State
+  const [visitorData, setVisitorData] = useState<VisitorAnalyticsData | null>(null);
+  const [visitorPeriod, setVisitorPeriod] = useState<'today' | 'week' | 'month' | 'custom'>('month');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [loadingVisitors, setLoadingVisitors] = useState(false);
 
   // Search & Filter states
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -234,6 +300,9 @@ export default function AdminDashboard() {
         if (wishesJson.success) setWishes(wishesJson.wishes);
         if (errorsJson.success) setErrorLogs(errorsJson.errors);
         if (trainingJson.success) setTrainingRules(trainingJson.rules);
+        
+        // Fetch visitor analytics concurrently
+        fetchVisitorAnalytics('month');
       } catch (error) {
         console.error('Failed to fetch admin data', error);
         toast.error(`Error loading analytics: ${error}`);
@@ -243,6 +312,30 @@ export default function AdminDashboard() {
     };
     fetchData();
   }, []);
+
+  const fetchVisitorAnalytics = async (period: 'today' | 'week' | 'month' | 'custom' = visitorPeriod, start = customStartDate, end = customEndDate) => {
+    try {
+      setLoadingVisitors(true);
+      const headers = { 
+        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`, 
+        'Content-Type': 'application/json' 
+      };
+      let url = `${import.meta.env.VITE_API_URL}/admin/visitor-analytics?period=${period}`;
+      if (period === 'custom') {
+        if (start) url += `&startDate=${start}`;
+        if (end) url += `&endDate=${end}`;
+      }
+      const res = await fetch(url, { headers });
+      const json = await res.json();
+      if (json.success) {
+        setVisitorData(json.data);
+      }
+    } catch (err: any) {
+      console.error('Error loading visitor analytics:', err);
+    } finally {
+      setLoadingVisitors(false);
+    }
+  };
 
   const handleAddTrainingRule = async () => {
     if (!newRuleInput.trim()) {
@@ -533,6 +626,7 @@ export default function AdminDashboard() {
 
   const navItems = [
     { id: 'dashboard', label: 'ড্যাশবোর্ড', icon: LayoutDashboard },
+    { id: 'visitors', label: 'ভিজিটর রিপোর্ট', icon: Globe, count: visitorData?.summary?.todayUniqueVisitors !== undefined ? visitorData.summary.todayUniqueVisitors : undefined, badge: 'Live', badgeColor: 'bg-emerald-500 text-white font-extrabold' },
     { id: 'users', label: 'ইউজার লিস্ট', icon: Users, count: data.totalUsers },
     { id: 'revenue', label: 'গ্রোথ ও রেভিনিউ', icon: TrendingUp },
     { id: 'templates', label: 'উইশ টেমপ্লেট', icon: MessageSquare },
@@ -753,33 +847,50 @@ export default function AdminDashboard() {
                 ওভারভিউ
               </h2>
               
-              {/* Subscriber Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+              {/* Subscriber & Visitor Overview */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
                 <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('ALL'); }}>
                   <div>
                     <p className="text-xs sm:text-sm font-bold text-slate-500">মোট ইউজার</p>
-                    <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.totalUsers}</h3>
+                    <h3 className="text-xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.totalUsers}</h3>
                   </div>
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center">
-                    <Users className="w-6 h-6 sm:w-7 sm:h-7" />
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5 sm:w-7 sm:h-7" />
                   </div>
                 </div>
                 <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('SUBSCRIBED'); }}>
                   <div>
                     <p className="text-xs sm:text-sm font-bold text-slate-500">অ্যাক্টিভ সাবস্ক্রাইবার</p>
-                    <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.activeSubscribers || 0}</h3>
+                    <h3 className="text-xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.activeSubscribers || 0}</h3>
                   </div>
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-green-50 text-green-600 border border-green-100 flex items-center justify-center">
-                    <CheckCircle className="w-6 h-6 sm:w-7 sm:h-7" />
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-green-50 text-green-600 border border-green-100 flex items-center justify-center shrink-0">
+                    <CheckCircle className="w-5 h-5 sm:w-7 sm:h-7" />
                   </div>
                 </div>
                 <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab('users'); setUserFilterStatus('UNSUBSCRIBED'); }}>
                   <div>
                     <p className="text-xs sm:text-sm font-bold text-slate-500">ইনঅ্যাক্টিভ</p>
-                    <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.inactiveSubscribers || 0}</h3>
+                    <h3 className="text-xl sm:text-3xl font-extrabold text-slate-800 mt-1">{data.inactiveSubscribers || 0}</h3>
                   </div>
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center">
-                    <XCircle className="w-6 h-6 sm:w-7 sm:h-7" />
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center shrink-0">
+                    <XCircle className="w-5 h-5 sm:w-7 sm:h-7" />
+                  </div>
+                </div>
+                <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-emerald-100/80 hover:border-emerald-300 flex items-center justify-between cursor-pointer hover:shadow-md transition-all group" onClick={() => setActiveTab('visitors')}>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs sm:text-sm font-bold text-emerald-800">আজকের ভিজিটর</p>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </div>
+                    <h3 className="text-xl sm:text-3xl font-extrabold text-slate-800 mt-1">
+                      {visitorData?.summary.todayUniqueVisitors ?? 0}
+                    </h3>
+                    <p className="text-[10px] sm:text-xs font-bold text-emerald-600 mt-0.5 group-hover:underline">
+                      {visitorData?.summary.todayPageViews ?? 0} পেজ ভিউ • রিপোর্ট →
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <Globe className="w-5 h-5 sm:w-7 sm:h-7" />
                   </div>
                 </div>
               </div>
@@ -801,6 +912,547 @@ export default function AdminDashboard() {
                     <p className="text-xs sm:text-sm font-bold text-slate-500">{item.label}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'visitors' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+              {/* Header with Title & Refresh */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-800 flex items-center gap-2.5">
+                    <Globe className="w-6 h-6 sm:w-8 sm:h-8 text-[#0A7756]" /> 
+                    ভিজিটর ও ট্রাফিক রিপোর্ট
+                  </h2>
+                  <p className="text-slate-500 font-medium text-xs sm:text-sm mt-1">
+                    কবে কতজন ভিজিটর সাইটে এসেছে তার বিস্তারিত রিপোর্ট (দৈনিক, সাপ্তাহিক, মাসিক ও কাস্টম তারিখ রেঞ্জ)
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    onClick={() => fetchVisitorAnalytics(visitorPeriod, customStartDate, customEndDate)}
+                    disabled={loadingVisitors}
+                    className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl shadow-sm transition active:scale-95 flex items-center gap-2"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${loadingVisitors ? 'animate-spin' : ''}`} />
+                    <span>{loadingVisitors ? 'আপডেট হচ্ছে...' : 'রিফ্রেশ'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Period Filter Card */}
+              <div className="bg-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 shadow-sm border border-slate-100">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  {/* Period Pills */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:none">
+                    <span className="text-xs font-bold text-slate-400 mr-1 shrink-0 flex items-center gap-1">
+                      <Filter className="w-3.5 h-3.5" /> সময়কাল:
+                    </span>
+                    {[
+                      { id: 'today', label: 'আজকে' },
+                      { id: 'week', label: 'গত ৭ দিন (সাপ্তাহিক)' },
+                      { id: 'month', label: 'গত ৩০ দিন (মাসিক)' },
+                      { id: 'custom', label: 'কাস্টম তারিখ রেঞ্জ' },
+                    ].map((p) => {
+                      const isSel = visitorPeriod === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setVisitorPeriod(p.id as any);
+                            if (p.id !== 'custom') {
+                              fetchVisitorAnalytics(p.id as any);
+                            }
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                            isSel
+                              ? 'bg-[#0A7756] text-white shadow-md shadow-emerald-700/20'
+                              : 'bg-slate-100 hover:bg-slate-200/80 text-slate-600'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom Date Pickers */}
+                  {visitorPeriod === 'custom' && (
+                    <div className="flex flex-wrap items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
+                        <span className="text-[11px] font-bold text-slate-500">শুরু:</span>
+                        <input
+                          type="date"
+                          value={customStartDate}
+                          onChange={(e) => setCustomStartDate(e.target.value)}
+                          className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
+                        <span className="text-[11px] font-bold text-slate-500">শেষ:</span>
+                        <input
+                          type="date"
+                          value={customEndDate}
+                          onChange={(e) => setCustomEndDate(e.target.value)}
+                          className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={() => fetchVisitorAnalytics('custom', customStartDate, customEndDate)}
+                        disabled={loadingVisitors || !customStartDate || !customEndDate}
+                        className="px-4 py-2 bg-[#0A7756] hover:bg-[#086146] text-white text-xs font-bold rounded-xl transition shadow-sm disabled:opacity-50 active:scale-95"
+                      >
+                        {loadingVisitors ? 'লোড হচ্ছে...' : 'ফিল্টার করুন'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Range Info */}
+                {visitorData && (
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      রিপোর্ট রেঞ্জ: <strong className="text-slate-700">{visitorData.startDate}</strong> থেকে <strong className="text-slate-700">{visitorData.endDate}</strong>
+                    </span>
+                    <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 text-[11px]">
+                      লাইভ অ্যানালিটিক্স
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 4 KPI Summary Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                {/* 1. Unique Visitors */}
+                <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs sm:text-sm font-bold text-slate-500">ইউনিক ভিজিটর</span>
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-50 text-[#0A7756] border border-emerald-100 flex items-center justify-center">
+                      <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl sm:text-4xl font-extrabold text-slate-800 tracking-tight">
+                      {visitorData?.summary.uniqueVisitors ?? 0}
+                    </h3>
+                    <p className="text-[11px] font-bold text-emerald-600 mt-1 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      আজকে: +{visitorData?.summary.todayUniqueVisitors ?? 0} জন
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Total Sessions */}
+                <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs sm:text-sm font-bold text-slate-500">মোট সেশন / ভিজিট</span>
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center">
+                      <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl sm:text-4xl font-extrabold text-slate-800 tracking-tight">
+                      {visitorData?.summary.totalSessions ?? 0}
+                    </h3>
+                    <p className="text-[11px] font-bold text-blue-600 mt-1">
+                      আজকে: +{visitorData?.summary.todaySessions ?? 0} সেশন
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. Total Page Views */}
+                <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs sm:text-sm font-bold text-slate-500">মোট পেজ ভিউ</span>
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center">
+                      <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl sm:text-4xl font-extrabold text-slate-800 tracking-tight">
+                      {visitorData?.summary.totalPageViews ?? 0}
+                    </h3>
+                    <p className="text-[11px] font-bold text-purple-600 mt-1">
+                      আজকে: +{visitorData?.summary.todayPageViews ?? 0} ভিউ
+                    </p>
+                  </div>
+                </div>
+
+                {/* 4. Mobile Share */}
+                {(() => {
+                  const mobileCount = visitorData?.deviceBreakdown.find(d => d.device === 'mobile')?.count || 0;
+                  const desktopCount = visitorData?.deviceBreakdown.find(d => d.device === 'desktop')?.count || 0;
+                  const total = (visitorData?.summary.totalPageViews) || 1;
+                  const mobilePct = Math.round((mobileCount / total) * 100);
+                  return (
+                    <div className="bg-white p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] shadow-sm border border-slate-100 flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs sm:text-sm font-bold text-slate-500">মোবাইল ট্রাফিক</span>
+                        <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center">
+                          <Smartphone className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="text-2xl sm:text-4xl font-extrabold text-slate-800 tracking-tight">
+                          {mobilePct}%
+                        </h3>
+                        <p className="text-[11px] font-bold text-slate-500 mt-1">
+                          {mobileCount} মোবাইল • {desktopCount} পিসি
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Interactive Daily Visitors Bar Chart */}
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-5 sm:p-7 shadow-sm border border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-[#0A7756]" />
+                      দৈনিক ভিজিটর ও পেজ ভিউ ট্রেন্ড
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">দিনভিত্তিক ইউনিক ভিজিটর ও মোট পেজ ভিউয়ের গ্রাফ</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-md bg-[#0A7756]"></span> ইউনিক ভিজিটর
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-md bg-indigo-200"></span> পেজ ভিউ
+                    </span>
+                  </div>
+                </div>
+
+                {visitorData && visitorData.dailyStats && visitorData.dailyStats.length > 0 ? (
+                  (() => {
+                    const maxVal = Math.max(...visitorData.dailyStats.map(d => Math.max(d.pageViews, d.uniqueVisitors, 1)));
+                    return (
+                      <div className="overflow-x-auto pt-4 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:none">
+                        <div className="min-w-[500px] flex items-end gap-2 sm:gap-3 h-52 px-2 border-b border-slate-100">
+                          {visitorData.dailyStats.map((item, idx) => {
+                            const visitorHeight = Math.max(8, Math.round((item.uniqueVisitors / maxVal) * 160));
+                            const pageViewHeight = Math.max(12, Math.round((item.pageViews / maxVal) * 160));
+                            
+                            let shortDate = item.date;
+                            try {
+                              const [y, m, d] = item.date.split('-').map(Number);
+                              const dt = new Date(y, m - 1, d);
+                              shortDate = dt.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+                            } catch (e) {}
+
+                            return (
+                              <div 
+                                key={idx} 
+                                className="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer"
+                              >
+                                {/* Tooltip on Hover */}
+                                <div className="absolute -top-12 z-20 hidden group-hover:flex flex-col items-center bg-slate-900 text-white text-[10px] font-bold py-1.5 px-2.5 rounded-lg shadow-xl pointer-events-none whitespace-nowrap">
+                                  <span>{item.date}</span>
+                                  <span className="text-emerald-400">ইউনিক: {item.uniqueVisitors} | ভিউ: {item.pageViews}</span>
+                                </div>
+
+                                {/* Bars Group */}
+                                <div className="w-full max-w-[28px] flex items-end justify-center gap-1">
+                                  {/* Unique Visitors Bar */}
+                                  <div 
+                                    style={{ height: `${visitorHeight}px` }} 
+                                    className="w-1/2 bg-[#0A7756] hover:bg-[#086146] rounded-t-md transition-all shadow-sm"
+                                    title={`ইউনিক: ${item.uniqueVisitors}`}
+                                  ></div>
+                                  {/* Page Views Bar */}
+                                  <div 
+                                    style={{ height: `${pageViewHeight}px` }} 
+                                    className="w-1/2 bg-indigo-200 hover:bg-indigo-300 rounded-t-md transition-all"
+                                    title={`ভিউ: ${item.pageViews}`}
+                                  ></div>
+                                </div>
+
+                                {/* X-axis Date Label */}
+                                <span className="text-[10px] font-semibold text-slate-500 mt-2 truncate max-w-[45px] text-center">
+                                  {shortDate}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="py-12 text-center text-slate-400 font-medium text-xs sm:text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    নির্বাচিত সময়কালের মধ্যে কোনো ভিজিটর রেকর্ড পাওয়া যায়নি
+                  </div>
+                )}
+              </div>
+
+              {/* Date-wise Detailed Breakdown Table (Desktop & Mobile Cards) */}
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-5 sm:p-7 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-[#0A7756]" />
+                      তারিখভিত্তিক ভিজিটর পরিসংখ্যান
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">কোন তারিখে কতজন অনন্য ভিজিটর এবং পেজ ভিউ হয়েছে</p>
+                  </div>
+                  {visitorData?.dailyStats && (
+                    <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                      মোট {visitorData.dailyStats.length} দিন
+                    </span>
+                  )}
+                </div>
+
+                {/* Mobile View: Cards Layout */}
+                <div className="block md:hidden space-y-3">
+                  {visitorData?.dailyStats && visitorData.dailyStats.length > 0 ? (
+                    [...visitorData.dailyStats].reverse().map((stat, i) => {
+                      let formattedDate = stat.date;
+                      try {
+                        const [y, m, d] = stat.date.split('-').map(Number);
+                        const dt = new Date(y, m - 1, d);
+                        formattedDate = dt.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric', weekday: 'short' });
+                      } catch (e) {}
+
+                      return (
+                        <div key={i} className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-sm">
+                          <div className="flex items-center justify-between border-b border-slate-200/70 pb-2">
+                            <span className="font-bold text-slate-800 text-xs sm:text-sm">{formattedDate}</span>
+                            <span className="text-[10px] font-mono text-slate-400">{stat.date}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-100">
+                              <span className="block text-[10px] font-bold text-slate-400 uppercase">ইউনিক</span>
+                              <span className="text-base font-extrabold text-[#0A7756]">{stat.uniqueVisitors}</span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-100">
+                              <span className="block text-[10px] font-bold text-slate-400 uppercase">সেশন</span>
+                              <span className="text-base font-extrabold text-blue-600">{stat.sessions}</span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-100">
+                              <span className="block text-[10px] font-bold text-slate-400 uppercase">পেজ ভিউ</span>
+                              <span className="text-base font-extrabold text-purple-600">{stat.pageViews}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-slate-400 text-xs font-semibold">কোনো ডাটা পাওয়া যায়নি</div>
+                  )}
+                </div>
+
+                {/* Desktop View: Clean Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b-2 border-slate-100 text-xs text-slate-400 font-bold uppercase tracking-wider">
+                        <th className="pb-4 px-4">তারিখ</th>
+                        <th className="pb-4 px-4 text-center">ইউনিক ভিজিটর</th>
+                        <th className="pb-4 px-4 text-center">মোট সেশন</th>
+                        <th className="pb-4 px-4 text-center">পেজ ভিউ</th>
+                        <th className="pb-4 px-4 text-right">গড়ে ভিউ/ইউজার</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
+                      {visitorData?.dailyStats && visitorData.dailyStats.length > 0 ? (
+                        [...visitorData.dailyStats].reverse().map((stat, i) => {
+                          let formattedDate = stat.date;
+                          try {
+                            const [y, m, d] = stat.date.split('-').map(Number);
+                            const dt = new Date(y, m - 1, d);
+                            formattedDate = dt.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'short' });
+                          } catch (e) {}
+
+                          const avgViews = stat.uniqueVisitors > 0 
+                            ? (stat.pageViews / stat.uniqueVisitors).toFixed(1) 
+                            : '1.0';
+
+                          return (
+                            <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-3.5 px-4 font-bold text-slate-800">
+                                <span>{formattedDate}</span>
+                                <span className="block text-[10px] font-mono font-medium text-slate-400">{stat.date}</span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span className="inline-flex items-center gap-1 bg-emerald-50 text-[#0A7756] border border-emerald-200/80 px-2.5 py-1 rounded-full font-black text-xs">
+                                  {stat.uniqueVisitors} জন
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-bold text-blue-600">
+                                {stat.sessions}
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200/80 px-2.5 py-1 rounded-full font-black text-xs">
+                                  {stat.pageViews} ভিউ
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-600">
+                                {avgViews}x
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">কোনো ডাটা পাওয়া যায়নি</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 2-Column Grid: Device Distribution & Top Pages */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Device Breakdown */}
+                <div className="bg-white rounded-[20px] sm:rounded-[32px] p-5 sm:p-7 shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 mb-1">
+                      <Smartphone className="w-5 h-5 text-[#0A7756]" />
+                      ডিভাইস ও ব্রাউজার বণ্টন
+                    </h3>
+                    <p className="text-xs text-slate-400 mb-5">কোন ডিভাইস থেকে ইউজাররা সাইট ব্যবহার করছে</p>
+                    
+                    <div className="space-y-4">
+                      {visitorData?.deviceBreakdown && visitorData.deviceBreakdown.length > 0 ? (
+                        visitorData.deviceBreakdown.map((item, idx) => {
+                          const isMobile = item.device === 'mobile';
+                          const isDesktop = item.device === 'desktop';
+                          const isTablet = item.device === 'tablet';
+
+                          const label = isMobile ? 'মোবাইল ফোন (Mobile)' : isDesktop ? 'ডেস্কটপ / ল্যাপটপ' : isTablet ? 'ট্যাবলেট (Tablet)' : 'অন্যান্য';
+                          const IconComp = isMobile ? Smartphone : isDesktop ? Laptop : Tablet;
+
+                          return (
+                            <div key={idx} className="space-y-1.5">
+                              <div className="flex items-center justify-between text-xs font-bold">
+                                <span className="flex items-center gap-2 text-slate-700">
+                                  <IconComp className="w-4 h-4 text-slate-400" />
+                                  {label}
+                                </span>
+                                <span className="text-slate-800 font-mono">{item.percentage}% ({item.count} ভিউ)</span>
+                              </div>
+                              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    isMobile ? 'bg-[#0A7756]' : isDesktop ? 'bg-blue-600' : 'bg-purple-600'
+                                  }`} 
+                                  style={{ width: `${item.percentage}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-xs text-slate-400 text-center py-6">কোনো ডিভাইস ডাটা নেই</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Visited Pages */}
+                <div className="bg-white rounded-[20px] sm:rounded-[32px] p-5 sm:p-7 shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 mb-1">
+                      <Compass className="w-5 h-5 text-[#0A7756]" />
+                      শীর্ষ পেজসমূহ (Top Visited Pages)
+                    </h3>
+                    <p className="text-xs text-slate-400 mb-4">সবচেয়ে বেশি ভিজিট হওয়া পেজ ও ইউআরএল</p>
+
+                    <div className="space-y-2.5">
+                      {visitorData?.topPages && visitorData.topPages.length > 0 ? (
+                        visitorData.topPages.slice(0, 7).map((p, idx) => (
+                          <div 
+                            key={idx} 
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs"
+                          >
+                            <div className="min-w-0 pr-2">
+                              <span className="font-mono font-bold text-slate-800 truncate block">
+                                {p.path === '/' ? '/ (ল্যান্ডিং পেজ)' : p.path}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-semibold">
+                                {p.uniqueVisitors} জন ইউনিক ভিজিটর
+                              </span>
+                            </div>
+                            <span className="shrink-0 bg-emerald-50 text-[#0A7756] border border-emerald-200/80 px-2.5 py-1 rounded-lg font-black text-xs">
+                              {p.views} ভিউ
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400 text-center py-6">কোনো পেজ ভিউ ডাটা নেই</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Live Visitor Feed (Last 25 Visits) */}
+              <div className="bg-white rounded-[20px] sm:rounded-[32px] p-5 sm:p-7 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-[#0A7756]" />
+                      সাম্প্রতিক লাইভ ভিজিটর হিস্ট্রি
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">রিয়েল-টাইমে সাইট পরিদর্শনের লগ (সর্বশেষ ২৫টি)</p>
+                  </div>
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    লাইভ ট্র্যাকার
+                  </span>
+                </div>
+
+                <div className="divide-y divide-slate-100 overflow-x-auto">
+                  {visitorData?.recentVisits && visitorData.recentVisits.length > 0 ? (
+                    visitorData.recentVisits.map((visit) => {
+                      const timeStr = new Date(visit.createdAt).toLocaleTimeString('bn-BD', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: true
+                      });
+
+                      return (
+                        <div key={visit._id} className="py-3 flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-slate-600">
+                              {visit.device === 'desktop' ? <Laptop className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-800 truncate">
+                                {visit.path === '/' ? '/ (Home)' : visit.path}
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-medium">
+                                {visit.browser} • {visit.os} • {visit.ip ? visit.ip.replace(/\.\d+$/, '.xxx') : 'Anonymous'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {visit.isUniqueDailyVisit ? (
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                নতুন
+                              </span>
+                            ) : (
+                              <span className="bg-slate-100 text-slate-500 text-[10px] font-medium px-2 py-0.5 rounded-md">
+                                পুনরাবৃত্তি
+                              </span>
+                            )}
+                            <span className="text-[11px] font-mono text-slate-500 font-semibold">{timeStr}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="py-8 text-center text-slate-400 text-xs font-semibold">কোনো সাম্প্রতিক ভিজিট নেই</div>
+                  )}
+                </div>
               </div>
             </div>
           )}

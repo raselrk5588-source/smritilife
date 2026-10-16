@@ -28,6 +28,7 @@ import expenseRoutes from './routes/expenseRoutes';
 import debtRoutes from './routes/debtRoutes';
 import subscriptionRoutes from './routes/subscriptionRoutes';
 import documentRoutes from './routes/documentRoutes';
+import visitorRoutes from './routes/visitorRoutes';
 import ErrorLog from './models/ErrorLog';
 
 dotenv.config();
@@ -82,6 +83,7 @@ app.use('/api/expenses', protect, expenseRoutes);
 app.use('/api/debts', protect, debtRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/documents', protect, documentRoutes);
+app.use('/api/visitors', visitorRoutes);
 
 app.get('/', (req, res) => {
   res.send('Smriti API is running...');
