@@ -936,7 +936,7 @@ export default function AdminDashboard() {
                       className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 bg-gradient-to-r from-[#0A7756] to-emerald-600 hover:from-[#086146] hover:to-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-700/20 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
                     >
                       <Plus className="w-4 h-4 stroke-[3]" />
-                      <span>+ নতুন ডেমো ইউজার</span>
+                      <span>নতুন ডেমো ইউজার</span>
                     </button>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -967,8 +967,101 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 
-                <div className="overflow-x-auto -mx-2 sm:mx-0">
-                  <table className="w-full text-left border-collapse min-w-[620px]">
+                {/* Mobile User Cards (Phone View) */}
+                <div className="block md:hidden space-y-3">
+                  {filteredUsers.map((user) => {
+                    const joinDate = new Date(user.createdAt);
+                    const validUntil = new Date(joinDate);
+                    validUntil.setDate(validUntil.getDate() + 365);
+                    const cleanPhone = (user.mobile || '').replace(/\D/g, '');
+
+                    return (
+                      <div 
+                        key={user._id} 
+                        className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3.5"
+                      >
+                        {/* Header: Avatar, Name & Subscription Status Badge */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-11 h-11 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-700 font-extrabold text-base shrink-0">
+                              {(user.name && user.name.charAt(0)) || 'U'}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-800 text-sm truncate leading-snug">{user.name}</p>
+                              <p className="text-xs font-semibold text-slate-500 font-mono mt-0.5">{user.mobile}</p>
+                            </div>
+                          </div>
+
+                          {user.isSubscribed ? (
+                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] font-black border border-emerald-200/80 shrink-0">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> PRO সক্রিয়
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full text-[11px] font-bold border border-slate-200 shrink-0">
+                              <XCircle className="w-3.5 h-3.5 text-slate-400" /> ইনঅ্যাক্টিভ
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Dates Grid: Join Date & Validity */}
+                        <div className="grid grid-cols-2 gap-2 bg-white rounded-xl p-3 border border-slate-100 text-xs">
+                          <div>
+                            <span className="text-slate-400 font-semibold block text-[10px] uppercase tracking-wider">যোগদান</span>
+                            <span className="font-bold text-slate-700 text-xs">
+                              {joinDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-semibold block text-[10px] uppercase tracking-wider">ভ্যালিডিটি মেয়াদ</span>
+                            <span className={`font-bold text-xs ${user.isSubscribed ? 'text-emerald-700' : 'text-slate-400'}`}>
+                              {user.isSubscribed ? validUntil.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' }) : 'প্রযোজ্য নয়'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Bottom Actions: Toggle Subscription & WhatsApp Direct Link */}
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <button
+                            onClick={() => handleToggleSubscription(user._id, user.isSubscribed)}
+                            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 ${
+                              user.isSubscribed 
+                                ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50' 
+                                : 'bg-[#0A7756] text-white hover:bg-[#086146] shadow-emerald-700/20'
+                            }`}
+                          >
+                            {user.isSubscribed ? (
+                              <>
+                                <XCircle className="w-3.5 h-3.5" /> সাবস্ক্রিপশন বন্ধ করুন
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-3.5 h-3.5" /> সাবস্ক্রিপশন চালু করুন
+                              </>
+                            )}
+                          </button>
+                          {cleanPhone && (
+                            <a
+                              href={`https://wa.me/88${cleanPhone.length > 10 ? cleanPhone.slice(-10) : cleanPhone}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 border border-emerald-500/20 transition flex items-center justify-center shrink-0"
+                              title="WhatsApp-এ মেসেজ পাঠান"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {filteredUsers.length === 0 && (
+                    <div className="text-center py-12 text-slate-400 font-medium text-sm bg-slate-50 rounded-2xl border border-slate-100">কোনো ইউজার পাওয়া যায়নি</div>
+                  )}
+                </div>
+
+                {/* Desktop User Table (Laptop/Desktop View) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b-2 border-slate-100 text-xs text-slate-400 font-bold uppercase tracking-wider">
                         <th className="pb-4 px-4">নাম ও ফোন</th>
