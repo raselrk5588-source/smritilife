@@ -18,6 +18,7 @@ export const maintenanceMiddleware = async (req: Request, res: Response, next: N
     
     if (
       path.startsWith('/api/admin') ||
+      path.startsWith('/api/visitors') ||
       path.startsWith('/api/maintenance') ||
       path.startsWith('/api/health') ||
       path.startsWith('/api/whatsapp') ||

@@ -337,6 +337,27 @@ export default function AdminDashboard() {
     }
   };
 
+  const formatBnDateRange = (startStr: string, endStr: string) => {
+    if (!startStr || !endStr) return '';
+    try {
+      const parseDate = (s: string) => {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      };
+      const sDate = parseDate(startStr);
+      const eDate = parseDate(endStr);
+      
+      if (startStr === endStr) {
+        return eDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      const sFormatted = sDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+      const eFormatted = eDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' });
+      return `${sFormatted} – ${eFormatted}`;
+    } catch (e) {
+      return `${startStr} থেকে ${endStr}`;
+    }
+  };
+
   const handleAddTrainingRule = async () => {
     if (!newRuleInput.trim()) {
       toast.error('নিয়মটি লিখুন');
@@ -919,105 +940,106 @@ export default function AdminDashboard() {
           {activeTab === 'visitors' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
               {/* Header with Title & Refresh */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-800 flex items-center gap-2.5">
-                    <Globe className="w-6 h-6 sm:w-8 sm:h-8 text-[#0A7756]" /> 
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-800 flex items-center gap-2 truncate">
+                    <Globe className="w-6 h-6 sm:w-8 sm:h-8 text-[#0A7756] shrink-0" /> 
                     ভিজিটর ও ট্রাফিক রিপোর্ট
                   </h2>
-                  <p className="text-slate-500 font-medium text-xs sm:text-sm mt-1">
-                    কবে কতজন ভিজিটর সাইটে এসেছে তার বিস্তারিত রিপোর্ট (দৈনিক, সাপ্তাহিক, মাসিক ও কাস্টম তারিখ রেঞ্জ)
+                  <p className="text-slate-500 font-medium text-xs sm:text-sm mt-0.5 truncate">
+                    ওয়েবসাইট ভিজিটর ও ব্যবহারের পরিসংখ্যান
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <button
-                    onClick={() => fetchVisitorAnalytics(visitorPeriod, customStartDate, customEndDate)}
-                    disabled={loadingVisitors}
-                    className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl shadow-sm transition active:scale-95 flex items-center gap-2"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${loadingVisitors ? 'animate-spin' : ''}`} />
-                    <span>{loadingVisitors ? 'আপডেট হচ্ছে...' : 'রিফ্রেশ'}</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => fetchVisitorAnalytics(visitorPeriod, customStartDate, customEndDate)}
+                  disabled={loadingVisitors}
+                  className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl shadow-sm transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                  title="রিফ্রেশ করুন"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${loadingVisitors ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{loadingVisitors ? 'আপডেট হচ্ছে...' : 'রিফ্রেশ'}</span>
+                </button>
               </div>
 
-              {/* Period Filter Card */}
-              <div className="bg-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 shadow-sm border border-slate-100">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  {/* Period Pills */}
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:none">
-                    <span className="text-xs font-bold text-slate-400 mr-1 shrink-0 flex items-center gap-1">
-                      <Filter className="w-3.5 h-3.5" /> সময়কাল:
-                    </span>
-                    {[
-                      { id: 'today', label: 'আজকে' },
-                      { id: 'week', label: 'গত ৭ দিন (সাপ্তাহিক)' },
-                      { id: 'month', label: 'গত ৩০ দিন (মাসিক)' },
-                      { id: 'custom', label: 'কাস্টম তারিখ রেঞ্জ' },
-                    ].map((p) => {
-                      const isSel = visitorPeriod === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            setVisitorPeriod(p.id as any);
-                            if (p.id !== 'custom') {
-                              fetchVisitorAnalytics(p.id as any);
-                            }
-                          }}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
-                            isSel
-                              ? 'bg-[#0A7756] text-white shadow-md shadow-emerald-700/20'
-                              : 'bg-slate-100 hover:bg-slate-200/80 text-slate-600'
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Period Filter Card (100% Mobile Responsive, No Cutoff!) */}
+              <div className="bg-white rounded-[20px] sm:rounded-[24px] p-3 sm:p-5 shadow-sm border border-slate-100 space-y-3">
+                {/* 4-Button Segmented Control (Evenly Distributed, Never Cut Off) */}
+                <div className="grid grid-cols-4 gap-1 sm:gap-2 p-1 bg-slate-100/90 rounded-xl sm:rounded-2xl">
+                  {[
+                    { id: 'today', mobileLabel: 'আজকে', desktopLabel: 'আজকে' },
+                    { id: 'week', mobileLabel: '৭ দিন', desktopLabel: 'গত ৭ দিন' },
+                    { id: 'month', mobileLabel: '৩০ দিন', desktopLabel: 'গত ৩০ দিন' },
+                    { id: 'custom', mobileLabel: 'কাস্টম', desktopLabel: 'কাস্টম রেঞ্জ' },
+                  ].map((p) => {
+                    const isSel = visitorPeriod === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setVisitorPeriod(p.id as any);
+                          if (p.id !== 'custom') {
+                            fetchVisitorAnalytics(p.id as any);
+                          }
+                        }}
+                        className={`py-2 px-1 sm:px-3 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold text-center transition-all ${
+                          isSel
+                            ? 'bg-[#0A7756] text-white shadow-md shadow-emerald-700/25 scale-[1.01]'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                        }`}
+                      >
+                        <span className="sm:hidden">{p.mobileLabel}</span>
+                        <span className="hidden sm:inline">{p.desktopLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                  {/* Custom Date Pickers */}
-                  {visitorPeriod === 'custom' && (
-                    <div className="flex flex-wrap items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
-                        <span className="text-[11px] font-bold text-slate-500">শুরু:</span>
+                {/* Custom Date Pickers Sub-Panel (Shows only when 'custom' is active) */}
+                {visitorPeriod === 'custom' && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">শুরুর তারিখ</label>
                         <input
                           type="date"
                           value={customStartDate}
                           onChange={(e) => setCustomStartDate(e.target.value)}
-                          className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0A7756]"
                         />
                       </div>
-                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
-                        <span className="text-[11px] font-bold text-slate-500">শেষ:</span>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">শেষের তারিখ</label>
                         <input
                           type="date"
                           value={customEndDate}
                           onChange={(e) => setCustomEndDate(e.target.value)}
-                          className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0A7756]"
                         />
                       </div>
-                      <button
-                        onClick={() => fetchVisitorAnalytics('custom', customStartDate, customEndDate)}
-                        disabled={loadingVisitors || !customStartDate || !customEndDate}
-                        className="px-4 py-2 bg-[#0A7756] hover:bg-[#086146] text-white text-xs font-bold rounded-xl transition shadow-sm disabled:opacity-50 active:scale-95"
-                      >
-                        {loadingVisitors ? 'লোড হচ্ছে...' : 'ফিল্টার করুন'}
-                      </button>
+                      <div>
+                        <button
+                          onClick={() => fetchVisitorAnalytics('custom', customStartDate, customEndDate)}
+                          disabled={loadingVisitors || !customStartDate || !customEndDate}
+                          className="w-full py-2 bg-[#0A7756] hover:bg-[#086146] text-white text-xs font-bold rounded-xl transition shadow-sm disabled:opacity-50 active:scale-95 flex items-center justify-center gap-1.5"
+                        >
+                          <Filter className="w-3.5 h-3.5" />
+                          <span>{loadingVisitors ? 'খুঁজছি...' : 'ফিল্টার প্রয়োগ'}</span>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Range Info */}
+                {/* Range Info & Live Analytics Badge (Clean Bengali formatting) */}
                 {visitorData && (
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      রিপোর্ট রেঞ্জ: <strong className="text-slate-700">{visitorData.startDate}</strong> থেকে <strong className="text-slate-700">{visitorData.endDate}</strong>
-                    </span>
-                    <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 text-[11px]">
+                  <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-600 font-bold">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>রিপোর্ট: <strong className="text-slate-800 font-extrabold">{formatBnDateRange(visitorData.startDate, visitorData.endDate)}</strong></span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80 text-[11px] shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       লাইভ অ্যানালিটিক্স
                     </span>
                   </div>
