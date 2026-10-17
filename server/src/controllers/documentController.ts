@@ -28,7 +28,10 @@ export const getDocuments = async (req: Request, res: Response) => {
       ];
     }
 
-    const documents = await UserDocument.find(query).sort({ createdAt: -1 });
+    const documents = await UserDocument.find(query)
+      .select('-fileData')
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,

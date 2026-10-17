@@ -37,8 +37,8 @@ const UserSchema: Schema = new Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     username: { type: String },
-    mobile: { type: String },
-    whatsapp: { type: String },
+    mobile: { type: String, index: true },
+    whatsapp: { type: String, index: true },
     profilePic: { type: String },
     timezone: { type: String, default: 'Asia/Dhaka' },
     preferences: {

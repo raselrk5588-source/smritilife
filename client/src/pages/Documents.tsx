@@ -286,6 +286,10 @@ export default function Documents() {
       const apiBase = import.meta.env.VITE_API_URL || '/api';
       return doc.fileUrl.startsWith('/') ? `${apiBase}${doc.fileUrl}` : `${apiBase}/${doc.fileUrl}`;
     }
+    if (doc.mimeType && doc.mimeType.startsWith('image/')) {
+      const apiBase = import.meta.env.VITE_API_URL || '/api';
+      return `${apiBase}/documents/${doc._id}/view`;
+    }
     return null;
   };
 

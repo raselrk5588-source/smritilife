@@ -1635,8 +1635,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           /(?:আমার|amr|amar)?\s*(?:কি\s*কি|কোন\s*কোন|সব|সকল|list)?\s*(?:ফাইল|ডকুমেন্ট|কাগজ|প্রেসক্রিপশন|রিপোর্ট|file|doc|document)\s*(?:আছে|দেখাও|দেখান|লিস্ট|list|সব\s*দেখাও)/i.test(cleanText);
 
         if (isDocListQuery) {
-          const docs = await UserDocument.find({ userId: user._id }).sort({ createdAt: -1 });
-          const listMsg = formatDocumentListMessage(docs);
+          const docs = await UserDocument.find({ userId: user._id })
+            .select('-fileData')
+            .sort({ createdAt: -1 })
+            .lean();
+          const listMsg = formatDocumentListMessage(docs as any);
           await sendMetaWhatsAppMessage(fromNumber, listMsg);
           return;
         }

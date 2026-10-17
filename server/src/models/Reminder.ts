@@ -41,7 +41,7 @@ const MedicineItemSchema = new Schema({
 
 const ReminderSchema: Schema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     title: { type: String, required: true },
     description: { type: String },
     recipientPhone: { type: String },

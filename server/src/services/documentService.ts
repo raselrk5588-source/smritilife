@@ -433,7 +433,10 @@ export async function findMatchingDocumentWithVersion(
   userId: string,
   query: string
 ): Promise<DocumentMatchResult> {
-  const userDocs = await UserDocument.find({ userId }).sort({ createdAt: -1 });
+  const userDocs = (await UserDocument.find({ userId })
+    .select('-fileData')
+    .sort({ createdAt: -1 })
+    .lean()) as any[];
   if (!userDocs || userDocs.length === 0) {
     return {
       doc: null,
@@ -495,7 +498,7 @@ export async function findMatchingDocumentWithVersion(
 
   for (const doc of userDocs) {
     const docTitle = doc.title.toLowerCase().trim();
-    const docTokens = docTitle.split(/\s+/).filter((t) => t.length >= 2);
+    const docTokens = docTitle.split(/\s+/).filter((t: string) => t.length >= 2);
     let score = 0;
 
     // Direct substring in title
@@ -518,7 +521,7 @@ export async function findMatchingDocumentWithVersion(
         }
       }
 
-      if (doc.tags && doc.tags.some((t) => qVariants.some((qv) => t.toLowerCase().includes(qv)))) {
+      if (doc.tags && doc.tags.some((t: string) => qVariants.some((qv) => t.toLowerCase().includes(qv)))) {
         score += 25;
       }
     }
@@ -529,7 +532,7 @@ export async function findMatchingDocumentWithVersion(
   }
 
   // Sort descending by match score, then by creation date
-  matchingDocsWithScores.sort((a, b) => b.score - a.score || b.doc.createdAt.getTime() - a.doc.createdAt.getTime());
+  matchingDocsWithScores.sort((a, b) => b.score - a.score || new Date(b.doc.createdAt).getTime() - new Date(a.doc.createdAt).getTime());
   let allMatchingDocs = matchingDocsWithScores.map((m) => m.doc);
 
   // If no direct keyword score match, try category detection
@@ -537,7 +540,7 @@ export async function findMatchingDocumentWithVersion(
     const { category, tags } = detectDocumentCategory(queryWithoutYear || clean);
     if (category !== 'Other') {
       const catMatches = userDocs.filter(
-        (d) => d.category === category || (d.tags && d.tags.some((t) => tags.includes(t)))
+        (d: any) => d.category === category || (d.tags && d.tags.some((t: string) => tags.includes(t)))
       );
       allMatchingDocs.push(...catMatches);
     }

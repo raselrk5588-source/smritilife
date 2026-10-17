@@ -7,7 +7,7 @@ import SystemSettings from '../models/SystemSettings';
 
 export const getReminders = async (req: Request, res: Response) => {
   try {
-    const reminders = await Reminder.find({ userId: req.user?.id }).sort({ date: 1, time: 1 });
+    const reminders = await Reminder.find({ userId: req.user?.id }).sort({ date: 1, time: 1 }).lean();
     res.json(reminders);
   } catch (error: any) {
     res.status(500).json({ message: error.message });

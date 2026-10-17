@@ -6,7 +6,7 @@ import mongoose from 'mongoose';
 
 export const getNotes = async (req: Request, res: Response) => {
   try {
-    const notes = await Note.find({ userId: req.user?.id }).sort({ createdAt: -1 });
+    const notes = await Note.find({ userId: req.user?.id }).sort({ createdAt: -1 }).lean();
     res.json(notes);
   } catch (error: any) {
     res.status(500).json({ message: error.message });

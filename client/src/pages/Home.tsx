@@ -35,8 +35,9 @@ export default function Home() {
         ]);
 
         if (docsRes.ok) {
-          const docs = await docsRes.json();
-          setDocsCount(Array.isArray(docs) ? docs.length : 0);
+          const docsData = await docsRes.json();
+          const docsList = Array.isArray(docsData) ? docsData : (docsData?.documents || []);
+          setDocsCount(docsList.length);
         }
         
         let allTasks: any[] = [];
