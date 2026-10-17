@@ -43,9 +43,12 @@ export const matchRelativeDuration = (rawText: string): number | null => {
     .replace(/\b(?:kuri|bis|twenty)\b/gi, '20')
     .replace(/\b(?:trish|tirish|thirty)\b/gi, '30');
 
-  // Half hour / 1.5 hours
-  const halfHour = /(?:adha|adho|half|আধা|অর্ধেক)\s*(?:gh[aoie]nt[aoe]|g[aoie]nt[aoe]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)?(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after))?/i.test(text);
-  const oneAndHalfHour = /(?:der|দেড়|দেড়|1\.5)\s*(?:gh[aoie]nt[aoe]|g[aoie]nt[aoe]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)?(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after))?/i.test(text);
+  // Half hour (30 min) / 1.5 hours (90 min)
+  const halfHour = /\b(?:adha|adho|half|আধা|অর্ধেক|0\.5)\s*(?:an\s+)?(?:gh[aoie]nt[aoe]|g[aoie]nt[aoe]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after))?\b/i.test(text) ||
+                   /\bhalf\s+an?\s+hour(?:\s*(?:later|after))?\b/i.test(text);
+
+  const oneAndHalfHour = /\b(?:der|দেড়|দেড়|1\.5)\s*(?:gh[aoie]nt[aoe]|g[aoie]nt[aoe]|hours?|hrs?|ঘণ্টা(?:র)?|ঘন্টা(?:র)?)(?:\s*(?:por|pore|porer|পরে|পর|বাদ|বাদে|later|after))?\b/i.test(text) ||
+                         /\b1\.5\s*(?:hours?|hrs?)(?:\s*(?:later|after))?\b/i.test(text);
 
   if (halfHour && !oneAndHalfHour && !/\d+\s*(?:minute|min)/i.test(text)) {
     return 30;
@@ -817,7 +820,7 @@ Your capabilities include:
 
 Possible actions:
 1. list_reminders:
-   When user asks to view, check, list, or see their pending reminders or asks what reminders are due today (e.g. "আজ কি রিমাইন্ডার আছে", "আজকের রিমাইন্ডার", "সব রিমাইন্ডার দেখাও", "কি কি পেন্ডিং আছে").
+   When user asks to view, check, list, or see their pending reminders or asks what reminders are due today (e.g. "আজ কি রিমাইন্ডার আছে", "আজকের রিমাইন্ডার", "সব রিমাইন্ডার দেখাও", "কি কি পেন্ডিং আছে", "amar reminder list dau to", "amar reminder list daw", "reminder list", "show reminders").
    Fields in "data":
    - "filter"?: "today" | "all" (Set "today" if user specifically asks for today's reminders e.g. "আজ কি রিমাইন্ডার আছে", "আজকের রিমাইন্ডার", "aj ki reminder ache", "today's reminders". Otherwise set "all" or omit).
 
@@ -1134,11 +1137,26 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // 2C: Instant list reminders
-    if (/^(?:\/reminders|list\s*reminders)\b/i.test(cleanMsg) ||
-        /(?:রিমাইন্ডার\s*লিস্ট|রিমাইন্ডারগুলো|সব\s*রিমাইন্ডার|রিমাইন্ডার\s*দেখাও|রিমাইন্ডার\s*দেখান)/i.test(cleanMsg) ||
-        /(?:কি\s*কি|সব|সকল|list)?\s*(?:রিমাইন্ডার|reminder)\s*(?:আছে|দেখাও|দেখান|লিস্ট)/i.test(cleanMsg)) {
-      return { action: 'list_reminders' };
+    // 2C: Instant list reminders (Bengali, English & Banglish)
+    const hasDeleteWordInMsg = /(?:ডিলিট|মুছে|delete|remove|ক্লিয়ার|clear|বাতিল|ক্যান্সেল|cancel)/i.test(cleanMsg);
+    const isListRemindersIntent = !hasDeleteWordInMsg && (
+      /^(?:\/reminders?|list\s*reminders?|show\s*reminders?|my\s*reminders?)\b/i.test(cleanMsg) ||
+      /(?:reminder\s*list|reminders\s*list|list\s*reminders?)/i.test(cleanMsg) ||
+      /(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list|গুলো|গুলা|gulo|gula)/i.test(cleanMsg) ||
+      /(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list)?\s*(?:দাও|দেও|দিন|দেন|দেখান|দেখাও|দেখতে\s*চাই|daw|dao|dau|dekhao|dekhaw|chai|show)/i.test(cleanMsg) ||
+      /(?:আমার|amar|my)?\s*(?:সব|সকল|all|sob|shob)?\s*(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list|আছে|ase|ache|দেখাও|dekhao|dekhaw|দাও|dao|daw|dau)/i.test(cleanMsg) ||
+      /(?:কি\s*কি|কী\s*কী|কোন\s*কোন|ki\s*ki|kon\s*kon)\s*(?:রিমাইন্ডার|reminder)s?/i.test(cleanMsg) ||
+      /(?:রিমাইন্ডার|reminder)s?.*(?:কি\s*কি|কী\s*কী|ki\s*ki|ache|ase|আছে|koyta|koita|কয়টা|কয়টা)/i.test(cleanMsg)
+    );
+
+    if (isListRemindersIntent) {
+      const isToday = /(?:আজ|আজকের|আজকে|aj|ajke|ajker|today)/i.test(cleanMsg);
+      return {
+        action: 'list_reminders',
+        data: {
+          filter: isToday ? 'today' : 'all'
+        }
+      };
     }
 
     // 2D: Instant delete all reminders

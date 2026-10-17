@@ -3141,6 +3141,40 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 break;
               }
 
+              // Safety Guard: If title or user message is clearly asking for a reminder list
+              if (
+                /(?:reminder\s*list|reminders\s*list|রিমাইন্ডার\s*লিস্ট)/i.test(cleanTitle + ' ' + userMessage) ||
+                /(?:^|\s)(?:list|লিস্ট)\s*(?:dau|daw|dao|dekhao|dekhaw|দাও|দেখাও|দেন|দিন)/i.test(userMessage) ||
+                /(?:amar|আমার)\s*list\s*(?:dau|daw|dao|dekhao)/i.test(cleanTitle)
+              ) {
+                console.log(`[SafetyGuard] Redirecting misclassified list request away from create_reminder: "${userMessage}"`);
+                const isToday = /(?:আজ|আজকে|আজকের|aj|ajke|ajker|today)/i.test(userMessage);
+                const queryFilter: any = { userId: user._id, status: 'Pending' };
+                if (isToday) {
+                  const dhakaDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+                  const todayStart = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+                  const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
+                  queryFilter.date = { $gte: todayStart, $lte: todayEnd };
+                }
+                const reminders = await Reminder.find(queryFilter).sort({ date: 1, time: 1 });
+                if (reminders.length === 0) {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    isToday ? '📋 আজ আপনার কোনো পেন্ডিং রিমাইন্ডার নেই।' : '📋 আপনার বর্তমানে কোনো পেন্ডিং রিমাইন্ডার নেই।'
+                  );
+                } else {
+                  let text = `📋 আপনার মোট *${reminders.length}টি* পেন্ডিং রিমাইন্ডার রয়েছে:\n\n`;
+                  reminders.forEach((r, idx) => {
+                    const dStr = r.date ? new Date(r.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+                    const timeStr = formatTime12Hour(r.time);
+                    text += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${timeStr} (${dStr})\n\n`;
+                  });
+                  text += `💡 *এডিট বা ডিলিট করতে:* নম্বর দিয়ে বলুন (যেমন: "১ নম্বর সময় ৫টায় দাও" বা "২ নম্বর ডিলিট করো")`;
+                  await sendMetaWhatsAppMessage(fromNumber, text.trim());
+                }
+                break;
+              }
+
               const sendNow = !!aiResponse.data.sendNow;
               const reminderDate = new Date(aiResponse.data.date || new Date());
               let reminderTime = aiResponse.data.time || '10:00';
