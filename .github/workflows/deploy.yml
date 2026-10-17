@@ -61,16 +61,37 @@ jobs:
             echo "WHATSAPP_PHONE_NUMBER_ID=${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}" >> worker/.env
             echo "WHATSAPP_ACCESS_TOKEN=${{ secrets.WHATSAPP_ACCESS_TOKEN }}" >> worker/.env
             
+            # Ensure Swap is enabled on VPS to prevent Docker OOM killer during build
+            if [ ! -f /swapfile ] && [ $(free -m | awk '/^Swap:/ {print $2}') -eq 0 ]; then
+              echo "Configuring 2GB swap space for stable builds..."
+              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile || true
+            fi
+
+            # Clean unused images to prevent disk full issues
+            docker system prune -f || true
+
+            # Determine docker compose command (supports compose v2 plugin and classic v1)
+            if docker compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="docker compose"
+            else
+              COMPOSE_CMD="docker-compose"
+            fi
+            echo "Using Compose command: $COMPOSE_CMD"
+
             # Prepare static maintenance page for Nginx custom 502 error fallback
             mkdir -p /var/www/roni/smritilife.com/static
             cp client/public/maintenance.html /var/www/roni/smritilife.com/static/maintenance.html || true
 
-            # Cleanly restart all docker containers with fresh build
-            docker-compose down --remove-orphans || true
-            docker-compose up -d --build --remove-orphans
+            # Build images first so running containers stay alive during build
+            $COMPOSE_CMD build --parallel || $COMPOSE_CMD build
+            $COMPOSE_CMD up -d --remove-orphans
             
-            # Print running containers in deployment log
-            docker ps
+            # Print running containers and check status
+            $COMPOSE_CMD ps
+            $COMPOSE_CMD logs --tail=30
 
             echo "Configuring Nginx Reverse Proxy with Custom Maintenance Fallback..."
             sudo bash -c 'cat > /etc/nginx/sites-available/smritilife.com << "EOF"

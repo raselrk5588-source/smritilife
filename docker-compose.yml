@@ -6,6 +6,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: smriti_server
+    restart: unless-stopped
     ports:
       - "5000:5000"
     dns:
@@ -19,6 +20,7 @@ services:
       context: ./worker
       dockerfile: Dockerfile
     container_name: smriti_worker
+    restart: unless-stopped
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -30,6 +32,7 @@ services:
       context: ./client
       dockerfile: Dockerfile
     container_name: smriti_client
+    restart: unless-stopped
     ports:
       - "5173:80"
     networks:
