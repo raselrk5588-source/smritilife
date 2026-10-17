@@ -282,8 +282,8 @@ export default function MainLayout() {
         <div className="max-w-5xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center text-slate-500 text-xs font-medium">
           <p>© {new Date().getFullYear()} Smriti Life. {t('সর্বস্বত্ব সংরক্ষিত।', 'All rights reserved.')}</p>
           <div className="flex space-x-6 mt-2 md:mt-0">
-            <Link to="#" className="hover:text-[#0A7756] transition-colors">{t('শর্তাবলী', 'Terms')}</Link>
-            <Link to="#" className="hover:text-[#0A7756] transition-colors">{t('গোপনীয়তা নীতি', 'Privacy Policy')}</Link>
+            <Link to="/terms" className="hover:text-[#0A7756] transition-colors">{t('শর্তাবলী', 'Terms')}</Link>
+            <Link to="/privacy" className="hover:text-[#0A7756] transition-colors">{t('গোপনীয়তা নীতি', 'Privacy Policy')}</Link>
             <Link to="#" className="hover:text-[#0A7756] transition-colors">{t('সাহায্য', 'Help')}</Link>
           </div>
         </div>

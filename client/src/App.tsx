@@ -25,6 +25,8 @@ import Expenses from './pages/Expenses';
 import Debts from './pages/Debts';
 import Documents from './pages/Documents';
 import FCommerce from './pages/FCommerce';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
 import MaintenanceGuard from './components/MaintenanceGuard';
 import VisitorTracker from './components/VisitorTracker';
 
@@ -38,6 +40,10 @@ function App() {
           <Routes>
         {/* Public Marketing Page */}
         <Route path="/" element={<Landing />} />
+
+        {/* Legal & Compliance Routes */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
 
         {/* Authentication Route */}
         <Route path="/auth" element={<Auth />} />
