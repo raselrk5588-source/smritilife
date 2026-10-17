@@ -51,6 +51,9 @@ jobs:
             echo "FB_APP_ID=2191632625092747" >> server/.env
             echo "FB_APP_SECRET=af04beeee2b5ff112a9baf1fd06e63b8" >> server/.env
             echo "FB_REDIRECT_URI=https://smritilife.com/api/fcommerce/oauth/callback" >> server/.env
+            echo "BDAPPS_API_KEY=b6d90fcd1ffd591edb6df89041158e19" >> server/.env
+            echo "BDAPPS_API_SECRET=20ceed1b-c5ab-4ded-8e53-9917a354d232" >> server/.env
+            echo "BDAPPS_REDIRECT_URL=https://smritilife.com/subscription-return" >> server/.env
 
             # Create .env for worker
             echo "PORT=5001" > worker/.env
