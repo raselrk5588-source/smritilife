@@ -46,6 +46,10 @@ jobs:
             echo "WHATSAPP_ACCESS_TOKEN=${{ secrets.WHATSAPP_ACCESS_TOKEN }}" >> server/.env
             echo "WHATSAPP_VERIFY_TOKEN=smriti_whatsapp_verify_token_2026" >> server/.env
             echo "MESSENGER_VERIFY_TOKEN=smriti_messenger_webhook_2026" >> server/.env
+            echo "META_APP_ID=2191632625092747" >> server/.env
+            echo "META_APP_SECRET=af04beeee2b5ff112a9baf1fd06e63b8" >> server/.env
+            echo "FB_APP_ID=2191632625092747" >> server/.env
+            echo "FB_APP_SECRET=af04beeee2b5ff112a9baf1fd06e63b8" >> server/.env
 
             # Create .env for worker
             echo "PORT=5001" > worker/.env

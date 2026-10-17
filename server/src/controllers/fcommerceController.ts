@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import FacebookPage, { IProduct } from '../models/FacebookPage';
 import FacebookOrder from '../models/FacebookOrder';
+import SystemSettings from '../models/SystemSettings';
 import { processMessengerCustomerMessage } from '../services/messengerAiService';
 
 /**
@@ -409,3 +410,302 @@ export const testAiSimulator = async (req: Request, res: Response): Promise<void
     res.status(500).json({ message: 'এআই সিমুলেটর রেসপন্স ব্যর্থ হয়েছে', error: error.message });
   }
 };
+
+/**
+ * In-memory temporary cache for multiple pages selection during 1-click OAuth (15 min TTL)
+ */
+interface IPendingPagesData {
+  userId: string;
+  pages: Array<{
+    id: string;
+    name: string;
+    access_token: string;
+    category?: string;
+  }>;
+  expires: number;
+}
+
+const pendingOAuthPagesMap = new Map<string, IPendingPagesData>();
+
+// Helper to retrieve Meta App ID and Secret from .env or DB SystemSettings
+export const getFacebookAppCredentials = async (): Promise<{ appId: string; appSecret: string }> => {
+  let appId = process.env.META_APP_ID || process.env.FB_APP_ID || '';
+  let appSecret = process.env.META_APP_SECRET || process.env.FB_APP_SECRET || '';
+
+  if (!appId || !appSecret) {
+    const settings = await SystemSettings.findOne().sort({ createdAt: -1 });
+    if (settings) {
+      if (!appId && settings.facebookAppId) appId = settings.facebookAppId;
+      if (!appSecret && settings.facebookAppSecret) appSecret = settings.facebookAppSecret;
+    }
+  }
+
+  return { appId: appId.trim(), appSecret: appSecret.trim() };
+};
+
+/**
+ * 1-Click OAuth: Generate Facebook Login Authorization URL
+ */
+export const getFacebookOAuthUrl = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id || (req as any).user?._id;
+    const { appId } = await getFacebookAppCredentials();
+
+    if (!appId) {
+      res.status(400).json({
+        success: false,
+        message: 'Facebook App ID কনফিগার করা হয়নি। দয়া করে এডমিন সেটিংস বা .env ফাইলে META_APP_ID যুক্ত করুন।'
+      });
+      return;
+    }
+
+    const host = req.get('host') || 'smritilife.com';
+    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const redirectUri = process.env.FB_REDIRECT_URI || `${protocol}://${host}/api/fcommerce/oauth/callback`;
+
+    // State encodes userId and timestamp
+    const statePayload = JSON.stringify({ userId: userId.toString(), t: Date.now() });
+    const state = Buffer.from(statePayload).toString('base64url');
+
+    const scopes = [
+      'pages_show_list',
+      'pages_messaging',
+      'pages_manage_metadata',
+      'business_management'
+    ].join(',');
+
+    const oauthUrl = `https://www.facebook.com/v25.0/dialog/oauth?client_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${state}`;
+
+    res.json({
+      success: true,
+      oauthUrl
+    });
+  } catch (error: any) {
+    console.error('[getFacebookOAuthUrl Error]', error);
+    res.status(500).json({ message: 'ফেসবুক অথরাইজেশন লিঙ্ক তৈরি করতে সমস্যা হয়েছে', error: error.message });
+  }
+};
+
+/**
+ * 1-Click OAuth: Handle Facebook OAuth Callback from Meta
+ */
+export const handleFacebookOAuthCallback = async (req: Request, res: Response): Promise<void> => {
+  const host = req.get('host') || 'smritilife.com';
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const frontendUrl = process.env.FRONTEND_URL || (host.includes('localhost') ? 'http://localhost:5173' : `${protocol}://${host}`);
+
+  try {
+    const { code, state, error, error_description } = req.query;
+
+    if (error || !code) {
+      const errReason = (error_description as string) || (error as string) || 'ফেসবুক লগইন বাতিল করা হয়েছে';
+      res.redirect(`${frontendUrl}/app/fcommerce?error=${encodeURIComponent(errReason)}`);
+      return;
+    }
+
+    // Decode state
+    let userId = '';
+    try {
+      const stateObj = JSON.parse(Buffer.from(state as string, 'base64url').toString('utf-8'));
+      userId = stateObj.userId;
+      // Expire state after 30 minutes
+      if (Date.now() - stateObj.t > 30 * 60 * 1000) {
+        throw new Error('State expired');
+      }
+    } catch (e) {
+      res.redirect(`${frontendUrl}/app/fcommerce?error=${encodeURIComponent('সেশন মেয়াদোত্তীর্ণ হয়ে গেছে। পুনরায় চেষ্টা করুন।')}`);
+      return;
+    }
+
+    const { appId, appSecret } = await getFacebookAppCredentials();
+    const redirectUri = process.env.FB_REDIRECT_URI || `${protocol}://${host}/api/fcommerce/oauth/callback`;
+
+    // 1. Exchange authorization code for Short-Lived User Access Token
+    const tokenUrl = `https://graph.facebook.com/v25.0/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code as string)}`;
+    const tokenRes = await fetch(tokenUrl);
+    const tokenData = await tokenRes.json();
+
+    if (!tokenRes.ok || !tokenData.access_token) {
+      console.error('[OAuth token exchange failed]', tokenData);
+      res.redirect(`${frontendUrl}/app/fcommerce?error=${encodeURIComponent('ফেসবুক টোকেন পাওয়া যায়নি: ' + (tokenData.error?.message || 'Unknown error'))}`);
+      return;
+    }
+
+    // 2. Exchange for Long-Lived User Access Token (60 days)
+    const longTokenUrl = `https://graph.facebook.com/v25.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(tokenData.access_token)}`;
+    const longTokenRes = await fetch(longTokenUrl);
+    const longTokenData = await longTokenRes.json();
+    const userAccessToken = longTokenData.access_token || tokenData.access_token;
+
+    // 3. Fetch User's Managed Facebook Pages with permanent Page Access Tokens
+    const pagesUrl = `https://graph.facebook.com/v25.0/me/accounts?access_token=${encodeURIComponent(userAccessToken)}`;
+    const pagesRes = await fetch(pagesUrl);
+    const pagesData = await pagesRes.json();
+
+    if (!pagesRes.ok || !Array.isArray(pagesData.data) || pagesData.data.length === 0) {
+      res.redirect(`${frontendUrl}/app/fcommerce?error=${encodeURIComponent('আপনার ফেসবুক অ্যাকাউন্টে কোনো অ্যাডমিন পেজ পাওয়া যায়নি।')}`);
+      return;
+    }
+
+    const pages = pagesData.data;
+
+    // 4. If exactly 1 page, connect automatically!
+    if (pages.length === 1) {
+      const selectedPage = pages[0];
+
+      // Auto-subscribe page to our app's Webhooks via Graph API
+      try {
+        await fetch(`https://graph.facebook.com/v25.0/${selectedPage.id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${encodeURIComponent(selectedPage.access_token)}`, {
+          method: 'POST'
+        });
+      } catch (subErr) {
+        console.warn('[Auto-subscribe error]', subErr);
+      }
+
+      // Save to database
+      let pageDoc = await FacebookPage.findOne({ userId });
+      if (pageDoc) {
+        pageDoc.pageId = selectedPage.id;
+        pageDoc.pageName = selectedPage.name;
+        pageDoc.pageAccessToken = selectedPage.access_token;
+        pageDoc.isActive = true;
+        await pageDoc.save();
+      } else {
+        await FacebookPage.create({
+          userId,
+          pageId: selectedPage.id,
+          pageName: selectedPage.name,
+          pageAccessToken: selectedPage.access_token,
+          isActive: true,
+          settings: {
+            businessName: selectedPage.name,
+            welcomeMessage: 'আসসালামু আলাইকুম! আমাদের পেজে আপনাকে স্বাগতম। আপনি কোন পণ্যটি সম্পর্কে জানতে বা কিনতে চান বলুন।',
+            deliveryChargeInsideDhaka: 70,
+            deliveryChargeOutsideDhaka: 130,
+            codAvailable: true
+          },
+          products: []
+        });
+      }
+
+      res.redirect(`${frontendUrl}/app/fcommerce?connected=true&pageName=${encodeURIComponent(selectedPage.name)}`);
+      return;
+    }
+
+    // 5. If user manages multiple pages, store temporarily and let user pick which page to connect
+    pendingOAuthPagesMap.set(userId, {
+      userId,
+      pages: pages.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        access_token: p.access_token,
+        category: p.category || ''
+      })),
+      expires: Date.now() + 15 * 60 * 1000
+    });
+
+    res.redirect(`${frontendUrl}/app/fcommerce?selectPage=true`);
+  } catch (error: any) {
+    console.error('[handleFacebookOAuthCallback Error]', error);
+    res.redirect(`${frontendUrl}/app/fcommerce?error=${encodeURIComponent(error.message || 'ফেসবুক সংযোগে ত্রুটি ঘটেছে')}`);
+  }
+};
+
+/**
+ * 1-Click OAuth: Get list of pages for user to select (when managing multiple pages)
+ */
+export const getPendingOAuthPages = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = ((req as any).user?.id || (req as any).user?._id).toString();
+    const pending = pendingOAuthPagesMap.get(userId);
+
+    if (!pending || Date.now() > pending.expires) {
+      res.status(404).json({ success: false, message: 'কোনো মুলতুবি পেজ পাওয়া যায়নি বা সেশনের মেয়াদ শেষ হয়েছে।' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      pages: pending.pages.map(p => ({ id: p.id, name: p.name, category: p.category }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'পেজ তালিকা লোড ব্যর্থ হয়েছে', error: error.message });
+  }
+};
+
+/**
+ * 1-Click OAuth: Finalize connection of selected page
+ */
+export const selectOAuthPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = ((req as any).user?.id || (req as any).user?._id).toString();
+    const { pageId } = req.body;
+
+    if (!pageId) {
+      res.status(400).json({ message: 'Page ID আবশ্যক।' });
+      return;
+    }
+
+    const pending = pendingOAuthPagesMap.get(userId);
+    if (!pending || Date.now() > pending.expires) {
+      res.status(404).json({ message: 'সেশন মেয়াদোত্তীর্ণ হয়ে গেছে। পুনরায় ফেসবুক লগইন করুন।' });
+      return;
+    }
+
+    const selectedPage = pending.pages.find(p => p.id === pageId);
+    if (!selectedPage) {
+      res.status(404).json({ message: 'বাছাইকৃত পেজটি পাওয়া যায়নি।' });
+      return;
+    }
+
+    // Auto-subscribe page to Webhook via Graph API
+    try {
+      await fetch(`https://graph.facebook.com/v25.0/${selectedPage.id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${encodeURIComponent(selectedPage.access_token)}`, {
+        method: 'POST'
+      });
+    } catch (subErr) {
+      console.warn('[Auto-subscribe error]', subErr);
+    }
+
+    // Save to DB
+    let pageDoc = await FacebookPage.findOne({ userId });
+    if (pageDoc) {
+      pageDoc.pageId = selectedPage.id;
+      pageDoc.pageName = selectedPage.name;
+      pageDoc.pageAccessToken = selectedPage.access_token;
+      pageDoc.isActive = true;
+      await pageDoc.save();
+    } else {
+      await FacebookPage.create({
+        userId,
+        pageId: selectedPage.id,
+        pageName: selectedPage.name,
+        pageAccessToken: selectedPage.access_token,
+        isActive: true,
+        settings: {
+          businessName: selectedPage.name,
+          welcomeMessage: 'আসসালামু আলাইকুম! আমাদের পেজে আপনাকে স্বাগতম। আপনি কোন পণ্যটি সম্পর্কে জানতে বা কিনতে চান বলুন।',
+          deliveryChargeInsideDhaka: 70,
+          deliveryChargeOutsideDhaka: 130,
+          codAvailable: true
+        },
+        products: []
+      });
+    }
+
+    // Clean up cache
+    pendingOAuthPagesMap.delete(userId);
+
+    res.json({
+      success: true,
+      message: `"${selectedPage.name}" পেজটি সফলভাবে কানেক্ট হয়েছে!`,
+      page: {
+        pageId: selectedPage.id,
+        pageName: selectedPage.name
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: 'পেজ সংযোগ ব্যর্থ হয়েছে', error: error.message });
+  }
+};
+

@@ -28,8 +28,12 @@ import {
   AlertCircle,
   HelpCircle,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Globe,
+  CheckCircle,
+  Shield
 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { fetchWithAuth } from '../utils/api';
 
@@ -158,6 +162,105 @@ export default function FCommerce() {
   ]);
   const [simInput, setSimInput] = useState<string>('');
   const [simLoading, setSimLoading] = useState<boolean>(false);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // 1-Click Facebook OAuth States
+  const [oauthLoading, setOauthLoading] = useState<boolean>(false);
+  const [pendingPages, setPendingPages] = useState<Array<{ id: string; name: string; category?: string }>>([]);
+  const [isSelectPageModalOpen, setIsSelectPageModalOpen] = useState<boolean>(false);
+  const [selectingPageId, setSelectingPageId] = useState<string | null>(null);
+  const [showManualForm, setShowManualForm] = useState<boolean>(false);
+
+  // Check URL query parameters for OAuth results
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('connected') === 'true') {
+      const pName = params.get('pageName');
+      toast.success(pName ? `"${pName}" পেজটি সফলভাবে কানেক্ট হয়েছে!` : 'ফেসবুক পেজ সফলভাবে কানেক্ট হয়েছে!');
+      navigate('/app/fcommerce', { replace: true });
+      fetchPageInfo();
+    } else if (params.get('selectPage') === 'true') {
+      fetchPendingPages();
+      navigate('/app/fcommerce', { replace: true });
+    } else if (params.get('error')) {
+      toast.error(decodeURIComponent(params.get('error') || 'ফেসবুক সংযোগ ব্যর্থ হয়েছে'));
+      navigate('/app/fcommerce', { replace: true });
+    }
+  }, [location.search]);
+
+  const handleConnectFacebook = async () => {
+    try {
+      setOauthLoading(true);
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/fcommerce/oauth/url`);
+      const data = await res.json();
+      if (res.ok && data.oauthUrl) {
+        window.location.href = data.oauthUrl;
+      } else {
+        toast.error(data.message || 'ফেসবুক অ্যাপ কনফিগারেশন পাওয়া যায়নি');
+        setShowManualForm(true);
+      }
+    } catch (err) {
+      toast.error('সার্ভারের সাথে যোগাযোগ করা যায়নি');
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  const fetchPendingPages = async () => {
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/fcommerce/oauth/pending-pages`);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.pages) && data.pages.length > 0) {
+        setPendingPages(data.pages);
+        setIsSelectPageModalOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSelectPage = async (pageId: string) => {
+    try {
+      setSelectingPageId(pageId);
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/fcommerce/oauth/select-page`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || 'পেজ সফলভাবে কানেক্ট হয়েছে!');
+        setIsSelectPageModalOpen(false);
+        fetchPageInfo();
+      } else {
+        toast.error(data.message || 'পেজ সংযোগ ব্যর্থ হয়েছে');
+      }
+    } catch (err) {
+      toast.error('পেজ সংযোগ করা যায়নি');
+    } finally {
+      setSelectingPageId(null);
+    }
+  };
+
+  const handleDisconnectPage = async () => {
+    if (!window.confirm('আপনি কি নিশ্চিত যে ফেসবুক পেজটি ডিসকানেক্ট করতে চান? এর ফলে এআই মেসেঞ্জারে রিপ্লাই দেওয়া বন্ধ করবে।')) return;
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/fcommerce/page`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || 'পেজ ডিসকানেক্ট করা হয়েছে');
+        fetchPageInfo();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (err) {
+      toast.error('ডিসকানেক্ট করতে সমস্যা হয়েছে');
+    }
+  };
 
   // Fetch Page Info
   const fetchPageInfo = async () => {
@@ -1074,48 +1177,133 @@ export default function FCommerce() {
             </div>
 
             {/* Shop & AI Configuration Form */}
-            <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <h3 className="text-sm font-bold text-slate-900 mb-1">দোকান ও এআই সেলস সহকারী সেটিংস</h3>
-              <p className="text-xs text-slate-500 mb-4">আপনার ব্যবসার বিবরণ ও ডেলিভারি পলিসি নির্ধারণ করুন</p>
-
-              <form onSubmit={handleSaveSettings} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Facebook Page ID *</label>
-                    <input
-                      type="text"
-                      placeholder="যেমন: 104928472910"
-                      value={settingsForm.pageId}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, pageId: e.target.value })}
-                      required
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    />
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-5">
+              
+              {/* 1-Click Facebook Connect Section */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/60 via-slate-50 to-indigo-50/50 border border-blue-200/80">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#1877F2] text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+                      <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h4 className="text-sm font-bold text-slate-900">
+                          {hasPage ? 'ফেসবুক পেজ সংযুক্ত আছে' : '১-ক্লিকে ফেসবুক পেজ কানেক্ট করুন'}
+                        </h4>
+                        {hasPage && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span>সক্রিয়</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                        {hasPage
+                          ? `সংযুক্ত পেজ: "${page?.pageName}" (ID: ${page?.pageId})`
+                          : 'ফেসবুক অ্যাকাউন্টে লগইন করে এক ক্লিকে আপনার পছন্দের পেজটি নির্বাচন করুন। কোনো ম্যানুয়াল টোকেন লাগবে না।'}
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Facebook Page Name *</label>
-                    <input
-                      type="text"
-                      placeholder="যেমন: ফ্যাশন হাউজ বিডি"
-                      value={settingsForm.pageName}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, pageName: e.target.value })}
-                      required
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    />
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {hasPage ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleConnectFacebook}
+                          disabled={oauthLoading}
+                          className="px-3.5 py-2 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs font-bold transition shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${oauthLoading ? 'animate-spin' : ''}`} />
+                          <span>পেজ পরিবর্তন</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectPage}
+                          className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition border border-rose-200 cursor-pointer"
+                        >
+                          ডিসকানেক্ট
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleConnectFacebook}
+                        disabled={oauthLoading}
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs font-bold transition shadow-sm flex items-center justify-center space-x-2 cursor-pointer"
+                      >
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                        </svg>
+                        <span>{oauthLoading ? 'রিডাইরেক্ট হচ্ছে...' : 'Connect with Facebook'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Page Access Token *</label>
-                  <textarea
-                    rows={2}
-                    placeholder="মেটা ডেভেলপার ড্যাশবোর্ড থেকে পাওয়া দীর্ঘ Page Access Token"
-                    value={settingsForm.pageAccessToken}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, pageAccessToken: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
+                <div className="mt-2.5 pt-2 border-t border-blue-200/40 flex justify-between items-center text-[11px]">
+                  <span className="text-slate-500">মেটা অফিশিয়াল OAuth ও গ্রাফ এপিআই দ্বারা সুরক্ষিত</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowManualForm(!showManualForm)}
+                    className="text-blue-700 hover:underline font-semibold cursor-pointer"
+                  >
+                    {showManualForm ? 'ম্যানুয়াল ফর্ম লুকান ▲' : 'ম্যানুয়াল টোকেন সেটিংস (Advanced) ▼'}
+                  </button>
                 </div>
+              </div>
+
+              {/* Manual Page ID & Token (Only visible if toggled) */}
+              {showManualForm && (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700">ম্যানুয়াল পেজ আইডি ও টোকেন কনফিগারেশন</span>
+                    <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">এডভান্সড</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Facebook Page ID</label>
+                      <input
+                        type="text"
+                        placeholder="যেমন: 104928472910"
+                        value={settingsForm.pageId}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, pageId: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Facebook Page Name</label>
+                      <input
+                        type="text"
+                        placeholder="যেমন: ফ্যাশন হাউজ বিডি"
+                        value={settingsForm.pageName}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, pageName: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Page Access Token</label>
+                    <textarea
+                      rows={2}
+                      placeholder="মেটা ডেভেলপার ড্যাশবোর্ড থেকে পাওয়া দীর্ঘ Page Access Token"
+                      value={settingsForm.pageAccessToken}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, pageAccessToken: e.target.value })}
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Shop & AI Configuration Form */}
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 mb-1">দোকান ও এআই সেলস সহকারী সেটিংস</h3>
+                <p className="text-xs text-slate-500 mb-3">আপনার ব্যবসার বিবরণ ও ডেলিভারি পলিসি নির্ধারণ করুন</p>
+
+                <form onSubmit={handleSaveSettings} className="space-y-4">
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
@@ -1215,6 +1403,7 @@ export default function FCommerce() {
                   </button>
                 </div>
               </form>
+              </div>
             </div>
           </div>
         )}
@@ -1336,6 +1525,63 @@ export default function FCommerce() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Multiple Facebook Pages Selection Modal */}
+      {isSelectPageModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center space-x-2.5 mb-2">
+              <div className="w-9 h-9 rounded-xl bg-[#1877F2] text-white flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">ফেসবুক পেজ নির্বাচন করুন</h3>
+                <p className="text-[11px] text-slate-500">আপনার অ্যাকাউন্টে একাধিক পেজ পাওয়া গেছে</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 mt-2 mb-4 leading-relaxed">
+              যে পেজটিতে স্মৃতি এআই সেলস সহকারী চালু করতে চান, নিচে সেটি বেছে নিন:
+            </p>
+
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {pendingPages.map((p) => (
+                <div
+                  key={p.id}
+                  className="p-3 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/50 flex items-center justify-between transition"
+                >
+                  <div className="pr-2">
+                    <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{p.name}</h4>
+                    <span className="text-[10px] text-slate-400">
+                      ID: {p.id} {p.category ? `• ${p.category}` : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPage(p.id)}
+                    disabled={selectingPageId === p.id}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs transition shrink-0 cursor-pointer"
+                  >
+                    {selectingPageId === p.id ? 'কানেক্ট হচ্ছে...' : 'কানেক্ট করুন'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSelectPageModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                বাতিল
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -18,6 +18,8 @@ export interface ISystemSettings extends Document {
   maintenanceMessage?: string;
   maintenanceEstimatedTime?: string;
   maintenanceAllowedIps?: string[];
+  facebookAppId?: string;
+  facebookAppSecret?: string;
 }
 
 const SystemSettingsSchema: Schema = new Schema(
@@ -39,6 +41,8 @@ const SystemSettingsSchema: Schema = new Schema(
     maintenanceMessage: { type: String, default: 'SmritiLive-কে আরও দ্রুত ও উন্নত করতে বর্তমানে সিস্টেম আপগ্রেডের কাজ চলছে। খুব শীঘ্রই আমরা আবার পুরোদমে ফিরে আসছি। আপনার সাময়িক অসুবিধার জন্য আন্তরিকভাবে দুঃখিত।' },
     maintenanceEstimatedTime: { type: String, default: '১৫-২০ মিনিট' },
     maintenanceAllowedIps: { type: [String], default: [] },
+    facebookAppId: { type: String, default: '' },
+    facebookAppSecret: { type: String, default: '' },
   },
   { timestamps: true }
 );
