@@ -1142,11 +1142,12 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     const isListRemindersIntent = !hasDeleteWordInMsg && (
       /^(?:\/reminders?|list\s*reminders?|show\s*reminders?|my\s*reminders?)\b/i.test(cleanMsg) ||
       /(?:reminder\s*list|reminders\s*list|list\s*reminders?)/i.test(cleanMsg) ||
-      /(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list|গুলো|গুলা|gulo|gula)/i.test(cleanMsg) ||
-      /(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list)?\s*(?:দাও|দেও|দিন|দেন|দেখান|দেখাও|দেখতে\s*চাই|daw|dao|dau|dekhao|dekhaw|chai|show)/i.test(cleanMsg) ||
-      /(?:আমার|amar|my)?\s*(?:সব|সকল|all|sob|shob)?\s*(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list|আছে|ase|ache|দেখাও|dekhao|dekhaw|দাও|dao|daw|dau)/i.test(cleanMsg) ||
+      /(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list)/i.test(cleanMsg) ||
+      /(?:রিমাইন্ডার|reminder)s?\s*(?:গুলো|গুলা|gulo|gula)\s*(?:দেখাও|দেখান|দেখতে\s*চাই|dekhao|dekhaw|show)/i.test(cleanMsg) ||
+      /(?:আমার|amar|my)\s*(?:সব|সকল|all|sob|shob)?\s*(?:রিমাইন্ডার|reminder)s?\s*(?:লিস্ট|list|আছে|ase|ache|দেখাও|dekhao|dekhaw)/i.test(cleanMsg) ||
+      /(?:সব|সকল|all|sob|shob)\s+(?:রিমাইন্ডার|reminder)s?\s*(?:দেখাও|দেখান|দেখতে\s*চাই|dekhao|dekhaw|show)/i.test(cleanMsg) ||
       /(?:কি\s*কি|কী\s*কী|কোন\s*কোন|ki\s*ki|kon\s*kon)\s*(?:রিমাইন্ডার|reminder)s?/i.test(cleanMsg) ||
-      /(?:রিমাইন্ডার|reminder)s?.*(?:কি\s*কি|কী\s*কী|ki\s*ki|ache|ase|আছে|koyta|koita|কয়টা|কয়টা)/i.test(cleanMsg)
+      /(?:রিমাইন্ডার|reminder)s?.*(?:কি\s*কি|কী\s*কী|ki\s*ki|ache|ase|আছে|koyta|koita|কয়টা|কয়টা|কতগুলো)/i.test(cleanMsg)
     );
 
     if (isListRemindersIntent) {
@@ -1264,9 +1265,9 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     // Candidate models: Adaptive ordering with fastest active model first
     const baseCandidateModels = [
       'gemini-3.5-flash-lite',
+      'gemini-2.5-flash',
       'gemini-3.5-flash',
-      'gemini-3-flash-preview',
-      'gemini-2.5-flash'
+      'gemini-3-flash-preview'
     ];
     const candidateModels = [
       activeFastModel,
@@ -1905,10 +1906,10 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     const genAI = new GoogleGenerativeAI(apiKey);
     const candidateModels = [
       activeFastModel,
-      'gemini-3.5-flash',
-      'gemini-3-flash-preview',
+      'gemini-3.5-flash-lite',
       'gemini-2.5-flash',
-      'gemini-3.5-flash-lite'
+      'gemini-3.5-flash',
+      'gemini-3-flash-preview'
     ];
 
     const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
