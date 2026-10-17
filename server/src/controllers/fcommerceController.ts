@@ -460,7 +460,8 @@ export const getFacebookOAuthUrl = async (req: Request, res: Response): Promise<
     }
 
     const host = req.get('host') || 'smritilife.com';
-    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    const protocol = isLocal ? 'http' : 'https';
     const redirectUri = process.env.FB_REDIRECT_URI || `${protocol}://${host}/api/fcommerce/oauth/callback`;
 
     // State encodes userId and timestamp
@@ -491,8 +492,9 @@ export const getFacebookOAuthUrl = async (req: Request, res: Response): Promise<
  */
 export const handleFacebookOAuthCallback = async (req: Request, res: Response): Promise<void> => {
   const host = req.get('host') || 'smritilife.com';
-  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-  const frontendUrl = process.env.FRONTEND_URL || (host.includes('localhost') ? 'http://localhost:5173' : `${protocol}://${host}`);
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+  const protocol = isLocal ? 'http' : 'https';
+  const frontendUrl = process.env.FRONTEND_URL || (isLocal ? 'http://localhost:5173' : `${protocol}://${host}`);
 
   try {
     const { code, state, error, error_description } = req.query;
