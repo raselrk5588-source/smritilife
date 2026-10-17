@@ -54,6 +54,7 @@ export default function Documents() {
   const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [failedThumbnails, setFailedThumbnails] = useState<Record<string, boolean>>({});
 
   const categories = [
     { id: 'All', label: 'সব ফাইল', icon: FolderOpen },
@@ -281,14 +282,13 @@ export default function Documents() {
     if (doc.fileData) {
       return `data:${doc.mimeType};base64,${doc.fileData}`;
     }
-    if (doc.fileUrl) {
-      if (doc.fileUrl.startsWith('http')) return doc.fileUrl;
-      const apiBase = import.meta.env.VITE_API_URL || '/api';
-      return doc.fileUrl.startsWith('/') ? `${apiBase}${doc.fileUrl}` : `${apiBase}/${doc.fileUrl}`;
+    if (doc.fileUrl && doc.fileUrl.startsWith('http')) {
+      return doc.fileUrl;
     }
     if (doc.mimeType && doc.mimeType.startsWith('image/')) {
       const apiBase = import.meta.env.VITE_API_URL || '/api';
-      return `${apiBase}/documents/${doc._id}/view`;
+      const token = localStorage.getItem('token') || '';
+      return `${apiBase}/documents/${doc._id}/view?token=${encodeURIComponent(token)}`;
     }
     return null;
   };
@@ -442,15 +442,15 @@ export default function Documents() {
                       onClick={() => handlePreview(doc)}
                       className="cursor-pointer shrink-0 group-hover:scale-105 transition-transform"
                     >
-                      {thumbSrc ? (
+                      {thumbSrc && !failedThumbnails[doc._id] ? (
                         <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/70 shadow-2xs relative">
                           <img
                             src={thumbSrc}
                             alt={doc.title}
                             className="w-full h-full object-cover"
                             loading="lazy"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
+                            onError={() => {
+                              setFailedThumbnails((prev) => ({ ...prev, [doc._id]: true }));
                             }}
                           />
                         </div>
