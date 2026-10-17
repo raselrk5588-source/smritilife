@@ -64,8 +64,6 @@ export const checkMobile = async (req: Request, res: Response) => {
     // If user is subscribed and this device is already in authorized devices (max 2)
     if (user && user.isSubscribed && user.deviceIds && user.deviceIds.includes(deviceId)) {
       const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
-      // Send welcome message asynchronously so user gets instant WhatsApp thread
-      sendLoginWelcomeMessage(user.whatsapp || cleanMobile, user.name);
       return res.json({
         requireOtp: false,
         token,
@@ -196,9 +194,6 @@ export const loginWithOtp = async (req: Request, res: Response) => {
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
-
-    // Send WhatsApp welcome message asynchronously so user gets instant WhatsApp thread
-    sendLoginWelcomeMessage(user.whatsapp || cleanMobile, user.name);
 
     res.json({
       token,
