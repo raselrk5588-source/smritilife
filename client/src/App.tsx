@@ -24,6 +24,7 @@ import Ramadan from './pages/Ramadan';
 import Expenses from './pages/Expenses';
 import Debts from './pages/Debts';
 import Documents from './pages/Documents';
+import FCommerce from './pages/FCommerce';
 import MaintenanceGuard from './components/MaintenanceGuard';
 import VisitorTracker from './components/VisitorTracker';
 
@@ -67,6 +68,7 @@ function App() {
           <Route path="expenses" element={<Expenses />} />
           <Route path="debts" element={<Debts />} />
           <Route path="documents" element={<Documents />} />
+          <Route path="fcommerce" element={<FCommerce />} />
           <Route path="admin" element={<Profile />} /> {/* Re-mapped admin to Profile for the bottom nav link to work visually */}
         </Route>
 

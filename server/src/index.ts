@@ -29,6 +29,8 @@ import debtRoutes from './routes/debtRoutes';
 import subscriptionRoutes from './routes/subscriptionRoutes';
 import documentRoutes from './routes/documentRoutes';
 import visitorRoutes from './routes/visitorRoutes';
+import messengerRoutes from './routes/messengerRoutes';
+import fcommerceRoutes from './routes/fcommerceRoutes';
 import ErrorLog from './models/ErrorLog';
 
 dotenv.config();
@@ -84,6 +86,8 @@ app.use('/api/debts', protect, debtRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/documents', protect, documentRoutes);
 app.use('/api/visitors', visitorRoutes);
+app.use('/api/messenger', messengerRoutes);
+app.use('/api/fcommerce', protect, fcommerceRoutes);
 
 app.get('/', (req, res) => {
   res.send('Smriti API is running...');

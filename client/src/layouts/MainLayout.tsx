@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate, Moon, FolderArchive, MessageSquare } from 'lucide-react';
+import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate, Moon, FolderArchive, MessageSquare, Store } from 'lucide-react';
 import AIAssistantModal from '../components/AIAssistantModal';
 import WakeUpAlarmModal from '../components/WakeUpAlarmModal';
 import { Toaster } from 'react-hot-toast';
@@ -12,7 +12,7 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const userName = localStorage.getItem('userName') || "রিয়াদ";
-  const isMainTab = ['/app', '/app/', '/app/notes', '/app/reminders', '/app/wishes', '/app/ramadan', '/app/documents'].includes(location.pathname);
+  const isMainTab = ['/app', '/app/', '/app/notes', '/app/reminders', '/app/wishes', '/app/ramadan', '/app/documents', '/app/fcommerce'].includes(location.pathname);
 
   useEffect(() => {
     if (!localStorage.getItem('isAuthenticated')) {
@@ -42,6 +42,7 @@ export default function MainLayout() {
     { path: '/app/reminders', icon: Bell, label: t('রিমাইন্ডার', 'Reminders') },
     { path: '/app/wishes', icon: Gift, label: t('বিশেষ দিন', 'Wishes') },
     { path: '/app/documents', icon: FolderArchive, label: t('ডকুমেন্ট ভল্ট', 'Documents') },
+    { path: '/app/fcommerce', icon: Store, label: t('এআই শপ', 'AI Shop') },
     { path: '/app/ramadan', icon: Moon, label: isRamadan ? t('রমজান স্পেশাল', 'Ramadan') : t('নামাজ ও রোজা', 'Prayer & Fast') },
   ];
 

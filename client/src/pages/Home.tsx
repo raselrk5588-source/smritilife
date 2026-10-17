@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake, FolderArchive } from 'lucide-react';
+import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake, FolderArchive, Store } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AIAssistantModal from '../components/AIAssistantModal';
@@ -385,6 +385,38 @@ export default function Home() {
             </div>
             <div className="flex items-center space-x-1 text-purple-300 text-xs font-bold pl-2 shrink-0">
               <span className="hidden sm:inline">ভল্ট খুলুন</span>
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </Link>
+
+        {/* Facebook Messenger AI Shop (F-Commerce SaaS) Feature Card */}
+        <Link 
+          to="/app/fcommerce"
+          className="block bg-gradient-to-r from-[#063828] via-[#0A543A] to-[#04281c] rounded-2xl md:rounded-3xl p-3 md:p-4 text-white shadow-md hover:shadow-lg transition-all group border border-emerald-500/30"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-emerald-400/20 border border-emerald-400/40 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                <Store className="w-4 h-4 md:w-5 md:h-5 text-emerald-300" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-1.5 mb-0.5">
+                  <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-300 bg-emerald-400/20 px-2 py-0.5 rounded-full border border-emerald-400/30">
+                    F-COMMERCE SAAS
+                  </span>
+                  <span className="text-[9px] text-emerald-200 font-semibold hidden sm:inline">মেসেঞ্জার এআই সেলস সহকারী</span>
+                </div>
+                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
+                  ফেসবুক পেজ কানেক্ট করে ২৪/৭ অটো এআই সেলস ও অর্ডার নিন
+                </h4>
+                <p className="text-[9px] md:text-xs text-emerald-200/80 font-medium line-clamp-1">
+                  কাস্টমারদের সাথে অটো চ্যাট, পণ্যের বিবরণ, অর্ডার কনফার্ম ও হোয়াটসঅ্যাপে ইনস্ট্যান্ট অ্যালার্ট
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1 text-emerald-300 text-xs font-bold pl-2 shrink-0">
+              <span className="hidden sm:inline">শপ খুলুন</span>
               <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>

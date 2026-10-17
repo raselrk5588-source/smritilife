@@ -27,7 +27,8 @@ import {
   Moon,
   FolderLock,
   ListTodo,
-  Mic
+  Mic,
+  Store
 } from 'lucide-react';
 
 const heroFeatures = [
@@ -549,6 +550,23 @@ export default function Landing() {
               </p>
               <span className="mt-auto inline-flex items-center gap-1 text-[11px] font-bold text-orange-700 bg-orange-50 px-3 py-1 rounded-full">
                 🎙️ ভয়েস এআই প্রসেসিং
+              </span>
+            </div>
+
+            {/* Feature 11: Messenger AI Shop SaaS */}
+            <div className="bg-white/80 backdrop-blur-xl border border-white/80 p-5 sm:p-6 rounded-3xl shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_45px_rgba(10,119,86,0.18)] hover:-translate-y-2 transition-all duration-300 flex flex-col items-center text-center group sm:col-span-2 lg:col-span-1 xl:col-span-2 bg-gradient-to-br from-emerald-50/50 via-white to-teal-50/40 border-emerald-500/20">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-[#063828] to-[#0A543A] text-emerald-400 flex items-center justify-center mb-4 shadow-md shadow-emerald-950/20 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                <Store className="w-7 h-7" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-800 text-[10px] font-extrabold uppercase mb-1.5 border border-emerald-400/30">
+                <span>F-Commerce SaaS</span>
+              </div>
+              <h3 className="font-black text-slate-900 text-lg mb-1.5">মেসেঞ্জার এআই সেলস শপ</h3>
+              <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed mb-4 max-w-md">
+                আপনার ফেসবুক পেজ কানেক্ট করলেই এআই ২৪/৭ কাস্টমারদের সাথে বাংলায় কথা বলে পণ্যের তথ্য দেবে, নাম-ফোন-ঠিকানা নিয়ে অর্ডার কনফার্ম করবে এবং তৎক্ষণাৎ আপনার হোয়াটসঅ্যাপে অর্ডার অ্যালার্ট পাঠাবে।
+              </p>
+              <span className="mt-auto inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-3.5 py-1 rounded-full">
+                🚀 ২৪/৭ অটো সেলস ও ক্যাটালগ
               </span>
             </div>
 

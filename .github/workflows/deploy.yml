@@ -45,6 +45,7 @@ jobs:
             echo "WHATSAPP_BUSINESS_ACCOUNT_ID=${{ secrets.WHATSAPP_BUSINESS_ACCOUNT_ID }}" >> server/.env
             echo "WHATSAPP_ACCESS_TOKEN=${{ secrets.WHATSAPP_ACCESS_TOKEN }}" >> server/.env
             echo "WHATSAPP_VERIFY_TOKEN=smriti_whatsapp_verify_token_2026" >> server/.env
+            echo "MESSENGER_VERIFY_TOKEN=smriti_messenger_webhook_2026" >> server/.env
 
             # Create .env for worker
             echo "PORT=5001" > worker/.env
