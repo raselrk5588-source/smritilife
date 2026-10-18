@@ -14,6 +14,11 @@ function normalizeMobile(mobile: string): string {
   let cleaned = (mobile || '').trim().replace(/[^\d]/g, '');
   if (cleaned.startsWith('880')) {
     cleaned = cleaned.substring(2);
+  } else if (cleaned.startsWith('88')) {
+    cleaned = cleaned.substring(2);
+  }
+  if (!cleaned.startsWith('0') && cleaned.length === 10) {
+    cleaned = '0' + cleaned;
   }
   return cleaned;
 }
@@ -78,7 +83,7 @@ export const checkMobile = async (req: Request, res: Response) => {
 
     // New device or unregistered device -> Generate and send WhatsApp OTP
     const otp = String(crypto.randomInt(1000, 10000)); // 4 digits
-    const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Delete any old pending OTP for this number
     await OtpToken.deleteMany({ mobile: cleanMobile });
@@ -97,17 +102,19 @@ export const checkMobile = async (req: Request, res: Response) => {
       ? '\n\n⚠️ *বিজ্ঞপ্তি:* আপনার একাউন্টে ইতিমধ্যে ২টি ডিভাইস সক্রিয় আছে। এই নতুন ডিভাইসে লগইন করলে সবচেয়ে পুরোনো ডিভাইসটি স্বয়ংক্রিয়ভাবে ডিসকানেক্ট হয়ে যাবে।'
       : '';
 
-    const messageText = `🔐 *স্মৃতি লাইফ (Smriti Life) লগইন ওটিপি*\n\nআপনার ওয়ান-টাইম লগইন কোড: *${otp}*\n\n⏱ কোডটি আগামী ৩ মিনিট কার্যকর থাকবে। নিরাপত্তার স্বার্থে এটি কাউকে শেয়ার করবেন না।${warningText}`;
+    const messageText = `🔐 *স্মৃতি লাইফ (Smriti Life) লগইন ওটিপি*\n\nআপনার ওয়ান-টাইম লগইন কোড: *${otp}*\n\n⏱ কোডটি আগামী ৫ মিনিট কার্যকর থাকবে। নিরাপত্তার স্বার্থে এটি কাউকে শেয়ার করবেন না।${warningText}`;
 
+    let sent = false;
     try {
-      await sendMetaWhatsAppMessage(targetPhone, messageText);
-      console.log(`[Auth] OTP ${otp} generated & sent to WhatsApp ${targetPhone}`);
+      sent = await sendMetaWhatsAppMessage(targetPhone, messageText);
+      console.log(`[Auth] OTP ${otp} generated & sent to WhatsApp ${targetPhone}, sent=${sent}`);
     } catch (msgErr) {
       console.error('[Auth] Failed to send WhatsApp message:', msgErr);
     }
 
     return res.json({
       requireOtp: true,
+      sentViaWhatsApp: sent,
       message: 'আপনার হোয়াটসঅ্যাপ নম্বরে লগইন কোড পাঠানো হয়েছে।'
     });
   } catch (error: any) {

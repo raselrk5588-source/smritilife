@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { Request, Response } from 'express';
 import User from '../models/User';
+import OtpToken from '../models/OtpToken';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
 import TodoList from '../models/TodoList';
@@ -1084,13 +1086,18 @@ export const sendMetaWhatsAppMessage = async (to: string, text: string): Promise
     return false;
   }
 
-  let formattedTo = to.trim();
-  if (formattedTo.startsWith('+')) formattedTo = formattedTo.substring(1);
-  else if (formattedTo.startsWith('01')) formattedTo = `88${formattedTo}`;
+  let formattedTo = to.trim().replace(/[^\d]/g, '');
+  if (formattedTo.startsWith('880')) {
+    // Already in 880XXXXXXXXXX format
+  } else if (formattedTo.startsWith('01')) {
+    formattedTo = `88${formattedTo}`;
+  } else if (formattedTo.length === 10 && formattedTo.startsWith('1')) {
+    formattedTo = `880${formattedTo}`;
+  }
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+      const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1107,7 +1114,7 @@ export const sendMetaWhatsAppMessage = async (to: string, text: string): Promise
       
       const data = await response.json();
       if (!response.ok) {
-        console.error('Error sending Meta message:', data);
+        console.error('Error sending Meta message:', JSON.stringify(data));
         if (attempt === 2) return false;
       } else {
         console.log(`✅ Meta WhatsApp Reply sent to ${formattedTo}: "${text}"`);
@@ -1302,6 +1309,16 @@ export const receiveWebhook = async (req: Request, res: Response) => {
       const changes = entry?.changes?.[0];
       const value = changes?.value;
       const messages = value?.messages;
+      const statuses = value?.statuses;
+
+      // Log delivery statuses (especially failures due to 24h window or invalid number)
+      if (statuses && statuses.length > 0) {
+        for (const st of statuses) {
+          if (st.status === 'failed') {
+            console.warn(`[Meta Webhook] WhatsApp message ${st.id} FAILED to deliver to ${st.recipient_id}:`, JSON.stringify(st.errors));
+          }
+        }
+      }
 
       if (messages && messages.length > 0) {
         const message = messages[0];
@@ -1379,6 +1396,52 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         // Show native WhatsApp "typing..." status & read receipt while AI processes the request
         if (message.id) {
           sendMetaTypingIndicator(message.id);
+        }
+
+        // Direct WhatsApp OTP request handler (User texted "OTP", "লগইন", "কোড", etc. or clicked website OTP link)
+        const rawOtpCheck = (userMessage || '').trim().toLowerCase();
+        const isOtpRequest = (
+          rawOtpCheck === 'otp' ||
+          rawOtpCheck === '/otp' ||
+          rawOtpCheck === 'code' ||
+          rawOtpCheck === '/code' ||
+          rawOtpCheck === 'লগইন' ||
+          rawOtpCheck === 'login' ||
+          rawOtpCheck === 'ওটিপি' ||
+          rawOtpCheck === 'কোড' ||
+          rawOtpCheck.startsWith('/start otp') ||
+          rawOtpCheck.includes('login otp') ||
+          rawOtpCheck.includes('লগইন ওটিপি')
+        );
+
+        if (isOtpRequest) {
+          let cleanFrom = fromNumber.replace(/[^\d]/g, '');
+          if (cleanFrom.startsWith('880')) {
+            cleanFrom = cleanFrom.substring(2);
+          } else if (cleanFrom.startsWith('88')) {
+            cleanFrom = cleanFrom.substring(2);
+          }
+          if (!cleanFrom.startsWith('0') && cleanFrom.length === 10) {
+            cleanFrom = '0' + cleanFrom;
+          }
+
+          const dynamicOtp = String(crypto.randomInt(1000, 10000));
+          const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes validity
+
+          await OtpToken.deleteMany({ mobile: cleanFrom });
+          await OtpToken.create({
+            mobile: cleanFrom,
+            otp: dynamicOtp,
+            expiresAt
+          });
+
+          console.log(`[WhatsApp-Webhook] Dynamic OTP ${dynamicOtp} generated via incoming WhatsApp message for ${cleanFrom}`);
+
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🔐 *স্মৃতি লাইফ (Smriti Life) লগইন ওটিপি*\n\nআপনার ওয়ান-টাইম লগইন কোড: *${dynamicOtp}*\n\n⏱ কোডটি আগামী ৫ মিনিট কার্যকর থাকবে। নিরাপত্তার স্বার্থে এটি কাউকে শেয়ার করবেন না।\n\n👉 স্মৃতি লাইফ ওয়েবসাইটে গিয়ে লগইন ফর্মে এই কোডটি দিয়ে প্রবেশ সম্পন্ন করুন:\nhttps://smritilife.com/auth`
+          );
+          return;
         }
 
         // WhatsApp cloud API sends number with country code without +

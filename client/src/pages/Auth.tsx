@@ -310,7 +310,7 @@ export default function Auth() {
                       📲 আপনার WhatsApp-এ ৪ ডিজিটের OTP পাঠানো হয়েছে
                     </p>
                     <p className="text-[11px] text-emerald-600 mt-0.5">
-                      কোডটি ৩ মিনিটের মধ্যে প্রবেশ করান।
+                      কোডটি ৫ মিনিটের মধ্যে প্রবেশ করান।
                     </p>
                   </div>
 
@@ -332,6 +332,7 @@ export default function Auth() {
                       className="w-full bg-slate-50 border-2 border-[#0A7756]/40 rounded-2xl pl-12 pr-4 py-3.5 text-center text-xl font-black text-slate-800 focus:outline-none focus:border-[#0A7756] focus:ring-2 focus:ring-[#0A7756]/20 transition-all tracking-[0.5em]"
                     />
                   </div>
+
                   <div className="text-center mt-3">
                     <button
                       type="button"
@@ -340,6 +341,22 @@ export default function Auth() {
                     >
                       কোড পাননি? আবার পাঠান
                     </button>
+                  </div>
+
+                  {/* Fallback Direct WhatsApp OTP Link */}
+                  <div className="mt-4 pt-3.5 border-t border-slate-100 text-center">
+                    <p className="text-[11px] text-slate-500 font-medium mb-2 leading-relaxed">
+                      হোয়াটসঅ্যাপে মেসেজ পাননি? সরাসরি WhatsApp থেকে ওটিপি নিন:
+                    </p>
+                    <a
+                      href={`https://wa.me/8801862636137?text=${encodeURIComponent('OTP')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 text-[#0A7756] border border-emerald-300/80 text-xs font-bold transition-all shadow-xs group"
+                    >
+                      <MessageSquare className="w-4 h-4 text-[#25D366] fill-[#25D366] shrink-0 group-hover:scale-110 transition-transform" />
+                      <span>WhatsApp থেকে তাৎক্ষণিক OTP নিন 💬</span>
+                    </a>
                   </div>
                 </div>
               )}
