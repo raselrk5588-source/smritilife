@@ -322,3 +322,202 @@ export const getAllSubscriptions = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+/**
+ * Send BDApps Robi/Airtel SMS OTP for 190 Tk subscription
+ */
+export const sendRobiSubscriptionOtp = async (req: Request, res: Response) => {
+  try {
+    const { mobile } = req.body;
+    if (!mobile) {
+      return res.status(400).json({ success: false, message: 'মোবাইল নম্বর প্রদান করুন।' });
+    }
+
+    let cleanMobile = String(mobile).replace(/[^\d]/g, '');
+    if (cleanMobile.startsWith('880')) cleanMobile = cleanMobile.substring(2);
+    else if (cleanMobile.startsWith('88')) cleanMobile = cleanMobile.substring(2);
+    if (!cleanMobile.startsWith('0') && cleanMobile.length === 10) cleanMobile = '0' + cleanMobile;
+
+    // Verify if Robi or Airtel
+    if (!cleanMobile.startsWith('018') && !cleanMobile.startsWith('016')) {
+      return res.status(400).json({
+        success: false,
+        message: 'এই অপশনটি শুধুমাত্র রবি (018) এবং এয়ারটেল (016) সিমের জন্য প্রযোজ্য। অন্যান্য অপারেটরের ক্ষেত্রে বিকাশ অপশনটি ব্যবহার করুন।'
+      });
+    }
+
+    const appId = process.env.BDAPPS_APP_ID || 'APP_140575';
+    const appPassword = process.env.BDAPPS_PASSWORD || '47b9ea91d92d9783a390681b2e07cd95';
+    const userMobile = 'tel:88' + cleanMobile;
+
+    const requestData = {
+      applicationId: appId,
+      password: appPassword,
+      subscriberId: userMobile,
+      applicationHash: 'Smriti Life',
+      applicationMetaData: {
+        client: 'MOBILEAPP',
+        device: 'Web Browser',
+        os: 'web',
+        appCode: 'https://smritilife.com'
+      }
+    };
+
+    const proxyUrl = 'https://portal.rtsquad.com/api/bdapps/proxy';
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Target-URL': 'https://developer.bdapps.com/subscription/otp/request'
+      },
+      body: JSON.stringify(requestData),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    const data: any = await response.json();
+    console.log('[Robi Subscription OTP Request]:', JSON.stringify(data));
+
+    if (data.referenceNo && (data.statusCode === 'S1000' || !data.statusCode || data.statusCode === '200')) {
+      return res.json({
+        success: true,
+        referenceNo: data.referenceNo,
+        message: 'আপনার রবি/এয়ারটেল নম্বরে ওটিপি কোড পাঠানো হয়েছে।'
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: data.statusDetail || data.message || 'ওটিপি পাঠানো সম্ভব হয়নি। অনুগ্রহ করে নম্বর পরীক্ষা করুন।'
+    });
+  } catch (error: any) {
+    console.error('sendRobiSubscriptionOtp error:', error);
+    res.status(500).json({ success: false, message: error.message || 'সার্ভার সমস্যা হয়েছে।' });
+  }
+};
+
+/**
+ * Verify BDApps Robi/Airtel SMS OTP and activate 190 Tk subscription & login
+ */
+export const verifyRobiSubscriptionOtp = async (req: Request, res: Response) => {
+  try {
+    const { mobile, otp, referenceNo, deviceId } = req.body;
+    if (!mobile || !otp || !referenceNo) {
+      return res.status(400).json({ success: false, message: 'মোবাইল নম্বর, ওটিপি এবং রেফারেন্স কোড প্রয়োজন।' });
+    }
+
+    let cleanMobile = String(mobile).replace(/[^\d]/g, '');
+    if (cleanMobile.startsWith('880')) cleanMobile = cleanMobile.substring(2);
+    else if (cleanMobile.startsWith('88')) cleanMobile = cleanMobile.substring(2);
+    if (!cleanMobile.startsWith('0') && cleanMobile.length === 10) cleanMobile = '0' + cleanMobile;
+
+    const appId = process.env.BDAPPS_APP_ID || 'APP_140575';
+    const appPassword = process.env.BDAPPS_PASSWORD || '47b9ea91d92d9783a390681b2e07cd95';
+
+    const requestData = {
+      applicationId: appId,
+      password: appPassword,
+      referenceNo,
+      otp: String(otp).trim()
+    };
+
+    const proxyUrl = 'https://portal.rtsquad.com/api/bdapps/proxy';
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Target-URL': 'https://developer.bdapps.com/subscription/otp/verify'
+      },
+      body: JSON.stringify(requestData),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    const data: any = await response.json();
+    console.log('[Robi Subscription OTP Verify]:', JSON.stringify(data));
+
+    const isSuccess = data.statusCode === 'S1000' || String(data.subscriptionStatus).toUpperCase() === 'REGISTERED';
+
+    if (!isSuccess) {
+      return res.status(400).json({
+        success: false,
+        message: data.statusDetail || data.message || 'ভুল বা মেয়াদোত্তীর্ণ ওটিপি কোড।'
+      });
+    }
+
+    // Subscription successful! Create or activate user
+    let user = await User.findOne({ mobile: cleanMobile });
+    if (!user) {
+      user = new User({
+        name: 'রবি ব্যবহারকারী',
+        mobile: cleanMobile,
+        whatsapp: cleanMobile,
+        email: `${cleanMobile}@smritilife.com`,
+        isSubscribed: true,
+        deviceIds: deviceId ? [deviceId] : []
+      });
+    } else {
+      user.isSubscribed = true;
+      if (deviceId) {
+        if (!user.deviceIds) user.deviceIds = [];
+        if (!user.deviceIds.includes(deviceId)) {
+          user.deviceIds.push(deviceId);
+          if (user.deviceIds.length > 2) user.deviceIds = user.deviceIds.slice(-2);
+        }
+      }
+    }
+    await user.save();
+
+    // Record subscription in DB
+    await Subscription.create({
+      userId: user._id,
+      requestId: `ROBI_${Date.now()}`,
+      subscriberId: `tel:88${cleanMobile}`,
+      status: 'SUBSCRIBED',
+      statusCode: 'S1000',
+      amount: 190,
+      meta: data
+    }).catch(e => console.error('Subscription record error:', e));
+
+    // Send BDApps confirmation SMS
+    try {
+      const smsPayload = {
+        applicationId: appId,
+        password: appPassword,
+        message: 'স্মৃতি লাইফ (Smriti Life)-এ স্বাগতম! ১৯০ টাকায় আপনার সাবস্ক্রিপশন সফলভাবে সম্পন্ন হয়েছে। সেবাটি সক্রিয় থাকবে। লগইন করুন: https://smritilife.com',
+        destinationAddresses: [`tel:88${cleanMobile}`]
+      };
+      fetch('https://portal.rtsquad.com/api/bdapps/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Target-URL': 'https://developer.bdapps.com/sms/send'
+        },
+        body: JSON.stringify(smsPayload)
+      }).catch(e => console.error('SMS send error:', e));
+    } catch (smsErr) {}
+
+    // Send WhatsApp welcome message
+    sendMetaWhatsAppMessage(
+      cleanMobile,
+      `🎉 *স্মৃতি লাইফ (Smriti Life)-এ আপনাকে স্বাগতম!*\n\nরবি/এয়ারটেল এর মাধ্যমে আপনার ১৯০ টাকার মাসিক সাবস্ক্রিপশন সফলভাবে সম্পন্ন হয়েছে।\n\n🌐 লগইন লিঙ্ক: https://smritilife.com/auth`
+    ).catch(e => console.error('WhatsApp message error:', e));
+
+    // Generate JWT token
+    const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
+
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        mobile: user.mobile,
+        isSubscribed: true
+      },
+      message: 'সাবস্ক্রিপশন সফলভাবে সম্পন্ন হয়েছে! স্বাগতম স্মৃতি লাইফে।'
+    });
+  } catch (error: any) {
+    console.error('verifyRobiSubscriptionOtp error:', error);
+    res.status(500).json({ success: false, message: error.message || 'সার্ভার সমস্যা হয়েছে।' });
+  }
+};

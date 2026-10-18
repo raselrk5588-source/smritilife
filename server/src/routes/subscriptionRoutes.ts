@@ -4,7 +4,9 @@ import {
   directSubscribeRedirect,
   verifySubscriptionReturn,
   bdappsNotificationWebhook,
-  getAllSubscriptions
+  getAllSubscriptions,
+  sendRobiSubscriptionOtp,
+  verifyRobiSubscriptionOtp
 } from '../controllers/subscriptionController';
 
 const router = express.Router();
@@ -15,6 +17,10 @@ router.post('/bkash/init', initBkashSubscription);
 // Direct 302 redirect for server-side authorization flow
 router.get('/bkash/authorize', directSubscribeRedirect);
 router.get('/bkash/subscribe', directSubscribeRedirect);
+
+// Robi / Airtel SIM carrier billing subscription (190 Tk)
+router.post('/robi/send-otp', sendRobiSubscriptionOtp);
+router.post('/robi/verify-otp', verifyRobiSubscriptionOtp);
 
 // Callback / User return verification
 router.post('/verify', verifySubscriptionReturn);
