@@ -400,7 +400,7 @@ export const sendRobiSubscriptionOtp = async (req: Request, res: Response) => {
  */
 export const verifyRobiSubscriptionOtp = async (req: Request, res: Response) => {
   try {
-    const { mobile, otp, referenceNo, deviceId } = req.body;
+    const { mobile, otp, referenceNo, deviceId, name, whatsapp } = req.body;
     if (!mobile || !otp || !referenceNo) {
       return res.status(400).json({ success: false, message: 'মোবাইল নম্বর, ওটিপি এবং রেফারেন্স কোড প্রয়োজন।' });
     }
@@ -409,6 +409,15 @@ export const verifyRobiSubscriptionOtp = async (req: Request, res: Response) => 
     if (cleanMobile.startsWith('880')) cleanMobile = cleanMobile.substring(2);
     else if (cleanMobile.startsWith('88')) cleanMobile = cleanMobile.substring(2);
     if (!cleanMobile.startsWith('0') && cleanMobile.length === 10) cleanMobile = '0' + cleanMobile;
+
+    let cleanWhatsApp = cleanMobile;
+    if (whatsapp) {
+      let wClean = String(whatsapp).replace(/[^\d]/g, '');
+      if (wClean.startsWith('880')) wClean = wClean.substring(2);
+      else if (wClean.startsWith('88')) wClean = wClean.substring(2);
+      if (!wClean.startsWith('0') && wClean.length === 10) wClean = '0' + wClean;
+      if (wClean.length === 11) cleanWhatsApp = wClean;
+    }
 
     const appId = process.env.BDAPPS_APP_ID || 'APP_140575';
     const appPassword = process.env.BDAPPS_PASSWORD || '47b9ea91d92d9783a390681b2e07cd95';
@@ -443,18 +452,22 @@ export const verifyRobiSubscriptionOtp = async (req: Request, res: Response) => 
       });
     }
 
-    // Subscription successful! Create or activate user
+    // Subscription successful! Create or activate user with their custom Name & WhatsApp
     let user = await User.findOne({ mobile: cleanMobile });
+    const userRealName = (name && String(name).trim()) || user?.name || 'স্মৃতি গ্রাহক';
+
     if (!user) {
       user = new User({
-        name: 'রবি ব্যবহারকারী',
+        name: userRealName,
         mobile: cleanMobile,
-        whatsapp: cleanMobile,
+        whatsapp: cleanWhatsApp,
         email: `${cleanMobile}@smritilife.com`,
         isSubscribed: true,
         deviceIds: deviceId ? [deviceId] : []
       });
     } else {
+      user.name = userRealName;
+      user.whatsapp = cleanWhatsApp;
       user.isSubscribed = true;
       if (deviceId) {
         if (!user.deviceIds) user.deviceIds = [];
@@ -495,10 +508,10 @@ export const verifyRobiSubscriptionOtp = async (req: Request, res: Response) => 
       }).catch(e => console.error('SMS send error:', e));
     } catch (smsErr) {}
 
-    // Send WhatsApp welcome message
+    // Send WhatsApp welcome message to user's designated WhatsApp number
     sendMetaWhatsAppMessage(
-      cleanMobile,
-      `🎉 *স্মৃতি লাইফ (Smriti Life)-এ আপনাকে স্বাগতম!*\n\nরবি/এয়ারটেল এর মাধ্যমে আপনার ১৯০ টাকার মাসিক সাবস্ক্রিপশন সফলভাবে সম্পন্ন হয়েছে।\n\n🌐 লগইন লিঙ্ক: https://smritilife.com/auth`
+      cleanWhatsApp,
+      `🎉 *স্মৃতি লাইফ (Smriti Life)-এ আপনাকে স্বাগতম, ${userRealName}!* 🤖\n\nরবি/এয়ারটেল এর মাধ্যমে আপনার ১৯০ টাকার মাসিক সাবস্ক্রিপশন সফলভাবে সম্পন্ন হয়েছে।\n\nদৈনিক রিমাইন্ডার, নোট বা খরচ রাখতে এই চ্যাটে সরাসরি *"হাই"* লিখে শুরু করুন! 😊\n\n🌐 লগইন লিঙ্ক: https://smritilife.com`
     ).catch(e => console.error('WhatsApp message error:', e));
 
     // Generate JWT token
@@ -512,6 +525,7 @@ export const verifyRobiSubscriptionOtp = async (req: Request, res: Response) => 
         id: user._id,
         name: user.name,
         mobile: user.mobile,
+        whatsapp: user.whatsapp,
         isSubscribed: true
       },
       message: 'সাবস্ক্রিপশন সফলভাবে সম্পন্ন হয়েছে! স্বাগতম স্মৃতি লাইফে।'

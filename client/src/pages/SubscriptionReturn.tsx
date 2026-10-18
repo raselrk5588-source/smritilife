@@ -100,12 +100,7 @@ export default function SubscriptionReturn() {
   }, [success, countdown]);
 
   const handleContinue = () => {
-    const isProfileCompleted = localStorage.getItem('isProfileCompleted');
-    if (isProfileCompleted === 'true') {
-      navigate('/app');
-    } else {
-      navigate('/complete-profile');
-    }
+    navigate('/complete-profile');
   };
 
   const getFriendlyErrorMessage = (code: string) => {
@@ -189,9 +184,9 @@ export default function SubscriptionReturn() {
 
               <button
                 onClick={handleContinue}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-2xl transition flex items-center justify-center gap-2 group text-sm cursor-pointer"
+                className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group text-sm cursor-pointer"
               >
-                <span>ওয়েবসাইটে প্রবেশ করুন ({countdown}s)</span>
+                <span>নাম ও হোয়াটসঅ্যাপ নম্বর সেট করুন ({countdown}s)</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Shield, Sparkles, ChevronRight, Phone, ArrowRight, Loader2, KeyRound } from 'lucide-react';
+import { CheckCircle2, Shield, Sparkles, ChevronRight, Phone, ArrowRight, Loader2, KeyRound, User, MessageSquare } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -16,6 +16,8 @@ export default function Paywall() {
   const [robiMobile, setRobiMobile] = useState('');
   const [robiStep, setRobiStep] = useState<1 | 2>(1);
   const [robiOtp, setRobiOtp] = useState('');
+  const [robiUserName, setRobiUserName] = useState('');
+  const [robiWhatsApp, setRobiWhatsApp] = useState('');
   const [referenceNo, setReferenceNo] = useState('');
 
   useEffect(() => {
@@ -129,6 +131,9 @@ export default function Paywall() {
 
       if (res.ok && data.success && data.referenceNo) {
         setReferenceNo(data.referenceNo);
+        if (!robiWhatsApp) {
+          setRobiWhatsApp(cleanNum);
+        }
         setRobiStep(2);
         toast.success('আপনার রবি সিমে ওটিপি পাঠানো হয়েছে!', { id: 'robiOtp' });
       } else {
@@ -150,6 +155,18 @@ export default function Paywall() {
       return;
     }
 
+    const cleanName = robiUserName.trim();
+    if (!cleanName) {
+      toast.error('অনুগ্রহ করে আপনার পূর্ণ নাম লিখুন।');
+      return;
+    }
+
+    const cleanWhatsApp = robiWhatsApp.trim();
+    if (!cleanWhatsApp || !/^01[3-9]\d{8}$/.test(cleanWhatsApp)) {
+      toast.error('অনুগ্রহ করে সঠিক ১১ ডিজিটের WhatsApp নম্বর দিন।');
+      return;
+    }
+
     setIsProcessing(true);
     toast.loading('সাবস্ক্রিপশন ভেরিফাই করা হচ্ছে...', { id: 'robiVerify' });
 
@@ -162,7 +179,9 @@ export default function Paywall() {
           mobile: robiMobile.trim(),
           otp: cleanOtp,
           referenceNo,
-          deviceId
+          deviceId,
+          name: cleanName,
+          whatsapp: cleanWhatsApp
         })
       });
 
@@ -174,8 +193,10 @@ export default function Paywall() {
         localStorage.setItem('isSubscribed', 'true');
         localStorage.setItem('userMobile', robiMobile.trim());
         if (data.user?.name) localStorage.setItem('userName', data.user.name);
+        if (data.user?.whatsapp) localStorage.setItem('whatsappNumber', data.user.whatsapp);
+        localStorage.setItem('isProfileCompleted', 'true');
 
-        toast.success('রবি সাবস্ক্রিপশন সফল হয়েছে! স্বাগতম স্মৃতি লাইফে 🎉', { id: 'robiVerify', duration: 4000 });
+        toast.success(`স্বাগতম ${data.user?.name || ''}! সাবস্ক্রিপশন সফল হয়েছে 🎉`, { id: 'robiVerify', duration: 4000 });
         setTimeout(() => navigate('/app'), 1000);
       } else {
         toast.error(data.message || 'ভুল বা মেয়াদোত্তীর্ণ ওটিপি!', { id: 'robiVerify', duration: 5000 });
@@ -411,7 +432,7 @@ export default function Paywall() {
                     </p>
                   </div>
 
-                  <div className="mb-4">
+                  <div className="mb-3">
                     <div className="relative max-w-[200px] mx-auto">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <KeyRound className="h-4 w-4 text-[#e31b23]" />
@@ -424,10 +445,10 @@ export default function Paywall() {
                         autoFocus
                         value={robiOtp}
                         onChange={(e) => setRobiOtp(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border-2 border-[#e31b23]/40 rounded-xl text-center text-lg font-black text-slate-800 tracking-[0.3em] focus:outline-none focus:border-[#e31b23]"
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border-2 border-[#e31b23]/40 rounded-xl text-center text-lg font-black text-slate-800 tracking-[0.3em] focus:outline-none focus:border-[#e31b23]"
                       />
                     </div>
-                    <div className="text-center mt-2">
+                    <div className="text-center mt-1.5">
                       <button
                         type="button"
                         onClick={() => { setRobiStep(1); setRobiOtp(''); }}
@@ -435,6 +456,48 @@ export default function Paywall() {
                       >
                         নম্বর পরিবর্তন / কোড আবার পাঠান
                       </button>
+                    </div>
+                  </div>
+
+                  {/* Profile Info: Name & WhatsApp */}
+                  <div className="space-y-3 mb-4 text-left border-t border-slate-100 pt-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1 block">
+                        আপনার পূর্ণ নাম <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <User className="h-4 w-4 text-slate-400" />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="যেমন: রিয়াদ হাসান"
+                          value={robiUserName}
+                          onChange={(e) => setRobiUserName(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#e31b23] focus:ring-1 focus:ring-[#e31b23]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1 block">
+                        আপনার WhatsApp নম্বর <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Phone className="h-4 w-4 text-slate-400" />
+                        </div>
+                        <input
+                          type="tel"
+                          placeholder="01XXXXXXXXX"
+                          value={robiWhatsApp}
+                          onChange={(e) => setRobiWhatsApp(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#e31b23] focus:ring-1 focus:ring-[#e31b23]"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        💡 WhatsApp নম্বর রবি সিম থেকে আলাদা হলে এখানে লিখুন।
+                      </p>
                     </div>
                   </div>
 

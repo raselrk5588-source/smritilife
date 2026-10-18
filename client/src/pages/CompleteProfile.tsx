@@ -13,13 +13,22 @@ export default function CompleteProfile() {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   useEffect(() => {
-    // Get the bKash number saved during payment
-    const savedNumber = localStorage.getItem('userMobile') || '';
-    if (!savedNumber) {
+    // Get the mobile number saved during payment
+    const savedNumber = localStorage.getItem('userMobile') || localStorage.getItem('pendingMsisdn') || '';
+    if (!savedNumber && !localStorage.getItem('token')) {
       // If somehow reached here without payment
       navigate('/');
+      return;
     }
-    setBkashNumber(savedNumber);
+    if (savedNumber) {
+      setBkashNumber(savedNumber);
+      setWhatsapp(savedNumber);
+    }
+
+    const savedName = localStorage.getItem('userName') || '';
+    if (savedName && savedName !== 'নতুন ব্যবহারকারী' && savedName !== 'রবি ব্যবহারকারী') {
+      setName(savedName);
+    }
 
     // Adjust size for mobile view by decreasing 10%
     const handleResize = () => {
@@ -43,16 +52,22 @@ export default function CompleteProfile() {
     e.preventDefault();
     setIsSubmitted(true);
     
-    if (!name || !whatsapp) {
-      toast.error('নাম এবং হোয়াটসঅ্যাপ নম্বর অবশ্যই দিতে হবে');
+    if (!name.trim()) {
+      toast.error('অনুগ্রহ করে আপনার নাম লিখুন');
+      return;
+    }
+
+    const cleanWhatsapp = whatsapp.trim();
+    if (!cleanWhatsapp || !/^01[3-9]\d{8}$/.test(cleanWhatsapp)) {
+      toast.error('সঠিক ১১ ডিজিটের WhatsApp নম্বর দিন (যেমন: 017XXXXXXXX)');
       return;
     }
 
     try {
       // Construct payload dynamically to avoid overriding valid email with empty string
-      const payload: any = { name, whatsapp };
+      const payload: any = { name: name.trim(), whatsapp: cleanWhatsapp };
       if (email.trim() !== '') {
-        payload.email = email;
+        payload.email = email.trim();
       }
       
       const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/users/profile`, {
@@ -64,10 +79,11 @@ export default function CompleteProfile() {
       if (res.ok) {
         const result = await res.json();
         // Also save to localStorage for immediate UI updates
-        localStorage.setItem('userName', name);
+        localStorage.setItem('userName', name.trim());
         if (result.email) localStorage.setItem('userEmail', result.email);
-        localStorage.setItem('whatsappNumber', whatsapp);
+        localStorage.setItem('whatsappNumber', cleanWhatsapp);
         localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('isSubscribed', 'true');
         localStorage.setItem('isProfileCompleted', 'true');
 
         toast.success('প্রোফাইল আপডেট সফল হয়েছে!');
@@ -96,32 +112,34 @@ export default function CompleteProfile() {
           </div>
 
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-extrabold text-slate-800 mb-2">পেমেন্ট সফল হয়েছে!</h2>
+            <h2 className="text-2xl font-extrabold text-slate-800 mb-2">সাবস্ক্রিপশন সফল হয়েছে!</h2>
             <p className="text-slate-500 text-sm font-medium px-4">
-              দয়া করে আপনার প্রোফাইল সম্পূর্ণ করুন যেন আমরা আপনাকে রিমাইন্ডার পাঠাতে পারি।
+              দয়া করে আপনার নাম এবং WhatsApp নম্বর দিন যেন আমরা আপনাকে সময়মতো রিমাইন্ডার ও অ্যাসিস্ট্যান্ট সেবা দিতে পারি।
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Disabled bKash Number field (Unique ID) */}
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">আপনার Unique ID (bKash নম্বর)</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <ShieldCheck className="h-5 w-5 text-emerald-600" />
+            {/* Disabled Mobile Number field */}
+            {bkashNumber && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">সাবস্ক্রিপশন মোবাইল নম্বর</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <input
+                    type="text"
+                    value={bkashNumber}
+                    disabled
+                    className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold text-emerald-800 cursor-not-allowed"
+                  />
                 </div>
-                <input
-                  type="text"
-                  value={bkashNumber}
-                  disabled
-                  className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold text-emerald-800 cursor-not-allowed"
-                />
               </div>
-            </div>
+            )}
 
             <div>
               <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">
-                আপনার নাম {isSubmitted && !name && <span className="text-red-500 text-sm">*</span>}
+                আপনার পূর্ণ নাম {isSubmitted && !name && <span className="text-red-500 text-sm">*</span>}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -131,10 +149,31 @@ export default function CompleteProfile() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="আপনার পুরো নাম লিখুন"
+                  placeholder="আপনার পুরো নাম লিখুন (যেমন: রিয়াদ হাসান)"
                   className={`w-full bg-slate-50 border ${isSubmitted && !name ? 'border-red-400 focus:ring-red-400/20' : 'border-slate-200 focus:border-[#0A7756] focus:ring-[#0A7756]/20'} rounded-2xl pl-12 pr-4 py-3.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 transition-all`}
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">
+                WhatsApp নম্বর (রিমাইন্ডারের জন্য) {isSubmitted && !whatsapp && <span className="text-red-500 text-sm">*</span>}
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Phone className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="tel"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  placeholder="01XXXXXXXXX"
+                  className={`w-full bg-slate-50 border ${isSubmitted && !whatsapp ? 'border-red-400 focus:ring-red-400/20' : 'border-slate-200 focus:border-[#0A7756] focus:ring-[#0A7756]/20'} rounded-2xl pl-12 pr-4 py-3.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 transition-all`}
+                />
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1 ml-1">
+                💡 আপনার হোয়াটসঅ্যাপ নম্বর যদি সাবস্ক্রিপশন নম্বর থেকে আলাদা হয়, তবে সেই নম্বরটি দিন।
+              </p>
             </div>
 
             <div>
@@ -153,29 +192,11 @@ export default function CompleteProfile() {
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">
-                WhatsApp নম্বর (রিমাইন্ডারের জন্য) {isSubmitted && !whatsapp && <span className="text-red-500 text-sm">*</span>}
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Phone className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="tel"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  placeholder="017XXXXXXX"
-                  className={`w-full bg-slate-50 border ${isSubmitted && !whatsapp ? 'border-red-400 focus:ring-red-400/20' : 'border-slate-200 focus:border-[#0A7756] focus:ring-[#0A7756]/20'} rounded-2xl pl-12 pr-4 py-3.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 transition-all`}
-                />
-              </div>
-            </div>
-
             <button
               type="submit"
-              className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center group mt-6"
+              className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center group mt-6 cursor-pointer"
             >
-              প্রোফাইল সেভ করুন 
+              প্রোফাইল সেভ করে অ্যাপে প্রবেশ করুন 
               <ChevronRight className="w-5 h-5 ml-1 group-hover:translate-x-1 transition-transform" />
             </button>
           </form>
