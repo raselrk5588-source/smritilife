@@ -5,6 +5,13 @@ import Activity from '../models/Activity';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
 import Subscription from '../models/Subscription';
+import Expense from '../models/Expense';
+import Debt from '../models/Debt';
+import TodoList from '../models/TodoList';
+import SpecialDate from '../models/SpecialDate';
+import Contact from '../models/Contact';
+import UserDocument from '../models/UserDocument';
+import OtpToken from '../models/OtpToken';
 
 import SystemLog from '../models/SystemLog';
 import WishTemplate from '../models/WishTemplate';
@@ -108,6 +115,58 @@ export const toggleSubscription = async (req: Request, res: Response) => {
     res.json({ success: true, isSubscribed: user.isSubscribed, message: 'Subscription updated' });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Permanently delete a user and wipe subscription & associated records
+export const deleteUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'ইউজার পাওয়া যায়নি।' });
+    }
+
+    // Safety: Protect super admin / system developer account
+    if (user.isAdmin || user.mobile === '01734042131') {
+      return res.status(403).json({ success: false, message: 'অ্যাডমিন অ্যাকাউন্ট ডিলিট করা সম্ভব নয়।' });
+    }
+
+    const cleanMobile = user.mobile;
+
+    // Remove user and all related records completely
+    await Promise.all([
+      User.findByIdAndDelete(id),
+      Subscription.deleteMany({
+        $or: [
+          { userId: user._id },
+          ...(cleanMobile ? [
+            { msisdn: cleanMobile },
+            { subscriberId: `tel:88${cleanMobile}` },
+            { subscriberId: cleanMobile }
+          ] : [])
+        ]
+      }),
+      cleanMobile ? OtpToken.deleteMany({ mobile: cleanMobile }) : Promise.resolve(),
+      Note.deleteMany({ userId: id }),
+      Reminder.deleteMany({ userId: id }),
+      Wish.deleteMany({ userId: id }),
+      Activity.deleteMany({ userId: id }),
+      Expense.deleteMany({ userId: id }),
+      Debt.deleteMany({ userId: id }),
+      TodoList.deleteMany({ userId: id }),
+      SpecialDate.deleteMany({ userId: id }),
+      Contact.deleteMany({ userId: id }),
+      UserDocument.deleteMany({ userId: id })
+    ]);
+
+    res.json({
+      success: true,
+      message: 'ইউজার এবং সম্পর্কিত সাবস্ক্রিপশন সফলভাবে মুছে ফেলা হয়েছে।'
+    });
+  } catch (error: any) {
+    console.error('deleteUser error:', error);
+    res.status(500).json({ success: false, message: error.message || 'ইউজার ডিলিট করা সম্ভব হয়নি।' });
   }
 };
 

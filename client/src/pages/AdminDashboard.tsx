@@ -444,6 +444,34 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteUser = async (userId: string, userName: string, userMobile?: string) => {
+    const confirmMessage = `আপনি কি নিশ্চিত যে ইউজার "${userName}" (${userMobile || 'নম্বর নেই'}) কে সম্পূর্ণ মুছে ফেলতে চান?\n\n⚠️ মুছে ফেললে ইউজারের অ্যাকাউন্ট ও সাবস্ক্রিপশন বাতিল হয়ে যাবে এবং পুনরায় সাবস্ক্রিপশন (১৯০ টাকা) ছাড়া অ্যাপে আর প্রবেশ করতে পারবেন না।`;
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+      });
+      const result = await res.json();
+      if (result.success) {
+        const deletedUser = users.find(u => u._id === userId);
+        setUsers(users.filter(u => u._id !== userId));
+        setData(prev => prev ? {
+          ...prev,
+          totalUsers: Math.max(0, prev.totalUsers - 1),
+          activeSubscribers: deletedUser?.isSubscribed ? Math.max(0, prev.activeSubscribers - 1) : prev.activeSubscribers,
+          inactiveSubscribers: !deletedUser?.isSubscribed ? Math.max(0, prev.inactiveSubscribers - 1) : prev.inactiveSubscribers,
+        } : prev);
+        toast.success(result.message || 'ইউজার সফলভাবে মুছে ফেলা হয়েছে।');
+      } else {
+        toast.error(result.message || 'ইউজার মুছতে ব্যর্থ হয়েছে।');
+      }
+    } catch (e) {
+      toast.error('সার্ভারের সাথে সংযোগ করা সম্ভব হয়নি।');
+    }
+  };
+
   const handleSaveTemplate = async () => {
     try {
       const url = editingTemplate 
@@ -1693,7 +1721,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        {/* Bottom Actions: Toggle Subscription & WhatsApp Direct Link */}
+                        {/* Bottom Actions: Toggle Subscription, WhatsApp Direct Link & Delete User */}
                         <div className="flex items-center gap-2 pt-0.5">
                           <button
                             onClick={() => handleToggleSubscription(user._id, user.isSubscribed)}
@@ -1724,6 +1752,13 @@ export default function AdminDashboard() {
                               <MessageSquare className="w-4 h-4" />
                             </a>
                           )}
+                          <button
+                            onClick={() => handleDeleteUser(user._id, user.name, user.mobile)}
+                            className="p-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition flex items-center justify-center shrink-0 shadow-sm"
+                            title="ইউজার সম্পূর্ণ মুছে ফেলুন"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     );
@@ -1782,16 +1817,36 @@ export default function AdminDashboard() {
                               )}
                             </td>
                             <td className="py-5 px-4 text-right">
-                              <button
-                                onClick={() => handleToggleSubscription(user._id, user.isSubscribed)}
-                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95 ${
-                                  user.isSubscribed 
-                                    ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50' 
-                                    : 'bg-[#0A7756] text-white hover:bg-[#086146]'
-                                }`}
-                              >
-                                {user.isSubscribed ? 'বন্ধ করুন' : 'চালু করুন'}
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleToggleSubscription(user._id, user.isSubscribed)}
+                                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
+                                    user.isSubscribed 
+                                      ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50' 
+                                      : 'bg-[#0A7756] text-white hover:bg-[#086146]'
+                                  }`}
+                                >
+                                  {user.isSubscribed ? 'বন্ধ করুন' : 'চালু করুন'}
+                                </button>
+                                {user.mobile && (
+                                  <a
+                                    href={`https://wa.me/88${user.mobile.replace(/\D/g, '').length > 10 ? user.mobile.replace(/\D/g, '').slice(-10) : user.mobile.replace(/\D/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition flex items-center justify-center shadow-sm"
+                                    title="WhatsApp-এ যোগাযোগ"
+                                  >
+                                    <MessageSquare className="w-4 h-4" />
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteUser(user._id, user.name, user.mobile)}
+                                  className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition flex items-center justify-center shadow-sm"
+                                  title="ইউজার সম্পূর্ণ মুছে ফেলুন"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
