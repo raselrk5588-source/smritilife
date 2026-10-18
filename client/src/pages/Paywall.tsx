@@ -35,8 +35,9 @@ export default function Paywall() {
 
   // Unified Subscription Handler (bKash & Robi via bdapps Charging SDK)
   const handleStartSubscription = async () => {
-    if (mobileNumber && !/^01[3-9]\d{8}$/.test(mobileNumber.trim())) {
-      toast.error('সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)');
+    const cleanMobile = mobileNumber.trim();
+    if (!cleanMobile || !/^01[3-9]\d{8}$/.test(cleanMobile)) {
+      toast.error('অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)');
       return;
     }
 
@@ -171,36 +172,27 @@ export default function Paywall() {
             </div>
           </div>
 
-          {/* Optional Phone Input Field */}
-          {showPhoneInput ? (
-            <div className="mb-4 text-left">
-              <label className="text-xs font-bold text-slate-600 mb-1.5 block">
-                আপনার মোবাইল নম্বর (ঐচ্ছিক / সুবিধার্থে)
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Phone className="h-4 w-4 text-slate-400" />
-                </div>
-                <input
-                  type="tel"
-                  placeholder="01XXXXXXXXX"
-                  value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-1 focus:ring-[#0A7756]"
-                />
+          {/* Mobile Number Input Field */}
+          <div className="mb-4 text-left">
+            <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+              আপনার মোবাইল নম্বর (বিকাশ বা রবি) <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Phone className="h-4 w-4 text-slate-400" />
               </div>
+              <input
+                type="tel"
+                placeholder="01XXXXXXXXX"
+                value={mobileNumber}
+                onChange={(e) => setMobileNumber(e.target.value)}
+                className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-1 focus:ring-[#0A7756]"
+              />
             </div>
-          ) : (
-            <div className="mb-4 text-center">
-              <button
-                type="button"
-                onClick={() => setShowPhoneInput(true)}
-                className="text-xs text-slate-500 hover:text-[#0A7756] font-semibold transition underline decoration-dotted cursor-pointer"
-              >
-                {mobileNumber ? `মোবাইল নম্বর: ${mobileNumber} (পরিবর্তন করুন)` : '+ মোবাইল নম্বর যোগ করুন (ঐচ্ছিক)'}
-              </button>
-            </div>
-          )}
+            <p className="text-[11px] text-slate-500 mt-1">
+              💡 যে নম্বরটি দিয়ে পেমেন্ট বা সাবস্ক্রাইব করবেন সেই নম্বরটি দিন।
+            </p>
+          </div>
 
           {/* Single Unified Subscription Button */}
           <button

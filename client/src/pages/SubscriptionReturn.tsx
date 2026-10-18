@@ -65,13 +65,21 @@ export default function SubscriptionReturn() {
             localStorage.setItem('isAuthenticated', 'true');
           }
           if (data.user) {
-            localStorage.setItem('userName', data.user.name);
-            if (data.user.mobile) localStorage.setItem('userMobile', data.user.mobile);
+            if (data.user.name && data.user.name !== 'নতুন ব্যবহারকারী' && data.user.name !== 'রবি ব্যবহারকারী') {
+              localStorage.setItem('userName', data.user.name);
+            } else {
+              localStorage.removeItem('userName');
+            }
+            if (data.user.mobile) {
+              localStorage.setItem('userMobile', data.user.mobile);
+              localStorage.setItem('whatsappNumber', data.user.whatsapp || data.user.mobile);
+            }
           }
 
-          // Clear pending items
+          // Clear pending items and profile completed flag
           localStorage.removeItem('pendingBkashRequestId');
           localStorage.removeItem('pendingMsisdn');
+          localStorage.removeItem('isProfileCompleted');
         } else {
           setSuccess(false);
           setErrorMessage(data.message || 'বিকাশ সাবস্ক্রিপশন যাচাই করতে সমস্যা হয়েছে।');

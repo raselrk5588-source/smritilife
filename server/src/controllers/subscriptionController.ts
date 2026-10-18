@@ -150,36 +150,41 @@ export const verifySubscriptionReturn = async (req: Request, res: Response) => {
       });
     }
 
-    // Now update or find the user
+    let phone = msisdn || subscription?.msisdn;
+    if (!phone && subscriberId) {
+      const cleanDigits = String(subscriberId).replace(/[^\d]/g, '');
+      if (cleanDigits.startsWith('880')) phone = cleanDigits.substring(2);
+      else if (cleanDigits.startsWith('88')) phone = cleanDigits.substring(2);
+      else if (cleanDigits.startsWith('01')) phone = cleanDigits;
+    }
+
+    // Now update or find the user (prioritize actual subscription phone number)
     let user = null;
-    if (currentUserId) {
-      user = await User.findById(currentUserId);
-    }
-
-    if (!user && (msisdn || subscription?.msisdn)) {
-      const phone = msisdn || subscription?.msisdn;
+    if (phone) {
       user = await User.findOne({ mobile: phone });
+      if (!user) {
+        user = await User.create({
+          name: 'নতুন ব্যবহারকারী',
+          email: `${phone}@smritilife.com`,
+          mobile: phone,
+          whatsapp: phone,
+          isSubscribed: true
+        });
+      } else {
+        user.isSubscribed = true;
+        await user.save();
+      }
+    } else if (currentUserId) {
+      user = await User.findById(currentUserId);
+      if (user) {
+        user.isSubscribed = true;
+        await user.save();
+      }
     }
 
-    if (user) {
-      user.isSubscribed = true;
-      await user.save();
-      if (subscription && !subscription.userId) {
-        subscription.userId = user._id as any;
-        await subscription.save();
-      }
-    } else if (msisdn || subscription?.msisdn) {
-      const phone = msisdn || subscription?.msisdn;
-      user = await User.create({
-        name: 'নতুন ব্যবহারকারী',
-        email: `${phone}@example.com`,
-        mobile: phone,
-        isSubscribed: true
-      });
-      if (subscription) {
-        subscription.userId = user._id as any;
-        await subscription.save();
-      }
+    if (user && subscription && !subscription.userId) {
+      subscription.userId = user._id as any;
+      await subscription.save();
     }
 
     let token = null;
