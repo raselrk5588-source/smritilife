@@ -4,6 +4,7 @@ import User from '../models/User';
 import Subscription from '../models/Subscription';
 import SystemSettings from '../models/SystemSettings';
 import { createAuthorizationRequest, getBdappsConfig } from '../services/bdappsBkashService';
+import { sendMetaWhatsAppMessage } from './whatsappController';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
 
@@ -216,13 +217,30 @@ export const verifySubscriptionReturn = async (req: Request, res: Response) => {
  */
 export const bdappsNotificationWebhook = async (req: Request, res: Response) => {
   try {
-    const payload = req.body;
+    const payload = req.body || {};
     console.log('[bdapps Subscription Webhook]:', JSON.stringify(payload));
 
-    const { requestId, subscriberId, status, statusCode, msisdn } = payload;
+    const { requestId, subscriberId, status, statusCode } = payload;
+    let msisdn = payload.msisdn;
+
+    if (!msisdn && subscriberId) {
+      const cleanDigits = String(subscriberId).replace(/[^\d]/g, '');
+      if (cleanDigits.startsWith('880')) {
+        msisdn = cleanDigits.substring(2);
+      } else if (cleanDigits.startsWith('88')) {
+        msisdn = cleanDigits.substring(2);
+      } else if (cleanDigits.startsWith('01')) {
+        msisdn = cleanDigits;
+      }
+    }
+
+    const isSub =
+      status === 'REGISTERED' ||
+      status === '1' ||
+      status === 'SUBSCRIBED' ||
+      statusCode === 'S1000';
 
     if (requestId) {
-      const isSub = status === 'REGISTERED' || status === 'SUBSCRIBED' || statusCode === 'S1000';
       await Subscription.findOneAndUpdate(
         { requestId },
         {
@@ -233,9 +251,43 @@ export const bdappsNotificationWebhook = async (req: Request, res: Response) => 
         },
         { upsert: true }
       );
+    } else if (msisdn && isSub) {
+      // Record subscription event (e.g. from Robi OTP portal or USSD)
+      await Subscription.create({
+        requestId: `ROBI_${Date.now()}`,
+        subscriberId: subscriberId || `tel:88${msisdn}`,
+        status: 'SUBSCRIBED',
+        statusCode: statusCode || 'S1000',
+        amount: 4,
+        meta: payload
+      }).catch(err => console.error('[bdapps Webhook] Subscription record error:', err));
+    }
 
-      if (msisdn) {
-        await User.findOneAndUpdate({ mobile: msisdn }, { isSubscribed: isSub });
+    if (msisdn) {
+      let user = await User.findOne({ mobile: msisdn });
+      if (user) {
+        user.isSubscribed = isSub;
+        await user.save();
+        console.log(`[bdapps Webhook] User ${msisdn} subscription set to ${isSub}`);
+      } else if (isSub) {
+        user = new User({
+          name: 'রবি ব্যবহারকারী',
+          mobile: msisdn,
+          whatsapp: msisdn,
+          email: `${msisdn}@smritilife.com`,
+          isSubscribed: true,
+          deviceIds: []
+        });
+        await user.save();
+        console.log(`[bdapps Webhook] Created new user ${msisdn} with isSubscribed: true`);
+      }
+
+      if (isSub) {
+        // Send WhatsApp welcome and onboarding message
+        const welcomeText = `🎉 *স্মৃতি লাইফ (Smriti Life)-এ আপনাকে স্বাগতম!*\n\nরবি/এয়ারটেল এর মাধ্যমে আপনার সাবস্ক্রিপশন সফলভাবে সম্পন্ন হয়েছে। এখন থেকে আপনি প্রতিদিন স্মৃতি লাইফের সব ফিচার নির্বিঘ্নে ব্যবহার করতে পারবেন।\n\n🌐 লগইন লিঙ্ক: https://smritilife.com/auth\n💬 যেকোনো প্রশ্ন বা সাহায্যের জন্য সরাসরি এখানে মেসেজ দিন!`;
+        sendMetaWhatsAppMessage(msisdn, welcomeText).catch(e =>
+          console.error('[bdapps Webhook] WhatsApp alert error:', e)
+        );
       }
     }
 

@@ -16,3 +16,4 @@ payload.json
 server/payload.json
 runs.json
 *.mp4
+auth/*.txt
