@@ -17,6 +17,8 @@ export default function MainLayout() {
   useEffect(() => {
     if (!localStorage.getItem('isAuthenticated')) {
       navigate('/');
+    } else if (localStorage.getItem('isSubscribed') !== 'true') {
+      navigate('/paywall');
     }
     // Ensure default natural 100% font size on mobile and desktop
     document.documentElement.style.fontSize = '';
