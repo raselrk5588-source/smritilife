@@ -22,6 +22,48 @@ export default function Auth() {
   // Form states
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState('');
+  const [authSessionId, setAuthSessionId] = useState('');
+
+  // Polling for 1-Click WhatsApp Instant Verification
+  useEffect(() => {
+    if (!showOtp || !authSessionId) return;
+
+    let isCancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/users/auth-session/${authSessionId}`);
+        const data = await res.json();
+
+        if (!isCancelled && data.verified && data.token) {
+          clearInterval(interval);
+          localStorage.setItem('token', data.token);
+
+          if (data.user?.isSubscribed) {
+            toast.success('WhatsApp ভেরিফিকেশন সফল! সরাসরি লগইন হয়েছে 🎉', { id: 'authCheck' });
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('isSubscribed', 'true');
+            if (data.user?.name) localStorage.setItem('userName', data.user.name);
+            if (data.user?.mobile) localStorage.setItem('userMobile', data.user.mobile);
+            setShowSuccessChoice(true);
+          } else {
+            toast.error('আপনার সাবস্ক্রিপশন নেই! আগে সাবস্ক্রাইব করুন।', { duration: 4000, id: 'authCheck' });
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('isSubscribed', 'false');
+            if (data.user?.name) localStorage.setItem('userName', data.user.name);
+            if (data.user?.mobile) localStorage.setItem('userMobile', data.user.mobile);
+            setTimeout(() => navigate('/paywall'), 1500);
+          }
+        }
+      } catch (err) {
+        // silent polling catch
+      }
+    }, 1500);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, [showOtp, authSessionId, navigate]);
 
   const getDeviceId = () => {
     let id = localStorage.getItem('deviceId');
@@ -62,7 +104,10 @@ export default function Auth() {
           localStorage.setItem('userMobile', data.user.mobile);
           setShowSuccessChoice(true);
         } else {
-          toast.success(data.message || 'আপনার WhatsApp নম্বরে OTP পাঠানো হয়েছে!', { id: 'authCheck', duration: 4000 });
+          if (data.authSessionId) {
+            setAuthSessionId(data.authSessionId);
+          }
+          toast.success(data.message || 'আপনার WhatsApp নম্বরে কোড পাঠানো হয়েছে!', { id: 'authCheck', duration: 4000 });
           setShowOtp(true);
         }
       } catch (err: any) {
@@ -305,18 +350,40 @@ export default function Auth() {
 
               {showOtp && (
                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl mb-4 text-center">
-                    <p className="text-xs font-bold text-emerald-800">
-                      📲 আপনার WhatsApp-এ ৪ ডিজিটের OTP পাঠানো হয়েছে
+                  {/* Option 1: 1-Click WhatsApp Instant Verification (No OTP needed for same WhatsApp) */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white border-2 border-emerald-500/40 text-center shadow-xs mb-4">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <span className="w-2 h-2 rounded-full bg-[#25D366] animate-ping"></span>
+                      <span className="text-[11px] font-black uppercase text-emerald-800 tracking-wider">
+                        একই ফোনের WhatsApp হলে
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700 font-bold mb-3 leading-snug">
+                      নিচের বাটনে চাপ দিয়ে মেসেজ পাঠালেই <span className="text-[#0A7756] underline decoration-emerald-400">কোনো ওটিপি ছাড়াই</span> সরাসরি লগইন হয়ে যাবে!
                     </p>
-                    <p className="text-[11px] text-emerald-600 mt-0.5">
-                      কোডটি ৫ মিনিটের মধ্যে প্রবেশ করান।
+                    <a
+                      href={`https://wa.me/8801862636137?text=${encodeURIComponent(`LOGIN ${authSessionId}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs sm:text-sm font-black shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 group"
+                    >
+                      <MessageSquare className="w-5 h-5 fill-current shrink-0 group-hover:scale-110 transition-transform" />
+                      <span>WhatsApp দিয়ে ১-ক্লিকে লগইন 🚀</span>
+                    </a>
+                  </div>
+
+                  {/* Divider for Different Device */}
+                  <div className="relative my-4 text-center">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+                    <span className="relative bg-white px-3 text-[11px] text-slate-400 font-bold uppercase tracking-wider">অথবা অন্য ডিভাইসে WhatsApp থাকলে</span>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl mb-3 text-center">
+                    <p className="text-xs font-semibold text-slate-700">
+                      📲 আপনার WhatsApp-এ পাঠানো ৪ ডিজিটের OTP দিন
                     </p>
                   </div>
 
-                  <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1 text-center">
-                    OTP কোড দিন
-                  </label>
                   <div className="relative max-w-[200px] mx-auto">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <ShieldCheck className="h-5 w-5 text-[#0A7756]" />
@@ -329,11 +396,11 @@ export default function Auth() {
                       placeholder="••••"
                       maxLength={4}
                       autoFocus
-                      className="w-full bg-slate-50 border-2 border-[#0A7756]/40 rounded-2xl pl-12 pr-4 py-3.5 text-center text-xl font-black text-slate-800 focus:outline-none focus:border-[#0A7756] focus:ring-2 focus:ring-[#0A7756]/20 transition-all tracking-[0.5em]"
+                      className="w-full bg-slate-50 border-2 border-[#0A7756]/40 rounded-2xl pl-12 pr-4 py-3 text-center text-xl font-black text-slate-800 focus:outline-none focus:border-[#0A7756] focus:ring-2 focus:ring-[#0A7756]/20 transition-all tracking-[0.5em]"
                     />
                   </div>
 
-                  <div className="text-center mt-3">
+                  <div className="text-center mt-2.5">
                     <button
                       type="button"
                       onClick={(e) => { setShowOtp(false); handleAuthSubmit(e); }}
@@ -342,30 +409,14 @@ export default function Auth() {
                       কোড পাননি? আবার পাঠান
                     </button>
                   </div>
-
-                  {/* Fallback Direct WhatsApp OTP Link */}
-                  <div className="mt-4 pt-3.5 border-t border-slate-100 text-center">
-                    <p className="text-[11px] text-slate-500 font-medium mb-2 leading-relaxed">
-                      হোয়াটসঅ্যাপে মেসেজ পাননি? সরাসরি WhatsApp থেকে ওটিপি নিন:
-                    </p>
-                    <a
-                      href={`https://wa.me/8801862636137?text=${encodeURIComponent('OTP')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 text-[#0A7756] border border-emerald-300/80 text-xs font-bold transition-all shadow-xs group"
-                    >
-                      <MessageSquare className="w-4 h-4 text-[#25D366] fill-[#25D366] shrink-0 group-hover:scale-110 transition-transform" />
-                      <span>WhatsApp থেকে তাৎক্ষণিক OTP নিন 💬</span>
-                    </a>
-                  </div>
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 mt-4 cursor-pointer"
+                className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-3.5 sm:py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 mt-3 cursor-pointer"
               >
-                {showOtp ? 'ভেরিফাই ও লগইন করুন' : 'WhatsApp-এ OTP পাঠান'}
+                {showOtp ? 'ওটিপি দিয়ে ভেরিফাই করুন' : 'WhatsApp-এ এগিয়ে যান'}
               </button>
             </form>
           </div>

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { Request, Response } from 'express';
 import User from '../models/User';
 import OtpToken from '../models/OtpToken';
@@ -1396,6 +1397,88 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         // Show native WhatsApp "typing..." status & read receipt while AI processes the request
         if (message.id) {
           sendMetaTypingIndicator(message.id);
+        }
+
+        // 1-Click WhatsApp Instant Login Verification (e.g. user sends "LOGIN A4F9B2")
+        const trimmedRawMsg = (userMessage || '').trim();
+        const sessionMatch = trimmedRawMsg.match(/^(?:login|verify|স্মৃতি|log)\s*([a-f0-9]{6})$/i)
+          || trimmedRawMsg.match(/^([a-f0-9]{6})$/i);
+
+        if (sessionMatch) {
+          const targetSessionId = sessionMatch[1].toUpperCase();
+          const session = await OtpToken.findOne({
+            authSessionId: targetSessionId,
+            expiresAt: { $gt: new Date() }
+          });
+
+          if (session) {
+            let cleanFrom = fromNumber.replace(/[^\d]/g, '');
+            if (cleanFrom.startsWith('880')) {
+              cleanFrom = cleanFrom.substring(2);
+            } else if (cleanFrom.startsWith('88')) {
+              cleanFrom = cleanFrom.substring(2);
+            }
+            if (!cleanFrom.startsWith('0') && cleanFrom.length === 10) {
+              cleanFrom = '0' + cleanFrom;
+            }
+
+            // CHECK: Is it the SAME WhatsApp number as the portal login number?
+            if (cleanFrom === session.mobile) {
+              // SAME WHATSAPP -> Instant 1-Click login without OTP!
+              let authUser = await User.findOne({ mobile: cleanFrom });
+              if (!authUser) {
+                if (cleanFrom === '01734042131' || cleanFrom === '01747718615') {
+                  authUser = new User({
+                    name: cleanFrom === '01734042131' ? 'Roni Sikder' : 'Demo Tester',
+                    email: cleanFrom === '01734042131' ? 'ronisikder49@gmail.com' : `${cleanFrom}@smritilife.com`,
+                    mobile: cleanFrom,
+                    whatsapp: cleanFrom,
+                    isSubscribed: true,
+                    deviceIds: []
+                  });
+                } else {
+                  authUser = new User({
+                    name: 'নতুন ব্যবহারকারী',
+                    mobile: cleanFrom,
+                    whatsapp: cleanFrom,
+                    email: `${cleanFrom}@smritilife.com`,
+                    isSubscribed: false,
+                    deviceIds: []
+                  });
+                }
+                await authUser.save();
+              }
+
+              const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
+              const token = jwt.sign({ id: authUser._id }, JWT_SECRET, { expiresIn: '30d' });
+
+              session.verified = true;
+              session.verifiedToken = token;
+              session.verifiedUser = {
+                id: authUser._id,
+                name: authUser.name || 'ব্যবহারকারী',
+                mobile: authUser.mobile || cleanFrom,
+                isSubscribed: Boolean(authUser.isSubscribed)
+              };
+              await session.save();
+
+              console.log(`[Auth-Instant] Session ${targetSessionId} verified by SAME WhatsApp ${cleanFrom}. Instant login granted!`);
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✅ *স্মৃতি লাইফ লগইন সফল হয়েছে!*\n\nআপনার WhatsApp ভেরিফিকেশন সম্পন্ন হয়েছে। কোনো ওটিপি কোড ছাড়াই পোর্টালে সরাসরি লগইন হয়ে গেছে। 🎉`
+              );
+              return;
+            } else {
+              // DIFFERENT WHATSAPP -> Reject instant bypass! Must use standard OTP
+              console.warn(`[Auth-Instant] Session ${targetSessionId} attempt from DIFFERENT WhatsApp ${cleanFrom} (Portal mobile: ${session.mobile}). Rejected!`);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `⚠️ *ভেরিফিকেশন ব্যর্থ!*\n\nআপনার এই WhatsApp নম্বরটি (${cleanFrom}) পোর্টালে দেওয়া নম্বরের (${session.mobile}) সাথে মিলছে না।\n\nনিরাপত্তার স্বার্থে আসল নম্বরের WhatsApp-এ পাঠানো ৪ ডিজিটের OTP কোডটি পোর্টালে টাইপ করে লগইন করুন।`
+              );
+              return;
+            }
+          }
         }
 
         // Direct WhatsApp OTP request handler (User texted "OTP", "লগইন", "কোড", etc. or clicked website OTP link)

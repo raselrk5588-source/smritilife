@@ -82,16 +82,19 @@ export const checkMobile = async (req: Request, res: Response) => {
     }
 
     // New device or unregistered device -> Generate and send WhatsApp OTP
+    const authSessionId = crypto.randomBytes(3).toString('hex').toUpperCase(); // 6-char session token, e.g. A4F8B2
     const otp = String(crypto.randomInt(1000, 10000)); // 4 digits
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Delete any old pending OTP for this number
     await OtpToken.deleteMany({ mobile: cleanMobile });
 
-    // Save new OTP to database
+    // Save new OTP and authSessionId to database
     await OtpToken.create({
       mobile: cleanMobile,
       otp,
+      authSessionId,
+      verified: false,
       expiresAt
     });
 
@@ -102,18 +105,19 @@ export const checkMobile = async (req: Request, res: Response) => {
       ? '\n\n⚠️ *বিজ্ঞপ্তি:* আপনার একাউন্টে ইতিমধ্যে ২টি ডিভাইস সক্রিয় আছে। এই নতুন ডিভাইসে লগইন করলে সবচেয়ে পুরোনো ডিভাইসটি স্বয়ংক্রিয়ভাবে ডিসকানেক্ট হয়ে যাবে।'
       : '';
 
-    const messageText = `🔐 *স্মৃতি লাইফ (Smriti Life) লগইন ওটিপি*\n\nআপনার ওয়ান-টাইম লগইন কোড: *${otp}*\n\n⏱ কোডটি আগামী ৫ মিনিট কার্যকর থাকবে। নিরাপত্তার স্বার্থে এটি কাউকে শেয়ার করবেন না।${warningText}`;
+    const messageText = `🔐 *স্মৃতি লাইফ (Smriti Life) লগইন*\n\nআপনার ওয়ান-টাইম লগইন কোড: *${otp}*\n\n👉 *১-ক্লিকে সরাসরি লগইন:* ওটিপি টাইপ না করে লগইন করতে এই মেসেজে সরাসরি *LOGIN ${authSessionId}* লিখে রিপ্লাই দিন।\n\n⏱ কোডটি আগামী ৫ মিনিট কার্যকর থাকবে।${warningText}`;
 
     let sent = false;
     try {
       sent = await sendMetaWhatsAppMessage(targetPhone, messageText);
-      console.log(`[Auth] OTP ${otp} generated & sent to WhatsApp ${targetPhone}, sent=${sent}`);
+      console.log(`[Auth] OTP ${otp} (Session: ${authSessionId}) sent to WhatsApp ${targetPhone}, sent=${sent}`);
     } catch (msgErr) {
       console.error('[Auth] Failed to send WhatsApp message:', msgErr);
     }
 
     return res.json({
       requireOtp: true,
+      authSessionId,
       sentViaWhatsApp: sent,
       message: 'আপনার হোয়াটসঅ্যাপ নম্বরে লগইন কোড পাঠানো হয়েছে।'
     });
@@ -214,5 +218,39 @@ export const loginWithOtp = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('loginWithOtp error:', error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * Check if the 1-click WhatsApp session has been verified
+ */
+export const checkAuthSessionStatus = async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res.status(400).json({ verified: false, message: 'Session ID is required' });
+    }
+
+    const session = await OtpToken.findOne({
+      authSessionId: String(sessionId).trim().toUpperCase(),
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!session) {
+      return res.json({ verified: false, expired: true });
+    }
+
+    if (session.verified && session.verifiedToken) {
+      return res.json({
+        verified: true,
+        token: session.verifiedToken,
+        user: session.verifiedUser
+      });
+    }
+
+    return res.json({ verified: false });
+  } catch (error: any) {
+    console.error('checkAuthSessionStatus error:', error);
+    res.status(500).json({ verified: false, message: error.message });
   }
 };
