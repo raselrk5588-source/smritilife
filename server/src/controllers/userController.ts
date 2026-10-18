@@ -43,6 +43,11 @@ export const updateProfile = async (req: Request, res: Response) => {
       else if (wClean.startsWith('88')) wClean = wClean.substring(2);
       if (!wClean.startsWith('0') && wClean.length === 10) wClean = '0' + wClean;
       updateData.whatsapp = wClean;
+
+      const existingUser = await User.findById(req.user?.id);
+      if (existingUser && !existingUser.mobile) {
+        updateData.mobile = wClean;
+      }
     }
 
     const updatedUser = await User.findByIdAndUpdate(

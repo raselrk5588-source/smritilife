@@ -1,20 +1,12 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Shield, Sparkles, ChevronRight, Phone, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, Shield, Sparkles, ChevronRight, ArrowRight, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 export default function Paywall() {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [showPhoneInput, setShowPhoneInput] = useState(false);
 
   useEffect(() => {
-    // Check if user's mobile number is already stored
-    const savedMobile = localStorage.getItem('userMobile') || '';
-    if (savedMobile) {
-      setMobileNumber(savedMobile);
-    }
-
     // Adjust font size for web view
     const handleResize = () => {
       if (window.innerWidth >= 768) {
@@ -35,12 +27,6 @@ export default function Paywall() {
 
   // Unified Subscription Handler (bKash & Robi via bdapps Charging SDK)
   const handleStartSubscription = async () => {
-    const cleanMobile = mobileNumber.trim();
-    if (!cleanMobile || !/^01[3-9]\d{8}$/.test(cleanMobile)) {
-      toast.error('অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)');
-      return;
-    }
-
     setIsProcessing(true);
     toast.loading('পেমেন্ট গেটওয়েতে পাঠানো হচ্ছে...', { id: 'gatewayRedirect' });
 
@@ -59,7 +45,6 @@ export default function Paywall() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          msisdn: mobileNumber.trim() || undefined,
           redirectUrl
         })
       });
@@ -69,10 +54,6 @@ export default function Paywall() {
       if (res.ok && data.success && data.authorizationUrl) {
         if (data.requestId) {
           localStorage.setItem('pendingBkashRequestId', data.requestId);
-        }
-        if (mobileNumber.trim()) {
-          localStorage.setItem('pendingMsisdn', mobileNumber.trim());
-          localStorage.setItem('userMobile', mobileNumber.trim());
         }
 
         toast.success('গেটওয়ে পেজে নিয়ে যাওয়া হচ্ছে...', { id: 'gatewayRedirect' });
@@ -172,25 +153,10 @@ export default function Paywall() {
             </div>
           </div>
 
-          {/* Mobile Number Input Field */}
-          <div className="mb-4 text-left">
-            <label className="text-xs font-bold text-slate-700 mb-1.5 block">
-              আপনার মোবাইল নম্বর (বিকাশ বা রবি) <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <Phone className="h-4 w-4 text-slate-400" />
-              </div>
-              <input
-                type="tel"
-                placeholder="01XXXXXXXXX"
-                value={mobileNumber}
-                onChange={(e) => setMobileNumber(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-[#0A7756] focus:ring-1 focus:ring-[#0A7756]"
-              />
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              💡 যে নম্বরটি দিয়ে পেমেন্ট বা সাবস্ক্রাইব করবেন সেই নম্বরটি দিন।
+          {/* Direct Subscription Info */}
+          <div className="mb-5 p-3.5 bg-emerald-50/70 border border-emerald-100 rounded-2xl text-center">
+            <p className="text-xs font-semibold text-emerald-800 leading-relaxed">
+              পরবর্তী অফিসিয়াল গেটওয়ে পেজে বিকাশ বা রবি/এয়ারটেল সিলেক্ট করে ১-ক্লিকে সাবস্ক্রিপশন সম্পন্ন করুন।
             </p>
           </div>
 

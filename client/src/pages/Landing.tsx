@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { 
   Bell, 
   MessageCircle, 
@@ -28,7 +29,8 @@ import {
   FolderLock,
   ListTodo,
   Mic,
-  Store
+  Store,
+  Loader2
 } from 'lucide-react';
 
 const heroFeatures = [
@@ -127,9 +129,52 @@ export default function Landing() {
     };
   }, []);
 
-  const handleSubscribe = () => {
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  // Direct 1-click checkout: Initiates BDApps charging gateway directly
+  const handleSubscribe = async () => {
+    if (isSubscribing) return;
     setMobileMenuOpen(false);
-    navigate('/paywall');
+    setIsSubscribing(true);
+    toast.loading('পেমেন্ট গেটওয়েতে পাঠানো হচ্ছে...', { id: 'gatewayRedirect' });
+
+    try {
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const redirectUrl = `${window.location.origin}/subscription-return`;
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/subscription/bkash/init`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          redirectUrl
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success && data.authorizationUrl) {
+        if (data.requestId) {
+          localStorage.setItem('pendingBkashRequestId', data.requestId);
+        }
+        toast.success('পেমেন্ট পেজে নিয়ে যাওয়া হচ্ছে...', { id: 'gatewayRedirect' });
+        window.location.href = data.authorizationUrl;
+      } else {
+        setIsSubscribing(false);
+        const errMsg = data.message || 'সাবস্ক্রিপশন শুরু করা যাচ্ছে না। অনুগ্রহ করে আবার চেষ্টা করুন।';
+        toast.error(errMsg, { id: 'gatewayRedirect', duration: 5000 });
+      }
+    } catch (err: any) {
+      setIsSubscribing(false);
+      console.error('Subscription init error:', err);
+      toast.error('সার্ভারের সাথে সংযোগ করা সম্ভব হয়নি। আবার চেষ্টা করুন।', { id: 'gatewayRedirect' });
+    }
   };
 
   const handleOpenWhatsApp = () => {
@@ -258,6 +303,28 @@ export default function Landing() {
                 <p className="text-sm sm:text-base md:text-lg text-slate-600 leading-relaxed font-normal mt-2 sm:mt-3 max-w-xl">
                   {currentHero.subtitle}
                 </p>
+
+                {/* Hero Instant 1-Click Action Button */}
+                <div className="pt-3.5 sm:pt-4">
+                  <button
+                    onClick={handleSubscribe}
+                    disabled={isSubscribing}
+                    className="inline-flex items-center gap-2.5 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-extrabold text-sm sm:text-base px-6 py-3.5 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed group"
+                  >
+                    {isSubscribing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>পেমেন্ট পেজে পাঠানো হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 group-hover:rotate-12 transition-transform" />
+                        <span>শুরু করুন</span>
+                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -751,10 +818,20 @@ export default function Landing() {
                   {/* Subscribe Action Button */}
                   <button
                     onClick={handleSubscribe}
-                    className="w-full bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-98 text-white font-bold text-base py-4 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    disabled={isSubscribing}
+                    className="w-full bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-98 text-white font-bold text-base py-4 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
                   >
-                    <span>এখনই শুরু করুন</span>
-                    <ArrowRight className="w-4 h-4" />
+                    {isSubscribing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>পেমেন্ট পেজে পাঠানো হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>এখনই শুরু করুন</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
 
                 </div>
@@ -842,12 +919,22 @@ export default function Landing() {
       {/* Persistent Floating Action Button at Bottom Right Corner */}
       <button
         onClick={handleSubscribe}
-        className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-50 inline-flex items-center gap-2 sm:gap-2.5 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-black text-sm sm:text-base px-5 py-3 sm:px-6 sm:py-3.5 rounded-full shadow-[0_12px_28px_rgba(10,119,86,0.45)] hover:shadow-[0_18px_36px_rgba(10,119,86,0.6)] border border-emerald-300/40 backdrop-blur-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+        disabled={isSubscribing}
+        className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-50 inline-flex items-center gap-2 sm:gap-2.5 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-black text-sm sm:text-base px-5 py-3 sm:px-6 sm:py-3.5 rounded-full shadow-[0_12px_28px_rgba(10,119,86,0.45)] hover:shadow-[0_18px_36px_rgba(10,119,86,0.6)] border border-emerald-300/40 backdrop-blur-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group disabled:opacity-75 disabled:cursor-not-allowed"
         aria-label="শুরু করুন"
       >
-        <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 group-hover:rotate-12 transition-transform" />
-        <span>শুরু করুন</span>
-        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+        {isSubscribing ? (
+          <>
+            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-white" />
+            <span>অপেক্ষা করুন...</span>
+          </>
+        ) : (
+          <>
+            <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 group-hover:rotate-12 transition-transform" />
+            <span>শুরু করুন</span>
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+          </>
+        )}
       </button>
 
     </div>

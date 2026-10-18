@@ -180,6 +180,14 @@ export const verifySubscriptionReturn = async (req: Request, res: Response) => {
         user.isSubscribed = true;
         await user.save();
       }
+    } else {
+      // Fallback: create user so token can be generated and profile completed
+      const fallbackId = requestId || `user_${Date.now()}`;
+      user = await User.create({
+        name: 'নতুন ব্যবহারকারী',
+        email: `${fallbackId}@smritilife.com`,
+        isSubscribed: true
+      });
     }
 
     if (user && subscription && !subscription.userId) {
