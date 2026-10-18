@@ -31,7 +31,8 @@ export default function Auth() {
     let isCancelled = false;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/users/auth-session/${authSessionId}`);
+        const devId = localStorage.getItem('deviceId') || '';
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/users/auth-session/${authSessionId}?deviceId=${encodeURIComponent(devId)}`);
         const data = await res.json();
 
         if (!isCancelled && data.verified && data.token) {
@@ -350,16 +351,16 @@ export default function Auth() {
 
               {showOtp && (
                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                  {/* Option 1: 1-Click WhatsApp Instant Verification (No OTP needed for same WhatsApp) */}
+                  {/* Option 1: 1-Click WhatsApp Instant Verification */}
                   <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white border-2 border-emerald-500/40 text-center shadow-xs mb-4">
-                    <div className="flex items-center justify-center gap-1.5 mb-1">
-                      <span className="w-2 h-2 rounded-full bg-[#25D366] animate-ping"></span>
+                    <div className="flex items-center justify-center gap-1.5 mb-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#25D366] animate-ping"></span>
                       <span className="text-[11px] font-black uppercase text-emerald-800 tracking-wider">
-                        একই ফোনের WhatsApp হলে
+                        WhatsApp-এ অনুমোদন বাটন পাঠানো হয়েছে
                       </span>
                     </div>
-                    <p className="text-xs text-slate-700 font-bold mb-3 leading-snug">
-                      নিচের বাটনে চাপ দিয়ে মেসেজ পাঠালেই <span className="text-[#0A7756] underline decoration-emerald-400">কোনো ওটিপি ছাড়াই</span> সরাসরি লগইন হয়ে যাবে!
+                    <p className="text-xs text-slate-700 font-semibold mb-3 leading-snug">
+                      আপনার WhatsApp-এ অনুমোদনের বাটন গেছে। সেখানে <span className="text-emerald-700 font-black">"✅ হ্যাঁ, লগইন করুন"</span> বাটনে চাপ দিলেই ব্রাউজারে স্বয়ংক্রিয়ভাবে সরাসরি লগইন হয়ে যাবে!
                     </p>
                     <a
                       href={`https://wa.me/8801862636137?text=${encodeURIComponent(`LOGIN ${authSessionId}`)}`}
@@ -368,7 +369,7 @@ export default function Auth() {
                       className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs sm:text-sm font-black shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 group"
                     >
                       <MessageSquare className="w-5 h-5 fill-current shrink-0 group-hover:scale-110 transition-transform" />
-                      <span>WhatsApp দিয়ে ১-ক্লিকে লগইন 🚀</span>
+                      <span>WhatsApp খুলুন এবং 'হ্যাঁ' চাপুন 📲</span>
                     </a>
                   </div>
 

@@ -806,12 +806,19 @@ export const isPureEnglishText = (text: string): boolean => {
   return matchedEnglish.length >= 1 && matchedEnglish.length / englishWords.length >= 0.5;
 };
 
+export interface WhatsAppReplyButton {
+  id: string;
+  title: string;
+}
+
 // Function to send interactive buttons via Meta API
 export const sendMetaWhatsAppButtons = async (
   to: string,
   bodyText: string,
   buttons: Array<{ id: string; title: string }>,
-  footerText?: string
+  footerText?: string,
+  headerText?: string,
+  fallbackText?: string
 ): Promise<boolean> => {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -824,7 +831,7 @@ export const sendMetaWhatsAppButtons = async (
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const response = await fetch(`https://graph.facebook.com/v25.0/${phoneNumberId}/messages`, {
+      const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -837,13 +844,14 @@ export const sendMetaWhatsAppButtons = async (
           type: 'interactive',
           interactive: {
             type: 'button',
-            body: { text: bodyText },
+            ...(headerText ? { header: { type: 'text', text: headerText.substring(0, 60) } } : {}),
+            body: { text: bodyText.substring(0, 1024) },
             ...(footerText ? { footer: { text: footerText.substring(0, 60) } } : {}),
             action: {
               buttons: buttons.slice(0, 3).map(b => ({
                 type: 'reply',
                 reply: {
-                  id: b.id,
+                  id: b.id.substring(0, 256),
                   title: b.title.substring(0, 20)
                 }
               }))
@@ -856,7 +864,12 @@ export const sendMetaWhatsAppButtons = async (
       const data = await response.json();
       if (!response.ok) {
         console.warn(`[WhatsAppButtons] Attempt ${attempt} button error:`, data);
-        if (attempt === 2) return false;
+        if (attempt === 2) {
+          if (fallbackText) {
+            return await sendMetaWhatsAppMessage(to, fallbackText);
+          }
+          return false;
+        }
         await new Promise(r => setTimeout(r, 1000));
       } else {
         console.log(`✅ [WhatsAppButtons] Interactive buttons sent successfully to ${formattedTo}`);
@@ -864,7 +877,12 @@ export const sendMetaWhatsAppButtons = async (
       }
     } catch (err) {
       console.error(`[WhatsAppButtons] Network exception attempt ${attempt}:`, err);
-      if (attempt === 2) return false;
+      if (attempt === 2) {
+        if (fallbackText) {
+          return await sendMetaWhatsAppMessage(to, fallbackText);
+        }
+        return false;
+      }
       await new Promise(r => setTimeout(r, 1000));
     }
   }
@@ -1129,6 +1147,8 @@ export const sendMetaWhatsAppMessage = async (to: string, text: string): Promise
   }
   return false;
 };
+
+
 
 // Function to download any media (audio, voice, image, document) from Meta API
 export const downloadMetaMedia = async (mediaId: string): Promise<{ buffer: Buffer; mimeType: string } | null> => {
@@ -1399,29 +1419,78 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           sendMetaTypingIndicator(message.id);
         }
 
-        // 1-Click WhatsApp Instant Login Verification (e.g. user sends "LOGIN A4F9B2")
-        const trimmedRawMsg = (userMessage || '').trim();
-        const sessionMatch = trimmedRawMsg.match(/^(?:login|verify|স্মৃতি|log)\s*([a-f0-9]{6})$/i)
-          || trimmedRawMsg.match(/^([a-f0-9]{6})$/i);
+        // Normalize sender number cleanFrom
+        let cleanFrom = fromNumber.replace(/[^\d]/g, '');
+        if (cleanFrom.startsWith('880')) {
+          cleanFrom = cleanFrom.substring(2);
+        } else if (cleanFrom.startsWith('88')) {
+          cleanFrom = cleanFrom.substring(2);
+        }
+        if (!cleanFrom.startsWith('0') && cleanFrom.length === 10) {
+          cleanFrom = '0' + cleanFrom;
+        }
 
-        if (sessionMatch) {
-          const targetSessionId = sessionMatch[1].toUpperCase();
+        // 1-Click WhatsApp Instant Login / Interactive Approval Buttons
+        let targetSessionId = '';
+        let isRejection = false;
+
+        const approveButtonMatch = (buttonId || '').match(/^AUTH_APPROVE_([A-Za-z0-9]{4,8})$/i);
+        const rejectButtonMatch = (buttonId || '').match(/^AUTH_REJECT_([A-Za-z0-9]{4,8})$/i);
+
+        if (approveButtonMatch) {
+          targetSessionId = approveButtonMatch[1].toUpperCase();
+        } else if (rejectButtonMatch) {
+          targetSessionId = rejectButtonMatch[1].toUpperCase();
+          isRejection = true;
+        } else {
+          // Check text message (e.g. user sends "LOGIN 9369EB", "9369EB", "হ্যাঁ", "না", etc.)
+          const trimmedRawMsg = (userMessage || '').trim();
+          const sessionMatch = trimmedRawMsg.match(/^(?:login|verify|স্মৃতি|log)\s*([a-f0-9]{6})$/i)
+            || trimmedRawMsg.match(/^([a-f0-9]{6})$/i);
+
+          if (sessionMatch) {
+            targetSessionId = sessionMatch[1].toUpperCase();
+          } else if (/^(?:হ্যাঁ|ha|hae|yes|y|approve|অনুমোদন|লগইন)$/i.test(trimmedRawMsg)) {
+            // User texted "হ্যাঁ" or "yes" -> find latest pending session for this number
+            const pendingSession = await OtpToken.findOne({
+              mobile: cleanFrom,
+              verified: false,
+              expiresAt: { $gt: new Date() }
+            }).sort({ createdAt: -1 });
+            if (pendingSession && pendingSession.authSessionId) {
+              targetSessionId = pendingSession.authSessionId;
+            }
+          } else if (/^(?:না|na|no|n|reject|বাতিল)$/i.test(trimmedRawMsg)) {
+            // User texted "না" or "no" -> find latest pending session and reject
+            const pendingSession = await OtpToken.findOne({
+              mobile: cleanFrom,
+              verified: false,
+              expiresAt: { $gt: new Date() }
+            }).sort({ createdAt: -1 });
+            if (pendingSession && pendingSession.authSessionId) {
+              targetSessionId = pendingSession.authSessionId;
+              isRejection = true;
+            }
+          }
+        }
+
+        if (targetSessionId && isRejection) {
+          await OtpToken.deleteMany({ authSessionId: targetSessionId });
+          console.log(`[Auth-Instant] Session ${targetSessionId} REJECTED by WhatsApp ${cleanFrom}`);
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🛡️ *স্মৃতি লাইফ সুরক্ষা সতর্কতা*\n\nলগইন অনুরোধটি বাতিল করা হয়েছে। যদি এই অনুরোধটি আপনি না করে থাকেন, তবে নিশ্চিত থাকুন আপনার অ্যাকাউন্ট সুরক্ষিত রয়েছে। কেউ আপনার অ্যাকাউন্টে প্রবেশ করতে পারবে না।`
+          );
+          return;
+        }
+
+        if (targetSessionId && !isRejection) {
           const session = await OtpToken.findOne({
             authSessionId: targetSessionId,
             expiresAt: { $gt: new Date() }
           });
 
           if (session) {
-            let cleanFrom = fromNumber.replace(/[^\d]/g, '');
-            if (cleanFrom.startsWith('880')) {
-              cleanFrom = cleanFrom.substring(2);
-            } else if (cleanFrom.startsWith('88')) {
-              cleanFrom = cleanFrom.substring(2);
-            }
-            if (!cleanFrom.startsWith('0') && cleanFrom.length === 10) {
-              cleanFrom = '0' + cleanFrom;
-            }
-
             // CHECK: Is it the SAME WhatsApp number as the portal login number?
             if (cleanFrom === session.mobile) {
               // SAME WHATSAPP -> Instant 1-Click login without OTP!
@@ -1466,7 +1535,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
               await sendMetaWhatsAppMessage(
                 fromNumber,
-                `✅ *স্মৃতি লাইফ লগইন সফল হয়েছে!*\n\nআপনার WhatsApp ভেরিফিকেশন সম্পন্ন হয়েছে। কোনো ওটিপি কোড ছাড়াই পোর্টালে সরাসরি লগইন হয়ে গেছে। 🎉`
+                `✅ *স্মৃতি লাইফ লগইন সফল হয়েছে!*\n\nআপনার লগইন সফলভাবে অনুমোদিত হয়েছে। ব্রাউজারে কোনো ওটিপি ছাড়াই স্বয়ংক্রিয়ভাবে প্রবেশ সম্পন্ন হয়েছে। 🎉`
               );
               return;
             } else {

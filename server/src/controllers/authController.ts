@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import OtpToken from '../models/OtpToken';
-import { sendMetaWhatsAppMessage } from './whatsappController';
+import { sendMetaWhatsAppMessage, sendMetaWhatsAppButtons } from './whatsappController';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
 
@@ -98,21 +98,35 @@ export const checkMobile = async (req: Request, res: Response) => {
       expiresAt
     });
 
-    // Send OTP via Meta WhatsApp Cloud API
+    // Send OTP & Interactive Approval Buttons via Meta WhatsApp Cloud API
     const targetPhone = user?.whatsapp || cleanMobile;
     const isNewDevice = user?.deviceIds && user.deviceIds.length >= 2;
     const warningText = isNewDevice
       ? '\n\n⚠️ *বিজ্ঞপ্তি:* আপনার একাউন্টে ইতিমধ্যে ২টি ডিভাইস সক্রিয় আছে। এই নতুন ডিভাইসে লগইন করলে সবচেয়ে পুরোনো ডিভাইসটি স্বয়ংক্রিয়ভাবে ডিসকানেক্ট হয়ে যাবে।'
       : '';
 
-    const messageText = `🔐 *স্মৃতি লাইফ (Smriti Life) লগইন*\n\nআপনার ওয়ান-টাইম লগইন কোড: *${otp}*\n\n👉 *১-ক্লিকে সরাসরি লগইন:* ওটিপি টাইপ না করে লগইন করতে এই মেসেজে সরাসরি *LOGIN ${authSessionId}* লিখে রিপ্লাই দিন।\n\n⏱ কোডটি আগামী ৫ মিনিট কার্যকর থাকবে।${warningText}`;
+    const buttons = [
+      { id: `AUTH_APPROVE_${authSessionId}`, title: '✅ হ্যাঁ, লগইন করুন' },
+      { id: `AUTH_REJECT_${authSessionId}`, title: '❌ না, আমি নই' }
+    ];
+
+    const bodyText = `আপনার ব্রাউজার থেকে লগইনের অনুরোধ এসেছে।\n\n🔑 লগইন কোড: *${otp}*\n(মেয়াদ ৫ মিনিট)\n\n👉 লগইন করতে নিচের বাটনে চাপ দিন:${warningText}`;
+
+    const fallbackText = `🔐 *স্মৃতি লাইফ (Smriti Life) লগইন*\n\nআপনার ওয়ান-টাইম লগইন কোড: *${otp}*\n\n👉 *১-ক্লিকে সরাসরি লগইন:* এই মেসেজে সরাসরি *LOGIN ${authSessionId}* লিখে রিপ্লাই দিন অথবা *হ্যাঁ* লিখুন।\n\n⏱ কোডটি আগামী ৫ মিনিট কার্যকর থাকবে।${warningText}`;
 
     let sent = false;
     try {
-      sent = await sendMetaWhatsAppMessage(targetPhone, messageText);
-      console.log(`[Auth] OTP ${otp} (Session: ${authSessionId}) sent to WhatsApp ${targetPhone}, sent=${sent}`);
+      sent = await sendMetaWhatsAppButtons(
+        targetPhone,
+        bodyText,
+        buttons,
+        '🔐 স্মৃতি লাইফ (Smriti Life) লগইন',
+        'নিরাপদ ওটিপি যাচাইকরণ',
+        fallbackText
+      );
+      console.log(`[Auth] OTP ${otp} (Session: ${authSessionId}) sent with buttons to WhatsApp ${targetPhone}, sent=${sent}`);
     } catch (msgErr) {
-      console.error('[Auth] Failed to send WhatsApp message:', msgErr);
+      console.error('[Auth] Failed to send WhatsApp buttons:', msgErr);
     }
 
     return res.json({
@@ -227,6 +241,7 @@ export const loginWithOtp = async (req: Request, res: Response) => {
 export const checkAuthSessionStatus = async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params;
+    const { deviceId } = req.query;
     if (!sessionId) {
       return res.status(400).json({ verified: false, message: 'Session ID is required' });
     }
@@ -241,6 +256,26 @@ export const checkAuthSessionStatus = async (req: Request, res: Response) => {
     }
 
     if (session.verified && session.verifiedToken) {
+      // If deviceId provided, register device (max 2 devices limit)
+      if (deviceId && session.mobile) {
+        try {
+          const user = await User.findOne({ mobile: session.mobile });
+          if (user) {
+            if (!user.deviceIds) user.deviceIds = [];
+            const cleanDeviceId = String(deviceId).trim();
+            if (!user.deviceIds.includes(cleanDeviceId)) {
+              user.deviceIds.push(cleanDeviceId);
+              if (user.deviceIds.length > 2) {
+                user.deviceIds = user.deviceIds.slice(-2);
+              }
+              await user.save();
+            }
+          }
+        } catch (devErr) {
+          console.error('[Auth] Error updating deviceId during session login:', devErr);
+        }
+      }
+
       return res.json({
         verified: true,
         token: session.verifiedToken,
