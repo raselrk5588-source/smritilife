@@ -23,6 +23,7 @@ export const getDocuments = async (req: Request, res: Response) => {
       query.$or = [
         { title: { $regex: s, $options: 'i' } },
         { fileName: { $regex: s, $options: 'i' } },
+        { category: { $regex: s, $options: 'i' } },
         { tags: { $regex: s, $options: 'i' } },
         { notes: { $regex: s, $options: 'i' } }
       ];
@@ -62,10 +63,10 @@ export const uploadDocument = async (req: Request, res: Response) => {
     const effectiveMime = mimeType || 'application/octet-stream';
     const effectiveFileName = fileName || `file_${Date.now()}`;
 
-    // Auto-detect category if not explicitly specified
+    // Category is user-defined and optional
+    const finalCategory = category && String(category).trim() ? String(category).trim() : '';
     const autoCat = detectDocumentCategory(title + ' ' + (fileName || ''));
-    const finalCategory = category && category !== 'Other' ? category : autoCat.category;
-    const tags = Array.from(new Set([...(autoCat.tags || []), finalCategory.toLowerCase()]));
+    const tags = Array.from(new Set([...(autoCat.tags || []), ...(finalCategory ? [finalCategory.toLowerCase()] : [])]));
 
     // Save to disk
     const diskResult = await saveFileToDisk(buffer, effectiveFileName, effectiveMime);

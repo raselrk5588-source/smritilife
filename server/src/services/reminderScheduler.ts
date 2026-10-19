@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
 import User from '../models/User';
-import { deliverWishCard } from './wishDeliveryService';
+import { deliverWishCard, sendMetaWhatsAppTemplate } from './wishDeliveryService';
 import { formatTime12Hour } from './aiWhatsAppService';
 import { sendMetaWhatsAppButtons, userReminderState } from '../controllers/whatsappController';
 import { getRamadanTimes, RAMADAN_DUAS } from './ramadanService';
@@ -16,15 +16,21 @@ export interface ActiveAlarmRinger {
   ringCount: number;
   maxRings: number;
   nextRingAt: number;
+  isProcessing?: boolean;
 }
 
 export const activeAlarmRingers = new Map<string, ActiveAlarmRinger>();
 
-export const cancelAlarmRinger = (reminderIdOrUserId: string) => {
+export const cancelAlarmRinger = (idOrPhone: string) => {
   for (const [key, val] of activeAlarmRingers.entries()) {
-    if (val.reminderId === reminderIdOrUserId || val.userId === reminderIdOrUserId || key === reminderIdOrUserId) {
+    if (
+      val.reminderId === idOrPhone ||
+      val.userId === idOrPhone ||
+      val.phone === idOrPhone ||
+      key === idOrPhone
+    ) {
       activeAlarmRingers.delete(key);
-      console.log(`[AlarmRinger] Alarm ringer stopped for reminder ${val.reminderId} / user ${val.userId}`);
+      console.log(`[AlarmRinger] Alarm ringer stopped for reminder ${val.reminderId} / user ${val.userId} / phone ${val.phone}`);
     }
   }
 };
@@ -157,8 +163,30 @@ export const startReminderScheduler = () => {
 
             const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
 
-            await sendWhatsAppAlert(reminder.recipientPhone, thirdPartyAlert);
-            console.log(`[ReminderScheduler] Dispatched third-party message to ${reminder.recipientPhone} (Registered: ${!!recipientUser})`);
+            // Try template first to bypass Meta 24-hour customer window for third-party numbers
+            const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE_NAME || 'smriti_schedule_reminder';
+            const templateLang = process.env.WHATSAPP_REMINDER_TEMPLATE_LANG || 'bn';
+            const displayTime = formatTime12Hour(reminder.time);
+            const dStr = reminder.date ? new Date(reminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : 'আজ';
+            const formattedTimeDate = `${displayTime} (${dStr})`;
+            const senderDisplay = senderNumber ? `${senderName} (${senderNumber})` : senderName;
+
+            let deliveredViaTemplate = false;
+            if (process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) {
+              // 4 parameters: {{1}}=Sender, {{2}}=Topic/Title, {{3}}=Time/Date, {{4}}=Message Body
+              deliveredViaTemplate = await sendMetaWhatsAppTemplate(
+                reminder.recipientPhone,
+                templateName,
+                [senderDisplay, reminder.title || 'রিমাইন্ডার', formattedTimeDate, messageBody],
+                templateLang
+              );
+            }
+
+            // Fallback to direct text alert if template is not yet approved on Meta or delivery failed
+            if (!deliveredViaTemplate) {
+              await sendWhatsAppAlert(reminder.recipientPhone, thirdPartyAlert);
+            }
+            console.log(`[ReminderScheduler] Dispatched third-party message to ${reminder.recipientPhone} (TemplateDelivered: ${deliveredViaTemplate}, Registered: ${!!recipientUser})`);
 
             // Also confirm to the sender that their message was delivered
             if (senderNumber) {
@@ -254,6 +282,7 @@ export const startReminderScheduler = () => {
 
               // Register multi-ring loop for Wake-up / Sehri alarms (rings every 60s up to 3 times if no reply)
               if (isWakeup) {
+                cancelAlarmRinger(reminder.userId.toString());
                 activeAlarmRingers.set(reminder._id.toString(), {
                   reminderId: reminder._id.toString(),
                   userId: reminder.userId.toString(),
@@ -262,7 +291,8 @@ export const startReminderScheduler = () => {
                   isSehri,
                   ringCount: 1,
                   maxRings: 3,
-                  nextRingAt: Date.now() + 15 * 1000 // Ring 2 fires in 15s (rapid alert)
+                  nextRingAt: Date.now() + 60 * 1000, // Ring 2 fires in 60s
+                  isProcessing: false
                 });
               }
 
@@ -274,6 +304,11 @@ export const startReminderScheduler = () => {
                 : reminder.category === 'medicine'
                 ? [
                     { id: `rem_done_${reminder._id}`, title: 'ওষুধ খেয়েছি ✅' },
+                    { id: `rem_reschedule_${reminder._id}`, title: '১৫ মিনিট পর ⏰' }
+                  ]
+                : reminder.category === 'prayer'
+                ? [
+                    { id: `rem_done_${reminder._id}`, title: 'নামাজ পড়েছি 🤲' },
                     { id: `rem_reschedule_${reminder._id}`, title: '১৫ মিনিট পর ⏰' }
                   ]
                 : [
@@ -483,14 +518,27 @@ export const startReminderScheduler = () => {
     }
   };
 
-  // Urgent ringer loop: Fires Ring 2, 3, 4 every 60s for unanswered wake-up / Sehri alarms
+  // Urgent ringer loop: Fires Ring 2 and Ring 3 (max 3 rings total) for unanswered wake-up / Sehri alarms
   const checkAndFireAlarmRingers = async () => {
     if (mongoose.connection.readyState !== 1) return;
     if (activeAlarmRingers.size === 0) return;
 
     const now = Date.now();
     for (const [remId, ringer] of activeAlarmRingers.entries()) {
+      // 1. Guard against concurrent processing by interval ticks
+      if (ringer.isProcessing) continue;
+
+      // 2. Strict cap: maximum 3 rings total! Never exceed 3!
+      if (ringer.ringCount >= (ringer.maxRings || 3)) {
+        activeAlarmRingers.delete(remId);
+        continue;
+      }
+
       if (now >= ringer.nextRingAt) {
+        // Immediately acquire lock and advance nextRingAt so overlapping ticks cannot touch it
+        ringer.isProcessing = true;
+        ringer.nextRingAt = now + 60 * 1000;
+
         try {
           // Verify reminder status in database
           const reminder = await Reminder.findById(ringer.reminderId);
@@ -499,9 +547,16 @@ export const startReminderScheduler = () => {
             continue;
           }
 
+          // Increment ring count (Ring 1 was initial dispatch, so next is 2, then 3)
           ringer.ringCount += 1;
           const currentRing = ringer.ringCount;
-          const totalRings = ringer.maxRings;
+          const totalRings = ringer.maxRings || 3;
+
+          // Double check cap: If somehow already passed max rings, terminate!
+          if (currentRing > totalRings) {
+            activeAlarmRingers.delete(remId);
+            continue;
+          }
 
           let ringMsg = '';
           if (ringer.isSehri) {
@@ -530,14 +585,19 @@ export const startReminderScheduler = () => {
 
           console.log(`🔔 [AlarmRinger] Dispatched ring ${currentRing}/${totalRings} for reminder ${ringer.reminderId} to ${ringer.phone}`);
 
+          // If reached final ring (3), permanently delete and ensure reminder is Snoozed so it won't ring again
           if (currentRing >= totalRings) {
             activeAlarmRingers.delete(remId);
+            await Reminder.findByIdAndUpdate(ringer.reminderId, { status: 'Snoozed' });
+            console.log(`🛑 [AlarmRinger] Finished all ${totalRings} rings for reminder ${ringer.reminderId}. Ringer terminated.`);
           } else {
-            ringer.nextRingAt = Date.now() + 15 * 1000; // Next ring in 15s (rapid alert)
+            ringer.nextRingAt = Date.now() + 60 * 1000; // Next ring in 60s
           }
         } catch (err) {
           console.error(`[AlarmRinger] Error processing ring for ${remId}:`, err);
           activeAlarmRingers.delete(remId);
+        } finally {
+          ringer.isProcessing = false;
         }
       }
     }
@@ -559,7 +619,7 @@ export const startReminderScheduler = () => {
 
       const users = await User.find({
         isSubscribed: true,
-        'ramadanAlerts.enabled': { $ne: false },
+        'ramadanAlerts.enabled': true,
         $or: [
           { whatsapp: { $exists: true, $ne: '' } },
           { mobile: { $exists: true, $ne: '' } }
@@ -588,7 +648,7 @@ export const startReminderScheduler = () => {
         const iftarExactTime = times.iftar;
 
         // 1. Sehri Wake-up Multi-Ring Alarm
-        if (dhakaTimeStr === sehriAlarmTime && u.ramadanAlerts?.lastSehriAlertDate !== dhakaDateStr) {
+        if (u.ramadanAlerts?.sehriAlert === true && dhakaTimeStr === sehriAlarmTime && u.ramadanAlerts?.lastSehriAlertDate !== dhakaDateStr) {
           await User.findByIdAndUpdate(u._id, { 'ramadanAlerts.lastSehriAlertDate': dhakaDateStr });
 
           const sehriRem = await Reminder.create({
@@ -599,7 +659,8 @@ export const startReminderScheduler = () => {
             priority: 'Urgent',
             category: 'wakeup',
             repeat: 'Daily',
-            status: 'Pending',
+            status: 'Snoozed',
+            lastDispatchedDate: dhakaDateStr,
             isAlarm: true
           });
 
@@ -610,6 +671,7 @@ export const startReminderScheduler = () => {
             { id: `rem_reschedule_${sehriRem._id}`, title: '৫ মিনিট স্নুজ 💤' }
           ];
 
+          cancelAlarmRinger(u._id.toString());
           activeAlarmRingers.set(sehriRem._id.toString(), {
             reminderId: sehriRem._id.toString(),
             userId: u._id.toString(),
@@ -618,7 +680,8 @@ export const startReminderScheduler = () => {
             isSehri: true,
             ringCount: 1,
             maxRings: 3,
-            nextRingAt: Date.now() + 15 * 1000 // Ring 2 fires in 15s (rapid alert)
+            nextRingAt: Date.now() + 60 * 1000, // Ring 2 fires in 60s
+            isProcessing: false
           });
 
           const sent = await sendMetaWhatsAppButtons(targetNumber, alertBody, buttons);
@@ -629,7 +692,7 @@ export const startReminderScheduler = () => {
         }
 
         // 2. Iftar 15-Minute Preparation Notice & Dua
-        if (dhakaTimeStr === iftarNoticeTime && u.ramadanAlerts?.lastIftarNoticeDate !== dhakaDateStr) {
+        if (u.ramadanAlerts?.iftarAlert === true && dhakaTimeStr === iftarNoticeTime && u.ramadanAlerts?.lastIftarNoticeDate !== dhakaDateStr) {
           await User.findByIdAndUpdate(u._id, { 'ramadanAlerts.lastIftarNoticeDate': dhakaDateStr });
 
           const iftarNoticeMsg = `🤲🌙 আসসালামু আলাইকুম ${salutation}!\nইফতারের আর মাত্র ১৫ মিনিট বাকি (${times.districtBn} জেলায় ${times.iftarFormatted} এ)।\n\nইফতারের প্রস্তুতি নিন এবং বেশি বেশি দোয়া ও ইস্তিগফার করুন। রাসূলুল্লাহ (সা.) বলেছেন: "ইফতারের সময় রোজাদারের দোয়া আল্লাহ কখনো ফিরিয়ে দেন না।"\n\n🍽️ ইফতারের দোয়া:\n"${RAMADAN_DUAS.iftarDua.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.iftarDua.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.iftarDua.meaning}"`;
@@ -639,7 +702,7 @@ export const startReminderScheduler = () => {
         }
 
         // 3. Exact Iftar Moment Alert
-        if (dhakaTimeStr === iftarExactTime && u.ramadanAlerts?.lastIftarAlertDate !== dhakaDateStr) {
+        if (u.ramadanAlerts?.iftarAlert === true && dhakaTimeStr === iftarExactTime && u.ramadanAlerts?.lastIftarAlertDate !== dhakaDateStr) {
           await User.findByIdAndUpdate(u._id, { 'ramadanAlerts.lastIftarAlertDate': dhakaDateStr });
 
           const iftarMomentMsg = `🔔🌙 মাগরিবের আজান হয়েছে! ইফতারের সময় হয়ে গেছে (${times.districtBn} জেলা)!\n\nসুন্নাহ অনুযায়ী দ্রুত খেজুর বা পানি দিয়ে ইফতার সম্পন্ন করুন।\n\n🤲 ইফতারের পরের সুন্নাহ দোয়া:\n"${RAMADAN_DUAS.iftarSunnahDua.arabic}"\nউচ্চারণ: ${RAMADAN_DUAS.iftarSunnahDua.pronunciation}\nঅর্থ: "${RAMADAN_DUAS.iftarSunnahDua.meaning}"\n\nআল্লাহ আপনার আজকের সিয়াম কবুল করুন। আমিন! 🤲`;

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>লগইন করুন</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <a href="../index.html" class="close-btn"><i class="fa-solid fa-xmark"></i></a>
+
+      <h1 class="logo">লগইন করুন</h1>
+      <p class="subtitle">সাবস্ক্রিপশন করতে আপনার রবি/এয়ারটেল নম্বর দিন। চার্জ:<br>১৯০ টাকা/মাস (Vat+SC+SD)</p>
+
+      <div class="input-group" id="phone-group">
+        <i class="fa-solid fa-phone"></i>
+        <input type="tel" id="phone-input" placeholder="01XXXXXXXXX" required>
+      </div>
+
+      <button id="auth-btn" class="primary-btn" onclick="handleLogin()">পরবর্তী ধাপ</button>
+      <div id="loader" style="display:none; color:#cbd5e1; margin-top:10px; font-size:14px;">অপেক্ষা করুন...</div>
+    </div>
+  </div>
+
+  <script>
+    async function handleLogin() {
+      const phone = document.getElementById("phone-input").value.trim();
+      const btn = document.getElementById("auth-btn");
+      const loader = document.getElementById("loader");
+
+      const phoneRegex = /^01[3-9]\d{8}$/;
+
+      if (!phoneRegex.test(phone)) {
+        alert("অনুগ্রহ করে সঠিক মোবাইল নাম্বার দিন।");
+        return;
+      }
+
+      // Demo number for testing
+      if (phone === "01700000000" || phone === "01800000000") {
+        localStorage.setItem("phone", phone);
+        localStorage.setItem("isLoggedIn", true);
+        window.location.href = "../index.html";
+        return;
+      }
+
+      btn.disabled = true;
+      loader.style.display = "block";
+
+      try {
+        const res = await fetch("send_otp.php", {
+          method: "POST",
+          body: new URLSearchParams({ user_mobile: phone })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem("phone", phone);
+          localStorage.setItem("ref", data.referenceNo);
+          window.location.href = "otp.html";
+        } else {
+          alert(data.message || "OTP failed. Try again.");
+        }
+
+      } catch (e) {
+        alert("Network error");
+      } finally {
+        btn.disabled = false;
+        loader.style.display = "none";
+      }
+    }
+  </script>
+</body>
+
+</html>

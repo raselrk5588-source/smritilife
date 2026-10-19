@@ -303,28 +303,6 @@ export default function Landing() {
                 <p className="text-sm sm:text-base md:text-lg text-slate-600 leading-relaxed font-normal mt-2 sm:mt-3 max-w-xl">
                   {currentHero.subtitle}
                 </p>
-
-                {/* Hero Instant 1-Click Action Button */}
-                <div className="pt-3.5 sm:pt-4">
-                  <button
-                    onClick={handleSubscribe}
-                    disabled={isSubscribing}
-                    className="inline-flex items-center gap-2.5 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-extrabold text-sm sm:text-base px-6 py-3.5 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed group"
-                  >
-                    {isSubscribing ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>পেমেন্ট পেজে পাঠানো হচ্ছে...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 group-hover:rotate-12 transition-transform" />
-                        <span>শুরু করুন</span>
-                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
 
             </div>

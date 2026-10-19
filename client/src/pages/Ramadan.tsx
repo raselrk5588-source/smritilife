@@ -65,9 +65,9 @@ export default function Ramadan() {
   const [countdownText, setCountdownText] = useState<{ title: string; subtitle?: string; hours: number; minutes: number; seconds: number } | null>(null);
 
   // Settings
-  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [sehriMinsBefore, setSehriMinsBefore] = useState(40);
-  const [iftarAlertEnabled, setIftarAlertEnabled] = useState(true);
+  const [iftarAlertEnabled, setIftarAlertEnabled] = useState(false);
 
   // Fetch initial data
   useEffect(() => {
@@ -82,9 +82,9 @@ export default function Ramadan() {
               const sData = await sRes.json();
               if (sData.district) setSelectedDistrict(sData.district);
               if (sData.ramadanAlerts) {
-                setAlertsEnabled(sData.ramadanAlerts.enabled !== false);
+                setAlertsEnabled(!!sData.ramadanAlerts.enabled);
                 setSehriMinsBefore(sData.ramadanAlerts.sehriMinutesBefore || 40);
-                setIftarAlertEnabled(sData.ramadanAlerts.iftarAlert !== false);
+                setIftarAlertEnabled(!!sData.ramadanAlerts.iftarAlert);
               }
             }
           } catch (e) {}

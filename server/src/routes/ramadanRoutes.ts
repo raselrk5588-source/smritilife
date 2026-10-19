@@ -32,10 +32,10 @@ router.get('/settings', async (req: any, res) => {
       success: true,
       district: user?.district || 'Dhaka',
       ramadanAlerts: user?.ramadanAlerts || {
-        enabled: true,
-        sehriAlert: true,
+        enabled: false,
+        sehriAlert: false,
         sehriMinutesBefore: 40,
-        iftarAlert: true
+        iftarAlert: false
       }
     });
   } catch (err: any) {

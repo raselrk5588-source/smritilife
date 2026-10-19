@@ -1,0 +1,125 @@
+:root {
+    --bg-color: #f4f7f6;
+    --card-bg: #ffffff;
+    --primary: #e74c3c;
+    --primary-light: #c0392b;
+    --text-main: #2c3e50;
+    --text-muted: #7f8c8d;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.login-card {
+    background: var(--card-bg);
+    border: none;
+    border-radius: 16px;
+    padding: 40px 25px 30px 25px;
+    width: 100%;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    text-align: center;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    color: var(--text-main);
+    font-size: 1.2rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.close-btn:hover {
+    color: var(--primary-light);
+}
+
+.logo {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0 0 10px 0;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+.input-group {
+    background: #f8f9fa;
+    border: 1px solid #ced4da;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    margin-bottom: 25px;
+}
+
+.input-group i {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    margin-right: 15px;
+}
+
+.input-group input {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    width: 100%;
+    outline: none;
+}
+
+.input-group input::placeholder {
+    color: #adb5bd;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.primary-btn {
+    background-color: var(--primary);
+    color: #fff;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    font-family: 'Inter', sans-serif;
+}
+
+.primary-btn:active {
+    transform: scale(0.98);
+}
+.primary-btn:disabled {
+    background-color: #4f46e5;
+    cursor: not-allowed;
+}

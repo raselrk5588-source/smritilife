@@ -4,7 +4,21 @@ import SystemSettings from '../models/SystemSettings';
 import AITrainingRule from '../models/AITrainingRule';
 
 // In-memory chat history for WhatsApp users (In production, save to Redis or DB)
-const chatHistories = new Map<string, any[]>();
+export const chatHistories = new Map<string, any[]>();
+
+/**
+ * Retrieve the last user turn from chat history for context-aware followups
+ */
+export const getLastUserTurn = (whatsappNumber: string): string | null => {
+  const history = chatHistories.get(whatsappNumber);
+  if (!history || history.length === 0) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i]?.role === 'user' && history[i]?.parts?.[0]?.text) {
+      return history[i].parts[0].text;
+    }
+  }
+  return null;
+};
 
 /**
  * Converts 24-hour HH:mm (e.g. "13:00", "01:30") to human-friendly 12-hour format with AM/PM (e.g. "1:00 PM", "1:30 AM")
@@ -939,8 +953,11 @@ Possible actions:
    - "category"?: "Address" | "Personal" | "Health" | "Work" | "General"
 
 9. get_note:
-   When the user asks for their saved personal info, address, notes, passwords, or asks to see their notes, or asks about when an item/file was saved or how long it's lasting (e.g. "Tishu box ta kobe save kora hoyechilo", "tishu box ta kobe upload kora hoyechilo", "গ্যাস সিলিন্ডার কয়দিন চলছে", "প্রেসক্রিপশনটা দাও").
+   When the user asks for ANY saved personal info, address, notes, passwords, or asks about when an event, birthday, anniversary, deadline, task, reminder, or item was saved or scheduled (e.g. "Raiyan er jonmo din kobe?", "আমার ছেলের জন্মদিন কবে?", "TIN submit kobe?", "রাতের ওষুধ কখন খেতে হবে?", "Tishu box ta kobe save kora hoyechilo", "আমার বাসার ঠিকানাটা দাও").
    Examples in Bengali/Banglish:
+   - "Raiyan er jonmo din kobe?" বা "আমার ছেলের জন্মদিন কবে?" বা "raiyan er birthday kobe" -> action: "get_note", data: { searchQuery: "রাইয়ান জন্মদিন" }
+   - "TIN submit kobe?" বা "টিন সাবমিট কবে" -> action: "get_note", data: { searchQuery: "TIN সাবমিট" }
+   - "রাতের ওষুধ কখন খেতে হবে?" বা "rat er osudh kokhon" -> action: "get_note", data: { searchQuery: "রাতের ওষুধ" }
    - "Tishu box ta kobe save kora hoyechilo" বা "tishu box ta kobe upload kora hoyechilo" -> action: "get_note", data: { searchQuery: "Tishu box" }
    - "আমার বাসার ঠিকানাটা দাও" বা "বাসার ঠিকানা কি?" বা "বাসার এড্রেস বলো" বা "basar address ta daw" -> action: "get_note", data: { searchQuery: "বাসার ঠিকানা" }
    - "অফিসের ঠিকানাটা দাও" বা "office address ta daw" -> action: "get_note", data: { searchQuery: "অফিসের ঠিকানা" }
@@ -948,7 +965,7 @@ Possible actions:
    - "ওয়াইফাই পাসওয়ার্ড কত?" -> action: "get_note", data: { searchQuery: "ওয়াইফাই পাসওয়ার্ড" }
    - "আমার নোটগুলো দেখাও" বা "সব নোট দেখাও" বা "নোট কি কি আছে" -> action: "get_note", data: { searchQuery: "সব" }
    Fields in "data":
-   - "searchQuery": string (The item or topic name being requested, preserving English/Bangla text, or "সব" to view all saved notes)
+   - "searchQuery": string (The specific item, person, event, or topic name being asked about, e.g. "রাইয়ান জন্মদিন", "TIN সাবমিট", "বাসার ঠিকানা", or "সব" to view all saved notes)
 
 10. delete_note:
    When the user wants to delete or remove a saved note, address, or personal info.
@@ -1473,12 +1490,14 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // B. Get Note / Info Retrieval Intent (e.g. "বাসার ঠিকানা দাও", "অফিস এড্রেস কি", "amar basa koi", "basar address daw")
+    // B. Get Note / Info Retrieval Intent (e.g. "বাসার ঠিকানা দাও", "অফিস এড্রেস কি", "amar basa koi", "Raiyan er jonmo din kobe?")
     const isGetNoteIntent =
       /(?:সব\s*নোট|সকল\s*নোট|আমার\s*নোট|নোট\s*লিস্ট|নোটগুলো|নোটগুলা|show\s*notes|my\s*notes)/i.test(text) ||
       /(?:বাসার?|অফিসের?|বাড়ির?|ঘরের|ব্যক্তিগত|আমার|amr|amar)?\s*(?:ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:টা|টি|ta|ti)?\s*(?:দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto|koi|kothay|kothai)/i.test(text) ||
       /\b(?:amr|amar|my)?\s*(?:basa|basar|basha|bashar|bari|barir|office|officer)\s*(?:address|thikana)?\s*(?:ta\s*)?(?:koi|kothay|kothai|daw|dao|ki|bolo|koto)\b/i.test(text) ||
-      /(?:আমার|amr|amar)?\s*(?:বাসা|বাড়ি|অফিস|basa|basha|bari|office)\s*(?:কই|কোথায়|কোথাই|koi|kothay|kothai)/i.test(text);
+      /(?:আমার|amr|amar)?\s*(?:বাসা|বাড়ি|অফিস|basa|basha|bari|office)\s*(?:কই|কোথায়|কোথাই|koi|kothay|kothai)/i.test(text) ||
+      /(?:jonmodin|jonmo\s*din|birthday|জন্মদিন|biyebarsiki|anniversary|meeting|মিটিং|পরীক্ষা|porikkha|submit|সাবমিট|ওষুধ|ঔষধ|osudh)\s*(?:টা|টি|ta|ti)?\s*(?:কবে|কখন|কয়টায়|তারিখ|kobe|kokhon|koytay|tarikh|date)/i.test(text) ||
+      /(?:কবে|কখন|কয়টায়|kobe|kokhon|koytay)\s*(?:হবে|hobe|khete\s*hobe|ashe|আসবে|\?)/i.test(text);
 
     if (isGetNoteIntent) {
       if (/(?:সব\s*নোট|সকল\s*নোট|আমার\s*নোট|নোট\s*লিস্ট|নোটগুলো|নোটগুলা|show\s*notes|my\s*notes)/i.test(text)) {
@@ -1497,13 +1516,13 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       else if (/পাসওয়ার্ড|password/i.test(text)) queryTopic = 'পাসওয়ার্ড';
       else {
         queryTopic = text
-          .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto|koi|kothay|kothai)/gi, '')
+          .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto|koi|kothay|kothai|kobe|kokhon|koytay|কবে|কখন|কয়টায়|তারিখ|\?)/gi, '')
           .trim();
       }
 
       return {
         action: 'get_note',
-        data: { searchQuery: queryTopic }
+        data: { searchQuery: queryTopic || text }
       };
     }
 

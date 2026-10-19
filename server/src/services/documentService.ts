@@ -189,28 +189,59 @@ export async function uploadBufferToMeta(
 }
 
 /**
- * Load document file buffer from disk or embedded base64 data
+ * Load document file buffer from disk, embedded base64 data, or on-demand DB fetch
  */
-export async function getDocumentBuffer(doc: IUserDocument): Promise<Buffer | null> {
-  const baseName = path.basename(doc.fileUrl || '');
-  const candidates = [
-    path.join(__dirname, '../../uploads/documents', baseName),
-    path.join(__dirname, '../uploads/documents', baseName),
-    path.join(process.cwd(), 'uploads/documents', baseName),
-    path.join(process.cwd(), 'server/uploads/documents', baseName)
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) {
-      try {
-        return await fs.promises.readFile(c);
-      } catch (e) {}
-    }
-  }
+export async function getDocumentBuffer(doc: IUserDocument | any): Promise<Buffer | null> {
+  if (!doc) return null;
+
+  // 1. If base64 data is already in memory
   if (doc.fileData) {
     try {
       return Buffer.from(doc.fileData, 'base64');
-    } catch (e) {}
+    } catch (e) {
+      console.error('[DocumentService] Base64 decode error:', e);
+    }
   }
+
+  // 2. Try loading from disk
+  const baseName = path.basename(doc.fileUrl || doc.fileName || '');
+  if (baseName) {
+    const candidates = [
+      path.join(__dirname, '../../uploads/documents', baseName),
+      path.join(__dirname, '../uploads/documents', baseName),
+      path.join(process.cwd(), 'uploads/documents', baseName),
+      path.join(process.cwd(), 'server/uploads/documents', baseName)
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        try {
+          return await fs.promises.readFile(c);
+        } catch (e) {}
+      }
+    }
+  }
+
+  // 3. Fallback: If document was queried with .select('-fileData'), fetch fileData directly from DB by _id
+  if (doc._id) {
+    try {
+      const fullDoc = await UserDocument.findById(doc._id).select('fileData fileName mimeType fileUrl').lean();
+      if (fullDoc && fullDoc.fileData) {
+        const buffer = Buffer.from(fullDoc.fileData, 'base64');
+        // Cache to disk if possible
+        if (baseName) {
+          const saveDir = path.join(process.cwd(), 'uploads/documents');
+          if (!fs.existsSync(saveDir)) {
+            fs.mkdirSync(saveDir, { recursive: true });
+          }
+          fs.promises.writeFile(path.join(saveDir, baseName), buffer).catch(() => {});
+        }
+        return buffer;
+      }
+    } catch (e) {
+      console.error('[DocumentService] Failed to load document fileData from DB:', e);
+    }
+  }
+
   return null;
 }
 
@@ -523,6 +554,20 @@ export async function findMatchingDocumentWithVersion(
 
       if (doc.tags && doc.tags.some((t: string) => qVariants.some((qv) => t.toLowerCase().includes(qv)))) {
         score += 25;
+      }
+
+      if (doc.category) {
+        const docCat = doc.category.toLowerCase().trim();
+        if (qVariants.some((qv) => docCat.includes(qv) || qv.includes(docCat))) {
+          score += 35;
+        }
+      }
+    }
+
+    if (doc.category) {
+      const docCat = doc.category.toLowerCase().trim();
+      if (queryWithoutYear && (queryWithoutYear.includes(docCat) || docCat.includes(queryWithoutYear))) {
+        score += 50;
       }
     }
 

@@ -9,7 +9,7 @@ export interface IUserDocument extends Document {
   fileSize: number;
   fileUrl: string;
   fileData?: string; // base64 encoded payload for persistent retrieval
-  category: 'Prescription' | 'Medical Report' | 'NID/Card' | 'Certificate' | 'Invoice/Bill' | 'Other';
+  category?: string;
   tags: string[];
   metaMediaId?: string;
   notes?: string;
@@ -29,8 +29,7 @@ const UserDocumentSchema: Schema = new Schema(
     fileData: { type: String }, // Optional base64
     category: {
       type: String,
-      enum: ['Prescription', 'Medical Report', 'NID/Card', 'Certificate', 'Invoice/Bill', 'Other'],
-      default: 'Other',
+      default: '',
       index: true
     },
     tags: [{ type: String, index: true }],

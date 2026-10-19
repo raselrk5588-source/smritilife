@@ -44,7 +44,7 @@ export default function Documents() {
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadTitle, setUploadTitle] = useState('');
-  const [uploadCategory, setUploadCategory] = useState('Prescription');
+  const [uploadCategory, setUploadCategory] = useState(''); // Default is empty (optional)
   const [uploadNotes, setUploadNotes] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileBase64, setFileBase64] = useState('');
@@ -56,14 +56,28 @@ export default function Documents() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [failedThumbnails, setFailedThumbnails] = useState<Record<string, boolean>>({});
 
-  const categories = [
-    { id: 'All', label: 'সব ফাইল', icon: FolderOpen },
-    { id: 'Prescription', label: 'প্রেসক্রিপশন', icon: FileCheck },
-    { id: 'Medical Report', label: 'মেডিকেল রিপোর্ট', icon: FileText },
-    { id: 'NID/Card', label: 'এনআইডি ও কার্ড', icon: Shield },
-    { id: 'Certificate', label: 'সার্টিফিকেট', icon: Sparkles },
-    { id: 'Other', label: 'অন্যান্য', icon: FileText }
-  ];
+  // Dynamically extract user-defined categories from documents
+  const userCategories = Array.from(
+    new Set(
+      documents
+        .map((d) => (d.category || '').trim())
+        .filter((cat): cat is string => Boolean(cat && cat.length > 0))
+    )
+  );
+
+  const hasUncategorized = documents.some((d) => !d.category || !d.category.trim());
+
+  // Category suggestions (popular categories + user-created categories)
+  const categorySuggestions = Array.from(
+    new Set([
+      'প্রেসক্রিপশন',
+      'মেডিকেল রিপোর্ট',
+      'এনআইডি ও কার্ড',
+      'সার্টিফিকেট',
+      'রিসিপ্ট ও বিল',
+      ...userCategories
+    ])
+  ).slice(0, 8);
 
   const fetchDocuments = async () => {
     try {
@@ -95,12 +109,6 @@ export default function Documents() {
     }
 
     setSelectedFile(file);
-
-    // Default title from file name if empty
-    if (!uploadTitle) {
-      const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-      setUploadTitle(nameWithoutExt);
-    }
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -142,6 +150,7 @@ export default function Documents() {
         toast.success('ডকুমেন্ট সফলভাবে সেভ করা হয়েছে!', { id: 'docUpload' });
         setShowUploadModal(false);
         setUploadTitle('');
+        setUploadCategory('');
         setUploadNotes('');
         setSelectedFile(null);
         setFileBase64('');
@@ -249,33 +258,47 @@ export default function Documents() {
   };
 
   const filteredDocs = documents.filter((doc) => {
-    const matchesCat = selectedCategory === 'All' || doc.category === selectedCategory;
+    const docCat = (doc.category || '').trim();
+    const matchesCat =
+      selectedCategory === 'All'
+        ? true
+        : selectedCategory === 'Uncategorized'
+        ? !docCat
+        : docCat.toLowerCase() === selectedCategory.toLowerCase();
+
+    const q = searchQuery.trim().toLowerCase();
     const matchesQuery =
-      !searchQuery.trim() ||
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.tags && doc.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())));
+      !q ||
+      (doc.title && doc.title.toLowerCase().includes(q)) ||
+      (doc.category && doc.category.toLowerCase().includes(q)) ||
+      (doc.fileName && doc.fileName.toLowerCase().includes(q)) ||
+      (doc.notes && doc.notes.toLowerCase().includes(q)) ||
+      (doc.tags && doc.tags.some((t) => t.toLowerCase().includes(q)));
+
     return matchesCat && matchesQuery;
   });
 
-  const prescriptionCount = documents.filter((d) => d.category === 'Prescription').length;
-  const reportCount = documents.filter((d) => d.category === 'Medical Report').length;
+  const getCategoryInfo = (category?: string) => {
+    if (!category || !category.trim()) return null;
+    const cat = category.trim();
+    const lower = cat.toLowerCase();
 
-  const getCategoryInfo = (category: string) => {
-    switch (category) {
-      case 'Prescription':
-        return { label: 'প্রেসক্রিপশন', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200/70', dot: 'bg-emerald-500' };
-      case 'Medical Report':
-        return { label: 'মেডিকেল রিপোর্ট', bg: 'bg-blue-50 text-blue-700 border-blue-200/70', dot: 'bg-blue-500' };
-      case 'NID/Card':
-        return { label: 'এনআইডি ও কার্ড', bg: 'bg-purple-50 text-purple-700 border-purple-200/70', dot: 'bg-purple-500' };
-      case 'Certificate':
-        return { label: 'সার্টিফিকেট', bg: 'bg-amber-50 text-amber-700 border-amber-200/70', dot: 'bg-amber-500' };
-      case 'Invoice/Bill':
-        return { label: 'ইনভয়েস/বিল', bg: 'bg-teal-50 text-teal-700 border-teal-200/70', dot: 'bg-teal-500' };
-      default:
-        return { label: 'অন্যান্য ফাইল', bg: 'bg-slate-100 text-slate-700 border-slate-200/70', dot: 'bg-slate-400' };
+    if (lower.includes('presc') || lower.includes('প্রেসক্রিপশন')) {
+      return { label: cat, bg: 'bg-emerald-50 text-emerald-700 border-emerald-200/70', dot: 'bg-emerald-500' };
     }
+    if (lower.includes('medic') || lower.includes('report') || lower.includes('মেডিকেল') || lower.includes('রিপোর্ট')) {
+      return { label: cat, bg: 'bg-blue-50 text-blue-700 border-blue-200/70', dot: 'bg-blue-500' };
+    }
+    if (lower.includes('nid') || lower.includes('card') || lower.includes('কার্ড') || lower.includes('পাসপোর্ট')) {
+      return { label: cat, bg: 'bg-purple-50 text-purple-700 border-purple-200/70', dot: 'bg-purple-500' };
+    }
+    if (lower.includes('cert') || lower.includes('সনদ') || lower.includes('সার্টিফিকেট')) {
+      return { label: cat, bg: 'bg-amber-50 text-amber-700 border-amber-200/70', dot: 'bg-amber-500' };
+    }
+    if (lower.includes('bill') || lower.includes('invoice') || lower.includes('বিল') || lower.includes('রসিদ')) {
+      return { label: cat, bg: 'bg-teal-50 text-teal-700 border-teal-200/70', dot: 'bg-teal-500' };
+    }
+    return { label: cat, bg: 'bg-indigo-50 text-indigo-700 border-indigo-200/70', dot: 'bg-indigo-500' };
   };
 
   const getThumbnailSrc = (doc: DocumentItem) => {
@@ -337,12 +360,12 @@ export default function Documents() {
             <div className="text-base sm:text-2xl font-black mt-0.5">{documents.length}টি</div>
           </div>
           <div className="bg-black/10 backdrop-blur-xs rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/10 text-center sm:text-left">
-            <div className="text-[10px] sm:text-xs text-emerald-200 font-medium truncate">প্রেসক্রিপশন</div>
-            <div className="text-base sm:text-2xl font-black mt-0.5">{prescriptionCount}টি</div>
+            <div className="text-[10px] sm:text-xs text-emerald-200 font-medium truncate">ক্যাটাগরি</div>
+            <div className="text-base sm:text-2xl font-black mt-0.5">{userCategories.length}টি</div>
           </div>
           <div className="bg-black/10 backdrop-blur-xs rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/10 text-center sm:text-left">
-            <div className="text-[10px] sm:text-xs text-emerald-200 font-medium truncate">মেডিকেল রিপোর্ট</div>
-            <div className="text-base sm:text-2xl font-black mt-0.5">{reportCount}টি</div>
+            <div className="text-[10px] sm:text-xs text-emerald-200 font-medium truncate">ফিল্টারকৃত ফাইল</div>
+            <div className="text-base sm:text-2xl font-black mt-0.5">{filteredDocs.length}টি</div>
           </div>
           <div className="hidden sm:block bg-black/10 backdrop-blur-xs rounded-2xl p-3 border border-white/10">
             <div className="text-xs text-emerald-200 font-medium">WhatsApp সিঙ্ক</div>
@@ -356,26 +379,59 @@ export default function Documents() {
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-4 justify-between items-center mb-4 sm:mb-6">
-        {/* Category Pills */}
+        {/* Dynamic Category Pills */}
         <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            const isActive = selectedCategory === cat.id;
+          <button
+            onClick={() => setSelectedCategory('All')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'All'
+                ? 'bg-[#0A7756] text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+            }`}
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>সব ফাইল</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedCategory === 'All' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              {documents.length}
+            </span>
+          </button>
+
+          {userCategories.map((cat) => {
+            const count = documents.filter((d) => (d.category || '').trim().toLowerCase() === cat.toLowerCase()).length;
+            const isActive = selectedCategory.toLowerCase() === cat.toLowerCase();
             return (
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
                   isActive
                     ? 'bg-[#0A7756] text-white shadow-sm'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{cat.label}</span>
+                <span>{cat}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  {count}
+                </span>
               </button>
             );
           })}
+
+          {hasUncategorized && (
+            <button
+              onClick={() => setSelectedCategory('Uncategorized')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                selectedCategory === 'Uncategorized'
+                  ? 'bg-[#0A7756] text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+              }`}
+            >
+              <span>ক্যাটাগরি ছাড়া</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedCategory === 'Uncategorized' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                {documents.filter((d) => !d.category || !d.category.trim()).length}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Search Input */}
@@ -383,11 +439,20 @@ export default function Documents() {
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="ফাইল খুঁজুন..."
+            placeholder="টাইটেল বা ক্যাটাগরি দিয়ে খুঁজুন..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] shadow-2xs"
+            className="w-full pl-10 pr-8 py-2 sm:py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-[#0A7756] shadow-2xs"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -475,10 +540,14 @@ export default function Documents() {
                     {/* Title & Metadata */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${catInfo.bg}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${catInfo.dot}`}></span>
-                          <span>{catInfo.label}</span>
-                        </span>
+                        {catInfo ? (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${catInfo.bg}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${catInfo.dot}`}></span>
+                            <span>{catInfo.label}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-medium">ডকুমেন্ট</span>
+                        )}
                         <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/50 uppercase">
                           {fileExt}
                         </span>
@@ -556,8 +625,15 @@ export default function Documents() {
                 নতুন ফাইল বা প্রেসক্রিপশন যোগ করুন
               </h3>
               <button
-                onClick={() => setShowUploadModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-xl"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadCategory('');
+                  setUploadTitle('');
+                  setUploadNotes('');
+                  setSelectedFile(null);
+                  setFileBase64('');
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-xl cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -578,19 +654,46 @@ export default function Documents() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1">ক্যাটাগরি</label>
-                <select
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-600">
+                    ক্যাটাগরি <span className="text-slate-400 font-normal">(ঐচ্ছিক)</span>
+                  </label>
+                  {uploadCategory && (
+                    <button
+                      type="button"
+                      onClick={() => setUploadCategory('')}
+                      className="text-[11px] text-slate-400 hover:text-rose-500 cursor-pointer"
+                    >
+                      মুছে ফেলুন
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="যেমন: প্রেসক্রিপশন, মেডিকেল রিপোর্ট, এনআইডি, সার্টিফিকেট ইত্যাদি (ঐচ্ছিক)"
                   value={uploadCategory}
                   onChange={(e) => setUploadCategory(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-medium text-slate-800 focus:outline-none focus:border-[#0A7756]"
-                >
-                  <option value="Prescription">প্রেসক্রিপশন (Prescription)</option>
-                  <option value="Medical Report">মেডিকেল রিপোর্ট (Medical Report)</option>
-                  <option value="NID/Card">এনআইডি ও কার্ড (NID/Passport)</option>
-                  <option value="Certificate">সার্টিফিকেট (Certificate)</option>
-                  <option value="Invoice/Bill">রিসিপ্ট ও বিল (Invoice/Bill)</option>
-                  <option value="Other">অন্যান্য (Other)</option>
-                </select>
+                />
+                {categorySuggestions.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[10px] text-slate-400">পরামর্শ:</span>
+                    {categorySuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => setUploadCategory(suggestion)}
+                        className={`text-[10px] px-2 py-0.5 rounded-lg border transition cursor-pointer ${
+                          uploadCategory.trim().toLowerCase() === suggestion.toLowerCase()
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-bold'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -635,8 +738,15 @@ export default function Documents() {
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadCategory('');
+                    setUploadTitle('');
+                    setUploadNotes('');
+                    setSelectedFile(null);
+                    setFileBase64('');
+                  }}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   বাতিল
                 </button>
@@ -660,9 +770,11 @@ export default function Documents() {
           <div className="bg-white rounded-3xl max-w-3xl w-full p-4 overflow-hidden relative shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                  {previewDoc.category}
-                </span>
+                {previewDoc.category && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {previewDoc.category}
+                  </span>
+                )}
                 <h4 className="font-bold text-sm text-slate-800 truncate">{previewDoc.title}</h4>
               </div>
               <div className="flex items-center gap-2">

@@ -53,10 +53,10 @@ const UserSchema: Schema = new Schema(
     honorific: { type: String },
     district: { type: String, default: 'Dhaka' },
     ramadanAlerts: {
-      enabled: { type: Boolean, default: true },
-      sehriAlert: { type: Boolean, default: true },
+      enabled: { type: Boolean, default: false },
+      sehriAlert: { type: Boolean, default: false },
       sehriMinutesBefore: { type: Number, default: 40 },
-      iftarAlert: { type: Boolean, default: true },
+      iftarAlert: { type: Boolean, default: false },
       lastSehriAlertDate: { type: String },
       lastIftarNoticeDate: { type: String },
       lastIftarAlertDate: { type: String }

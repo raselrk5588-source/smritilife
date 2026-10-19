@@ -244,6 +244,7 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
   const templateName = process.env.WHATSAPP_WISH_TEMPLATE_NAME || 'wish_card_notification';
   const templateLang = process.env.WHATSAPP_WISH_TEMPLATE_LANG || 'bn';
 
+  // First try 2-param with dynamic button: [sender, wishPhrase] + buttonUrlSlug
   let textDelivered = await sendMetaWhatsAppTemplate(
     wish.recipientContact,
     templateName,
@@ -251,6 +252,16 @@ export const deliverWishCard = async (wish: IWish, senderName: string, senderWha
     templateLang,
     smartCardId
   );
+
+  // If failed (e.g. user created template without button, 3 body params), try 3-param body format [sender, wishPhrase, smartCardUrl]
+  if (!textDelivered) {
+    textDelivered = await sendMetaWhatsAppTemplate(
+      wish.recipientContact,
+      templateName,
+      [sender, wishPhrase, smartCardUrl],
+      templateLang
+    );
+  }
 
   // If template delivery failed (e.g., template not yet created/approved on Meta), fallback to direct text
   if (!textDelivered) {

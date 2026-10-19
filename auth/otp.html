@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ওটিপি (OTP) ভেরিফাই</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <a href="../index.html" class="close-btn"><i class="fa-solid fa-xmark"></i></a>
+            
+            <h1 class="logo">ওটিপি (OTP) দিন</h1>
+            <p class="subtitle">আপনার মোবাইলে পাঠানো ৪ ডিজিটের কোডটি দিন</p>
+            
+            <div class="input-group">
+                <i class="fa-solid fa-lock"></i>
+                <input type="text" id="otp-input" placeholder="------" style="letter-spacing: 5px; font-weight:bold;">
+            </div>
+
+            <button id="auth-btn" class="primary-btn" onclick="verifyOtp()">ভেরিফাই করুন</button>
+            <div id="loader" style="display:none; color:#cbd5e1; margin-top:10px; font-size:14px;">অপেক্ষা করুন...</div>
+        </div>
+    </div>
+
+    <script>
+    async function verifyOtp() {
+      const otp = document.getElementById("otp-input").value.trim();
+      
+      if (!otp) {
+          alert("অনুগ্রহ করে ওটিপি (OTP) দিন।");
+          return;
+      }
+      
+      const phone = localStorage.getItem("phone");
+      const ref = localStorage.getItem("ref");
+      const btn = document.getElementById("auth-btn");
+      const loader = document.getElementById("loader");
+
+      btn.disabled = true;
+      loader.style.display = "block";
+
+      try {
+          const res = await fetch("verify_otp.php", {
+            method: "POST",
+            body: new URLSearchParams({
+              Otp: otp,
+              referenceNo: ref,
+              user_mobile: phone
+            })
+          });
+
+          const data = await res.json();
+
+          if (data.statusCode === "S1000") {
+            localStorage.setItem("isLoggedIn", true);
+            window.location.href = "../index.html";
+          } else {
+            alert(data.message || "OTP ভুল");
+          }
+      } catch(e) {
+          alert("Network error");
+      } finally {
+          btn.disabled = false;
+          loader.style.display = "none";
+      }
+    }
+    </script>
+</body>
+</html>
