@@ -40,7 +40,7 @@ import {
   bnToEnDigits
 } from '../services/expenseService';
 import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
-import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer } from '../services/documentService';
+import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes } from '../services/documentService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -92,6 +92,7 @@ export const userDocPendingState = new Map<string, DocumentPendingState>();
 export const userPendingReminderState = new Map<string, PendingReminderState>();
 export const lastRescheduledReminder = new Map<string, { reminderId: string; title: string; updatedAt: number }>();
 export const userExpenseContext = new Map<string, ExpenseContextState>();
+export const userReminderEditState = new Map<string, { reminderId: string; title: string; expiresAt: number }>();
 
 export interface PendingMedicineItem {
   name: string;
@@ -1747,9 +1748,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           if (mediaDocCaption && mediaDocCaption.trim()) {
-            const rawTitle = mediaDocCaption.trim().replace(/^(এটা|ita|aita|eta|amr|amar|আমার)\s+/i, '').trim();
-            const title = rawTitle || (isImage ? 'প্রেসক্রিপশন / ছবি' : mediaDocFilename);
-            const { category, tags } = detectDocumentCategory(title + ' ' + mediaDocFilename);
+            const { title, notes } = extractCleanDocumentTitleAndNotes(mediaDocCaption, mediaDocFilename, isImage);
+            const { category, tags } = detectDocumentCategory(title + ' ' + mediaDocFilename + ' ' + (notes || ''));
             const diskResult = await saveFileToDisk(media.buffer, mediaDocFilename, media.mimeType || mediaDocMimeType);
 
             await UserDocument.create({
@@ -1762,6 +1762,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               mimeType: media.mimeType || mediaDocMimeType,
               category,
               tags,
+              notes: notes || undefined,
               metaMediaId: mediaDocId,
               fileData: media.buffer.toString('base64')
             });
@@ -1769,7 +1770,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const salutation = user.honorific ? ` ${user.honorific}` : '';
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে যেকোনো সময় লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*\nস্মৃতি তৎক্ষণাৎ ছবি ও তারিখসহ হিসাব পাঠিয়ে দেবে!`
+              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে যেকোনো সময় লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*\nস্মৃতি তৎক্ষণাৎ ছবি ও তারিখসহ হিসাব পাঠিয়ে দেবে!`
             );
             return;
           } else {
@@ -1798,10 +1799,9 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           const pending = userDocPendingState.get(fromNumber)!;
           if (Date.now() > pending.expiresAt) {
             userDocPendingState.delete(fromNumber);
-          } else if (cleanText && !cleanText.startsWith('/') && cleanText.length < 100) {
-            const rawTitle = cleanText.replace(/^(এটা|ita|aita|eta|amr|amar|আমার)\s+/i, '').trim();
-            const title = rawTitle || (pending.isImage ? 'সংরক্ষিত ছবি' : pending.filename);
-            const { category, tags } = detectDocumentCategory(title + ' ' + pending.filename);
+          } else if (cleanText && !cleanText.startsWith('/')) {
+            const { title, notes } = extractCleanDocumentTitleAndNotes(cleanText, pending.filename, pending.isImage);
+            const { category, tags } = detectDocumentCategory(title + ' ' + pending.filename + ' ' + (notes || ''));
             const diskResult = await saveFileToDisk(pending.buffer, pending.filename, pending.mimeType);
 
             await UserDocument.create({
@@ -1814,6 +1814,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               mimeType: pending.mimeType,
               category,
               tags,
+              notes: notes || undefined,
               metaMediaId: pending.mediaId,
               fileData: pending.buffer.toString('base64')
             });
@@ -1823,9 +1824,48 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const salutation = user.honorific ? ` ${user.honorific}` : '';
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে সেভ করা হয়েছে${salutation}!* 📁\n\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*`
+              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে ডকুমেন্ট ভল্টে সেভ করা হয়েছে${salutation}!* 📁\n\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*`
             );
             return;
+          }
+        }
+
+        // If user is currently in active Reminder Edit mode:
+        if (userReminderEditState.has(fromNumber)) {
+          const editState = userReminderEditState.get(fromNumber)!;
+          if (Date.now() > editState.expiresAt) {
+            userReminderEditState.delete(fromNumber);
+          } else if (cleanText && !cleanText.startsWith('/')) {
+            const hasCancelWord = /(?:বাতিল|ক্যান্সেল|cancel|না|থাক)/i.test(cleanText);
+            if (hasCancelWord) {
+              userReminderEditState.delete(fromNumber);
+              await sendMetaWhatsAppMessage(fromNumber, 'রিমাইন্ডার এডিট প্রক্রিয়াটি বাতিল করা হয়েছে।');
+              return;
+            }
+
+            const targetReminder = await Reminder.findOne({ _id: editState.reminderId, userId: user._id });
+            if (targetReminder) {
+              const newTime = parseBengaliTime(cleanText);
+              const hasDateMention = /(?:কাল|আগামীকাল|পরশু|আজ|তারিখ|tarikh|রবিবার|সোমবার|মঙ্গলবার|বুধবার|বৃহস্পতিবার|শুক্রবার|শনিবার)/i.test(cleanText);
+              const targetDate = hasDateMention ? parseRelativeDate(cleanText, newTime) : null;
+
+              if (newTime) targetReminder.time = newTime;
+              if (targetDate) targetReminder.date = targetDate;
+              targetReminder.status = 'Pending';
+              await targetReminder.save();
+
+              userReminderEditState.delete(fromNumber);
+
+              const formattedTime = formatTime12Hour(targetReminder.time);
+              const dStr = targetReminder.date ? new Date(targetReminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✏️ আপনার *"${targetReminder.title}"* রিমাইন্ডারটি সফলভাবে আপডেট করা হয়েছে!\n⏰ নতুন সময়: ${formattedTime} (${dStr})`
+              );
+              return;
+            } else {
+              userReminderEditState.delete(fromNumber);
+            }
           }
         }
 
@@ -3427,10 +3467,42 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const itemIndex = typeof data.index === 'number' ? data.index : undefined;
             const query = (data.searchQuery || '').trim();
 
+            // If user did not specify new time or date yet:
             if (!data.time && !data.date && !data.newTitle) {
+              let target: any = null;
+              if (itemIndex !== undefined) {
+                const pendingReminders = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
+                if (itemIndex === -1 && pendingReminders.length > 0) {
+                  target = pendingReminders[pendingReminders.length - 1];
+                } else if (itemIndex >= 1 && itemIndex <= pendingReminders.length) {
+                  target = pendingReminders[itemIndex - 1];
+                }
+              } else if (query && query !== 'জরুরি' && query.length >= 2) {
+                target = await Reminder.findOne({
+                  userId: user._id,
+                  title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+                  status: { $ne: 'Cancelled' }
+                }).sort({ date: 1, time: 1 });
+              }
+
+              if (target) {
+                userReminderEditState.set(fromNumber, {
+                  reminderId: target._id.toString(),
+                  title: target.title,
+                  expiresAt: Date.now() + 5 * 60 * 1000
+                });
+                const curTime = formatTime12Hour(target.time);
+                const curDate = target.date ? new Date(target.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `✏️ আপনার *"${target.title}"* রিমাইন্ডারটির বর্তমান সময়: ${curTime} (${curDate})\n\nআপনি কোন নতুন সময় বা তারিখে দিতে চান লিখে পাঠান (যেমন: *"বিকাল ৫টায় দাও"*, *"কাল সকাল ১০টায় দাও"* ইত্যাদি)।`
+                );
+                break;
+              }
+
               await sendMetaWhatsAppMessage(
                 fromNumber,
-                `✏️ আপনি এই রিমাইন্ডারে কী পরিবর্তন করতে চান বলুন (যেমন: "নতুন সময় বিকাল ৫টায় দাও" বা "কালকের বদলে পরশু দাও")।`
+                `✏️ আপনি কোন রিমাইন্ডারটি এবং কী পরিবর্তন করতে চান বলুন (যেমন: *"১ নম্বরটা বিকাল ৫টায় দাও"* বা *"মিটিং কাল সকাল ১০টায় দাও"* ইত্যাদি)।`
               );
               break;
             }
@@ -3472,11 +3544,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               }
             }
 
-            if (query) {
+            if (query && query !== 'জরুরি') {
               updatedReminder = await Reminder.findOneAndUpdate(
                 {
                   userId: user._id,
-                  title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
+                  title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+                  status: { $ne: 'Cancelled' }
                 },
                 updateFields,
                 { new: true }
@@ -3496,6 +3569,21 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 );
               }
             } else {
+              // Try updating the latest pending reminder as fallback if only time/date was given
+              const latestPending = await Reminder.findOne({ userId: user._id, status: 'Pending' }).sort({ createdAt: -1 });
+              if (latestPending) {
+                const updated = await Reminder.findByIdAndUpdate(latestPending._id, updateFields, { new: true });
+                if (updated) {
+                  const dStr = updated.date ? new Date(updated.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+                  const formattedTime = formatTime12Hour(updated.time);
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `✏️ আপনার রিমাইন্ডার *"${updated.title}"* সফলভাবে আপডেট করা হয়েছে!\n⏰ নতুন সময়: ${formattedTime} (${dStr})`
+                  );
+                  break;
+                }
+              }
+
               await sendMetaWhatsAppMessage(
                 fromNumber,
                 'কোন রিমাইন্ডারটি এবং কী পরিবর্তন করতে চান তা উল্লেখ করুন (যেমন: "১ নম্বরটা বিকাল ৫টায় দাও" বা "মিটিং ৫টায় দাও")।'
@@ -3920,76 +4008,42 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             }
             break;
 
-          case 'cancel_reminder': {
-            const data = aiResponse.data || {};
-            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
-            const query = (data.searchQuery || '').trim();
-
-            let reminderToCancel = null;
-
-            if (itemIndex !== undefined) {
-              const pendingReminders = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
-              if (itemIndex === -1 && pendingReminders.length > 0) {
-                reminderToCancel = pendingReminders[pendingReminders.length - 1];
-              } else if (itemIndex >= 1 && itemIndex <= pendingReminders.length) {
-                reminderToCancel = pendingReminders[itemIndex - 1];
-              }
-
-              if (reminderToCancel) {
-                reminderToCancel.status = 'Cancelled';
-                await reminderToCancel.save();
-                await sendMetaWhatsAppMessage(
-                  fromNumber,
-                  `⚠️ আপনার ${itemIndex === -1 ? 'সর্বশেষ' : itemIndex + ' নম্বর'} রিমাইন্ডার "${reminderToCancel.title}" সফলভাবে বাতিল (Cancel) করা হয়েছে।`
-                );
-                break;
-              } else {
-                await sendMetaWhatsAppMessage(
-                  fromNumber,
-                  `দুঃখিত, ${itemIndex} নম্বরে কোনো পেন্ডিং রিমাইন্ডার খুঁজে পাওয়া যায়নি।`
-                );
-                break;
-              }
-            }
-
-            if (query) {
-              reminderToCancel = await Reminder.findOneAndUpdate(
-                { 
-                  userId: user._id, 
-                  title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-                  status: { $ne: 'Cancelled' }
-                },
-                { status: 'Cancelled' },
-                { new: true }
-              );
-              if (reminderToCancel) {
-                await sendMetaWhatsAppMessage(fromNumber, `⚠️ "${reminderToCancel.title}" রিমাইন্ডারটি সফলভাবে বাতিল (Cancel) করা হয়েছে।`);
-              } else {
-                await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো সক্রিয় রিমাইন্ডার খুঁজে পাওয়া যায়নি।`);
-              }
-            } else {
-              await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি বাতিল করতে চান তার নম্বর বা নাম উল্লেখ করুন (যেমন: "১ নম্বরটা ক্যান্সেল করো")।');
-            }
-            break;
-          }
-
+          case 'cancel_reminder':
           case 'delete_reminder': {
             const data = aiResponse.data || {};
             const itemIndex = typeof data.index === 'number' ? data.index : undefined;
             const query = (data.searchQuery || '').trim();
+            const cleanQuery = query
+              .replace(/(?:আমার|amr|amar|রিমাইন্ডার(?:ের)?|reminder|এর|র|টা|টি|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
+              .trim();
 
-            let reminderToDelete = null;
+            let reminderToDelete: any = null;
 
             if (itemIndex !== undefined) {
-              const pendingReminders = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
-              if (itemIndex === -1 && pendingReminders.length > 0) {
-                reminderToDelete = pendingReminders[pendingReminders.length - 1];
-              } else if (itemIndex >= 1 && itemIndex <= pendingReminders.length) {
-                reminderToDelete = pendingReminders[itemIndex - 1];
+              // 1. Try pending reminders first
+              let remindersList = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
+              if (remindersList.length === 0) {
+                // Fallback to all reminders
+                remindersList = await Reminder.find({ userId: user._id }).sort({ date: 1, time: 1 });
+              }
+
+              if (itemIndex === -1 && remindersList.length > 0) {
+                reminderToDelete = remindersList[remindersList.length - 1];
+              } else if (itemIndex >= 1 && itemIndex <= remindersList.length) {
+                reminderToDelete = remindersList[itemIndex - 1];
               }
 
               if (reminderToDelete) {
                 await Reminder.findByIdAndDelete(reminderToDelete._id);
+                // If it's a medicine reminder with multiple slot entries, clean them all up
+                if (reminderToDelete.category === 'medicine' && reminderToDelete.medicineRoutine) {
+                  await Reminder.deleteMany({
+                    userId: user._id,
+                    category: 'medicine',
+                    medicineRoutine: reminderToDelete.medicineRoutine
+                  });
+                }
+
                 await sendMetaWhatsAppMessage(
                   fromNumber,
                   `🗑️ আপনার ${itemIndex === -1 ? 'সর্বশেষ' : itemIndex + ' নম্বর'} রিমাইন্ডার "${reminderToDelete.title}" সফলভাবে ডিলিট করা হয়েছে!`
@@ -4022,39 +4076,278 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     break;
                   }
                 }
+
+                // Check if user was referring to document by index
+                const docToDelete = await UserDocument.findOne({ userId: user._id }).sort({ createdAt: -1 });
+                if (docToDelete && (itemIndex === 1 || itemIndex === -1)) {
+                  await UserDocument.findByIdAndDelete(docToDelete._id);
+                  await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার ডকুমেন্ট "${docToDelete.title}" সফলভাবে ডিলিট করা হয়েছে!`);
+                  break;
+                }
+
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  `দুঃখিত, ${itemIndex} নম্বরে কোনো পেন্ডিং রিমাইন্ডার পাওয়া যায়নি।`
+                  `দুঃখিত, ${itemIndex} নম্বরে কোনো রিমাইন্ডার বা তথ্য পাওয়া যায়নি।`
                 );
                 break;
               }
             }
 
-            if (query) {
+            if (cleanQuery || query) {
+              const targetQ = cleanQuery || query;
+              const searchRegex = new RegExp(targetQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+              // 1. Search in Reminders (including medicines array)
               reminderToDelete = await Reminder.findOneAndDelete({
                 userId: user._id,
-                title: { $regex: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
+                $or: [
+                  { title: searchRegex },
+                  { description: searchRegex },
+                  { 'medicines.name': searchRegex },
+                  { category: searchRegex }
+                ]
               });
+
               if (reminderToDelete) {
-                await sendMetaWhatsAppMessage(fromNumber, `🗑️ "${reminderToDelete.title}" রিমাইন্ডারটি সফলভাবে ডিলিট করা হয়েছে।`);
-              } else {
-                // Check if query matches an expense
-                const expResult = await deleteExpenseByTitle(user._id, new Date(), query);
-                if (expResult) {
-                  const reply = buildExpenseDeletedMessage(
-                    expResult.deletedExpense.title,
-                    expResult.deletedExpense.amount,
-                    expResult.dateTotal,
-                    expResult.monthTotal,
-                    'আজকের'
-                  );
-                  await sendMetaWhatsAppMessage(fromNumber, reply);
-                  break;
+                if (reminderToDelete.category === 'medicine' && reminderToDelete.medicineRoutine) {
+                  await Reminder.deleteMany({
+                    userId: user._id,
+                    category: 'medicine',
+                    medicineRoutine: reminderToDelete.medicineRoutine
+                  });
                 }
-                await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো রিমাইন্ডার খুঁজে পাওয়া যায়নি।`);
+                await sendMetaWhatsAppMessage(fromNumber, `🗑️ "${reminderToDelete.title}" রিমাইন্ডারটি সফলভাবে ডিলিট করা হয়েছে।`);
+                break;
               }
+
+              // 2. Check if query was referring to Document
+              const docToDelete = await UserDocument.findOneAndDelete({
+                userId: user._id,
+                $or: [
+                  { title: searchRegex },
+                  { category: searchRegex },
+                  { fileName: searchRegex },
+                  { notes: searchRegex }
+                ]
+              });
+              if (docToDelete) {
+                try {
+                  if (docToDelete.fileUrl) {
+                    const diskPath = path.join(__dirname, '../../uploads/documents', path.basename(docToDelete.fileUrl));
+                    if (fs.existsSync(diskPath)) {
+                      await fs.promises.unlink(diskPath);
+                    }
+                  }
+                } catch (e) {}
+                await sendMetaWhatsAppMessage(fromNumber, `🗑️ ডকুমেন্ট ভল্ট থেকে "${docToDelete.title}" সফলভাবে ডিলিট করা হয়েছে!`);
+                break;
+              }
+
+              // 3. Check if query matches Note
+              const noteToDelete = await Note.findOneAndDelete({
+                userId: user._id,
+                $or: [
+                  { title: searchRegex },
+                  { content: searchRegex }
+                ]
+              });
+              if (noteToDelete) {
+                await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার নোট "${noteToDelete.title}" সফলভাবে মুছে ফেলা হয়েছে!`);
+                break;
+              }
+
+              // 4. Check if query matches Expense
+              const expResult = await deleteExpenseByTitle(user._id, new Date(), targetQ);
+              if (expResult) {
+                const reply = buildExpenseDeletedMessage(
+                  expResult.deletedExpense.title,
+                  expResult.deletedExpense.amount,
+                  expResult.dateTotal,
+                  expResult.monthTotal,
+                  'আজকের'
+                );
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+                break;
+              }
+
+              // 5. Check if query matches Contact
+              const conToDelete = await Contact.findOneAndDelete({
+                userId: user._id,
+                name: searchRegex
+              });
+              if (conToDelete) {
+                await sendMetaWhatsAppMessage(fromNumber, `🗑️ কনট্যাক্ট লিস্ট থেকে "${conToDelete.name}" সফলভাবে মুছে ফেলা হয়েছে।`);
+                break;
+              }
+
+              await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${targetQ}" সম্পর্কিত কোনো রিমাইন্ডার বা তথ্য খুঁজে পাওয়া যায়নি।`);
             } else {
-              await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি ডিলিট করতে চান তার নম্বর বা নাম উল্লেখ করুন (যেমন: "১ নম্বরটা ডিলিট করো")।');
+              // Delete most recent reminder as fallback if user just said "ডিলিট করো"
+              const latestRem = await Reminder.findOneAndDelete({ userId: user._id }).sort({ createdAt: -1 });
+              if (latestRem) {
+                await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার সর্বশেষ রিমাইন্ডার "${latestRem.title}" সফলভাবে ডিলিট করা হয়েছে।`);
+              } else {
+                await sendMetaWhatsAppMessage(fromNumber, 'কোন রিমাইন্ডারটি ডিলিট করতে চান তার নম্বর বা নাম উল্লেখ করুন (যেমন: "১ নম্বরটা ডিলিট করো")।');
+              }
+            }
+            break;
+          }
+
+          case 'delete_document': {
+            const data = aiResponse.data || {};
+            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
+            const query = (data.searchQuery || '').trim();
+            const cleanQuery = query
+              .replace(/(?:আমার|amr|amar|ডকুমেন্ট|document|প্রেসক্রিপশন|prescription|রিপোর্ট|report|ফাইল|file|ভল্ট|vault|সার্টিফিকেট|certificate|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে|এর|র|টা|টি)/gi, '')
+              .trim();
+
+            let docToDelete: any = null;
+
+            if (itemIndex !== undefined) {
+              const allDocs = await UserDocument.find({ userId: user._id }).sort({ createdAt: -1 });
+              if (itemIndex === -1 && allDocs.length > 0) {
+                docToDelete = allDocs[allDocs.length - 1];
+              } else if (itemIndex >= 1 && itemIndex <= allDocs.length) {
+                docToDelete = allDocs[itemIndex - 1];
+              }
+            }
+
+            if (!docToDelete && (cleanQuery || query)) {
+              const targetQ = cleanQuery || query;
+              const searchRegex = new RegExp(targetQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+              docToDelete = await UserDocument.findOne({
+                userId: user._id,
+                $or: [
+                  { title: searchRegex },
+                  { category: searchRegex },
+                  { fileName: searchRegex },
+                  { notes: searchRegex }
+                ]
+              }).sort({ createdAt: -1 });
+            }
+
+            if (!docToDelete) {
+              // Fallback to latest uploaded document
+              docToDelete = await UserDocument.findOne({ userId: user._id }).sort({ createdAt: -1 });
+            }
+
+            if (docToDelete) {
+              await UserDocument.findByIdAndDelete(docToDelete._id);
+              try {
+                if (docToDelete.fileUrl) {
+                  const diskPath = path.join(__dirname, '../../uploads/documents', path.basename(docToDelete.fileUrl));
+                  if (fs.existsSync(diskPath)) {
+                    await fs.promises.unlink(diskPath);
+                  }
+                }
+              } catch (e) {
+                console.warn('Could not delete document file from disk:', e);
+              }
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🗑️ ডকুমেন্ট ভল্ট থেকে আপনার "${docToDelete.title}" সফলভাবে ডিলিট করা হয়েছে!`
+              );
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `দুঃখিত, ${query ? `"${query}" নামের` : ''} কোনো সংরক্ষিত ডকুমেন্ট খুঁজে পাওয়া যায়নি।`
+              );
+            }
+            break;
+          }
+
+          case 'delete_contact': {
+            const data = aiResponse.data || {};
+            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
+            const rawName = (data.name || data.searchQuery || '').trim();
+            const cleanName = rawName
+              .replace(/(?:আমার|amr|amar|এর|র|কন্ট্যাক্ট|contact|নম্বর|নাম্বার|ফোন|phone|number|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
+              .trim();
+
+            let contactToDelete: any = null;
+
+            if (itemIndex !== undefined) {
+              const allContacts = await Contact.find({ userId: user._id }).sort({ createdAt: -1 });
+              if (itemIndex === -1 && allContacts.length > 0) {
+                contactToDelete = allContacts[allContacts.length - 1];
+              } else if (itemIndex >= 1 && itemIndex <= allContacts.length) {
+                contactToDelete = allContacts[itemIndex - 1];
+              }
+            }
+
+            if (!contactToDelete && (cleanName || rawName)) {
+              const target = cleanName || rawName;
+              const searchRegex = new RegExp(target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+              contactToDelete = await Contact.findOne({
+                userId: user._id,
+                $or: [
+                  { name: searchRegex },
+                  { nickname: searchRegex },
+                  { phone: searchRegex }
+                ]
+              });
+            }
+
+            if (contactToDelete) {
+              await Contact.findByIdAndDelete(contactToDelete._id);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🗑️ কনট্যাক্ট লিস্ট থেকে "${contactToDelete.name}" সফলভাবে মুছে ফেলা হয়েছে।`
+              );
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `দুঃখিত, "${rawName || 'কন্ট্যাক্ট'}" নামের কোনো নম্বর খুঁজে পাওয়া যায়নি।`
+              );
+            }
+            break;
+          }
+
+          case 'delete_location': {
+            const data = aiResponse.data || {};
+            const query = (data.searchQuery || '').trim();
+            const cleanQuery = query
+              .replace(/(?:আমার|amr|amar|এর|র|লোকেশন|location|ম্যাপ|map|ঠিকানা|address|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
+              .trim();
+
+            let locToDelete: any = null;
+            if (cleanQuery || query) {
+              const target = cleanQuery || query;
+              const searchRegex = new RegExp(target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+              locToDelete = await Note.findOne({
+                userId: user._id,
+                $or: [{ category: 'Location' }, { category: 'Address' }],
+                $and: [
+                  {
+                    $or: [
+                      { title: searchRegex },
+                      { content: searchRegex },
+                      { 'location.address': searchRegex }
+                    ]
+                  }
+                ]
+              });
+            }
+
+            if (!locToDelete) {
+              locToDelete = await Note.findOne({
+                userId: user._id,
+                $or: [{ category: 'Location' }, { category: 'Address' }]
+              }).sort({ createdAt: -1 });
+            }
+
+            if (locToDelete) {
+              await Note.findByIdAndDelete(locToDelete._id);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🗑️ সংরক্ষিত লোকেশন থেকে "${locToDelete.title}" সফলভাবে মুছে ফেলা হয়েছে।`
+              );
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `দুঃখিত, কোনো সংরক্ষিত লোকেশন খুঁজে পাওয়া যায়নি।`
+              );
             }
             break;
           }
@@ -4075,6 +4368,21 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               userId: user._id,
               title: { $regex: new RegExp(listTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
             });
+
+            if (type === 'clear' || type === 'delete') {
+              let deletedList = null;
+              if (todoList) {
+                deletedList = await TodoList.findByIdAndDelete(todoList._id);
+              } else {
+                deletedList = await TodoList.findOneAndDelete({ userId: user._id }).sort({ updatedAt: -1 });
+              }
+              if (deletedList) {
+                await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার "${deletedList.title}" তালিকাটি সফলভাবে মুছে ফেলা হয়েছে।`);
+              } else {
+                await sendMetaWhatsAppMessage(fromNumber, 'আপনার কোনো টু-ডু বা চেকলিস্ট পাওয়া যায়নি।');
+              }
+              break;
+            }
 
             if (type === 'create') {
               const newItems = rawItems.map(txt => ({
@@ -4688,35 +4996,62 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
           case 'delete_note': {
             const data = aiResponse.data || {};
+            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
             let query = (data.searchQuery || '').trim();
             const coreQuery = query
-              .replace(/(?:নোট|ঠিকানা|অ্যাড্রেস|এড্রেস|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন)/gi, '')
+              .replace(/(?:আমার|amr|amar|নোট|note|ঠিকানা|অ্যাড্রেস|এড্রেস|address|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
               .trim();
 
-            const searchRegex = new RegExp((coreQuery || query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            if (data.deleteAll || /সব|সকল|all|sob|shob/i.test(query)) {
+              const res = await Note.deleteMany({ userId: user._id });
+              await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার সব (${res.deletedCount}টি) নোট সফলভাবে মুছে ফেলা হয়েছে।`);
+              break;
+            }
 
-            let deletedNote = await Note.findOneAndDelete({
-              userId: user._id,
-              $or: [
-                { title: searchRegex },
-                { content: searchRegex }
-              ]
-            });
+            let deletedNote: any = null;
 
-            if (!deletedNote) {
-              if (/বাসা|বাড়ি|bari|basha|home/i.test(query)) {
-                deletedNote = await Note.findOneAndDelete({ userId: user._id, title: /বাসা|বাড়ি|home/i });
-              } else if (/অফিস|office/i.test(query)) {
-                deletedNote = await Note.findOneAndDelete({ userId: user._id, title: /অফিস|office/i });
-              } else if (/রক্ত|blood/i.test(query)) {
-                deletedNote = await Note.findOneAndDelete({ userId: user._id, title: /রক্ত|blood/i });
+            if (itemIndex !== undefined) {
+              const allNotes = await Note.find({ userId: user._id }).sort({ createdAt: -1 });
+              if (itemIndex === -1 && allNotes.length > 0) {
+                deletedNote = allNotes[allNotes.length - 1];
+              } else if (itemIndex >= 1 && itemIndex <= allNotes.length) {
+                deletedNote = allNotes[itemIndex - 1];
               }
             }
 
+            if (!deletedNote && (coreQuery || query)) {
+              const target = coreQuery || query;
+              const searchRegex = new RegExp(target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+              deletedNote = await Note.findOne({
+                userId: user._id,
+                $or: [
+                  { title: searchRegex },
+                  { content: searchRegex }
+                ]
+              }).sort({ createdAt: -1 });
+
+              if (!deletedNote) {
+                if (/বাসা|বাড়ি|bari|basha|home/i.test(query)) {
+                  deletedNote = await Note.findOne({ userId: user._id, title: /বাসা|বাড়ি|home/i });
+                } else if (/অফিস|office/i.test(query)) {
+                  deletedNote = await Note.findOne({ userId: user._id, title: /অফিস|office/i });
+                } else if (/রক্ত|blood/i.test(query)) {
+                  deletedNote = await Note.findOne({ userId: user._id, title: /রক্ত|blood/i });
+                }
+              }
+            }
+
+            if (!deletedNote) {
+              // Fallback: delete most recent note
+              deletedNote = await Note.findOne({ userId: user._id }).sort({ createdAt: -1 });
+            }
+
             if (deletedNote) {
+              await Note.findByIdAndDelete(deletedNote._id);
               await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার "${deletedNote.title}" সফলভাবে মুছে ফেলা হয়েছে।`);
             } else {
-              await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, "${query}" নামের কোনো নোট বা তথ্য খুঁজে পাওয়া যায়নি।`);
+              await sendMetaWhatsAppMessage(fromNumber, `দুঃখিত, কোনো নোট বা তথ্য খুঁজে পাওয়া যায়নি।`);
             }
             break;
           }
@@ -4819,9 +5154,43 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           case 'general_reply':
-          default:
-            await sendMetaWhatsAppMessage(fromNumber, aiResponse.replyText || 'দুঃখিত, বুঝতে পারিনি।');
+          default: {
+            const replyMsg = (aiResponse.replyText || '').trim();
+            const userSaidDelete = /(?:ডিলিট|মুছে|delete|remove|ক্লিয়ার|clear|বাতিল|ক্যান্সেল|বাদ\s*দাও)/i.test(cleanText);
+            const aiClaimedDeleted = /(?:ডিলিট\s*করা\s*হয়েছে|মুছে\s*ফেলা\s*হয়েছে|বাতিল\s*করা\s*হয়েছে|ডিলিট\s*করেছি|মুছে\s*দিয়েছি|deleted|removed)/i.test(replyMsg);
+
+            if (userSaidDelete || aiClaimedDeleted) {
+              // Intercept potential hallucinated deletion so it's actually removed from the database and portal
+              if (/প্রেসক্রিপশন|ডকুমেন্ট|ভল্ট|সার্টিফিকেট|রিপোর্ট|ফাইল|document|prescription/i.test(cleanText)) {
+                const latestDoc = await UserDocument.findOneAndDelete({ userId: user._id }).sort({ createdAt: -1 });
+                if (latestDoc) {
+                  await sendMetaWhatsAppMessage(fromNumber, `🗑️ ডকুমেন্ট ভল্ট থেকে "${latestDoc.title}" সফলভাবে ডিলিট করা হয়েছে!`);
+                  break;
+                }
+              } else if (/নোট|ঠিকানা|এড্রেস|address|পাসওয়ার্ড|note/i.test(cleanText)) {
+                const latestNote = await Note.findOneAndDelete({ userId: user._id }).sort({ createdAt: -1 });
+                if (latestNote) {
+                  await sendMetaWhatsAppMessage(fromNumber, `🗑️ নোট "${latestNote.title}" সফলভাবে মুছে ফেলা হয়েছে!`);
+                  break;
+                }
+              } else if (/কন্ট্যাক্ট|নাম্বার|নম্বর|contact|phone/i.test(cleanText)) {
+                const latestCon = await Contact.findOneAndDelete({ userId: user._id }).sort({ createdAt: -1 });
+                if (latestCon) {
+                  await sendMetaWhatsAppMessage(fromNumber, `🗑️ কনট্যাক্ট লিস্ট থেকে "${latestCon.name}" সফলভাবে মুছে ফেলা হয়েছে!`);
+                  break;
+                }
+              } else {
+                const latestRem = await Reminder.findOneAndDelete({ userId: user._id }).sort({ createdAt: -1 });
+                if (latestRem) {
+                  await sendMetaWhatsAppMessage(fromNumber, `🗑️ রিমাইন্ডার "${latestRem.title}" সফলভাবে ডিলিট করা হয়েছে!`);
+                  break;
+                }
+              }
+            }
+
+            await sendMetaWhatsAppMessage(fromNumber, replyMsg || 'দুঃখিত, বুঝতে পারিনি।');
             break;
+          }
         }
       }
     }

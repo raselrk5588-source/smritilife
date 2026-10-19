@@ -939,7 +939,14 @@ Possible actions:
    - "itemText"?: string (item to mark done)
 
 8. save_note:
-   When the user wants to store/save personal information, addresses, passwords, NID, blood group, documents, or data they want Smriti to remember!
+   When the user wants to store/save personal information, addresses, passwords, NID, blood group, or data they want Smriti to remember!
+   CRITICAL DISTINCTION (NOTES vs REMINDERS vs DOCUMENTS):
+   - When user says "নোট করে রাখো", "নোট করো", "নোট রাখো", "নোট", "note kore rakho", "note koro", "note rakh", "note:", "likhe rakho", "লিখে রাখো", "মনে রেখো", "save note":
+     * ALWAYS return action: "save_note" (or "manage_todolist" if checklist)!
+     * NEVER return action: "create_reminder" unless the user explicitly asks for an alarm or timed notification ("মনে করিয়ে দিও", "রিমাইন্ডার দিও", "call dio", "deke dio", "alarm dao")!
+     * Even if the note mentions a date or future plan (e.g. "নোট করে রাখো কাল শফিকের সাথে দেখা", "note kore rakho kal 5000 tk diyechi"), if user said "নোট"/"note", save it as a NOTE!
+     * For "title", extract a concise subject name (max 30 chars, e.g. "শফিকের সাথে দেখা", "টাকা দেওয়া", "বাসার ঠিকানা"). NEVER put the full text into the title! Put the entire details in "content".
+   - Physical documents (Prescriptions, reports, certificates, NID cards, utility bills) sent as files/images are managed under Document Vault, NOT as generic notes.
    Examples in Bengali/Banglish:
    - "আমার বাসার ঠিকানা: বাড়ি ১২, রোড ৪, ধানমন্ডি, ঢাকা" -> action: "save_note", data: { title: "বাসার ঠিকানা", content: "বাড়ি ১২, রোড ৪, ধানমন্ডি, ঢাকা", category: "Address" }
    - "আমার অফিসের এড্রেস সেভ করে রাখো: গুলশান ২, ঢাকা" -> action: "save_note", data: { title: "অফিসের ঠিকানা", content: "গুলশান ২, ঢাকা", category: "Address" }
@@ -948,8 +955,8 @@ Possible actions:
    - "আমার এনআইডি নম্বর: 1990123456789" -> action: "save_note", data: { title: "এনআইডি নম্বর", content: "1990123456789", category: "Personal" }
    - "নোট করে রাখো: আলমারির চাবি ড্রয়ারে আছে" -> action: "save_note", data: { title: "আলমারির চাবি", content: "ড্রয়ারে আছে", category: "General" }
    Fields in "data":
-   - "title": string (Specific topic name, e.g. "বাসার ঠিকানা", "অফিসের ঠিকানা", "রক্তের গ্রুপ", "এনআইডি নম্বর", "ওয়াইফাই পাসওয়ার্ড")
-   - "content": string (The actual information/data)
+   - "title": string (Concise topic name, max 30 chars, e.g. "বাসার ঠিকানা", "অফিসের ঠিকানা", "রক্তের গ্রুপ", "এনআইডি নম্বর", "ওয়াইফাই পাসওয়ার্ড")
+   - "content": string (The actual full information/data)
    - "category"?: "Address" | "Personal" | "Health" | "Work" | "General"
 
 9. get_note:
@@ -969,11 +976,39 @@ Possible actions:
 
 10. delete_note:
    When the user wants to delete or remove a saved note, address, or personal info.
-   Examples: "বাসার ঠিকানা ডিলিট করো", "অফিসের এড্রেস মুছে ফেলো", "ওয়াইফাই পাসওয়ার্ড ডিলিট করো"
+   Examples: "বাসার ঠিকানা ডিলিট করো", "অফিসের এড্রেস মুছে ফেলো", "ওয়াইফাই পাসওয়ার্ড ডিলিট করো", "১ নম্বর নোট ডিলিট করো", "সব নোট মুছে দাও"
+   Fields in "data":
+   - "searchQuery"?: string
+   - "index"?: number (1-based index)
+   - "deleteAll"?: boolean (true if user asks to delete all notes)
+
+11. delete_document:
+   CRITICAL REQUIREMENT: When user wants to delete or remove any saved document, prescription, blood test, medical report, NID, certificate, or file from their Document Vault!
+   Examples in Bengali/Banglish:
+   - "আমার প্রেসক্রিপশনটা ডিলিট করো" -> action: "delete_document", data: { searchQuery: "প্রেসক্রিপশন" }
+   - "ডকুমেন্ট ডিলিট করো" -> action: "delete_document", data: { searchQuery: "ডকুমেন্ট" }
+   - "১ নম্বর ডকুমেন্ট ডিলিট করো" -> action: "delete_document", data: { index: 1 }
+   - "লাস্টের ফাইলটা ডিলিট করো" -> action: "delete_document", data: { index: -1 }
+   - "ব্লাড টেস্ট রিপোর্ট মুছে ফেলো" -> action: "delete_document", data: { searchQuery: "ব্লাড টেস্ট" }
+   - "delete document" -> action: "delete_document", data: { searchQuery: "document" }
+   Fields in "data":
+   - "searchQuery"?: string
+   - "index"?: number
+
+12. delete_contact:
+   When user asks to delete or remove someone's saved contact number.
+   Examples: "রনির নম্বর ডিলিট করো", "বউ এর নম্বর মুছে ফেলো", "delete contact Shanto"
+   Fields in "data":
+   - "name": string
+   - "index"?: number
+
+13. delete_location:
+   When user asks to delete a saved location, address, or place.
+   Examples: "গুলশানের লোকেশন ডিলিট করো", "অফিসের লোকেশন মুছে ফেলো"
    Fields in "data":
    - "searchQuery": string
 
-11. save_contact:
+14. save_contact:
    When user asks to save a person's contact number (or relation).
    CRITICAL RULE: "name" must ONLY be the clean person's name or title (e.g. "Bou", "বউ", "রনি", "আম্মু", "Shanto"). NEVER include phrases like "ar number save koro", "এর নম্বর সেভ করো", "save koro" inside "name"!
    Examples in Bengali/Banglish:
@@ -986,7 +1021,7 @@ Possible actions:
    - "phone": string
    - "relationship"?: string
 
-12. get_contact:
+15. get_contact:
    When user asks for someone's phone number or asks to see their contact list.
    Examples in Bengali/Banglish:
    - "রনির নাম্বার কত?" বা "রনির নম্বরটা দাও" বা "roni r number ki" -> action: "get_contact", data: { searchQuery: "রনি" }
@@ -994,7 +1029,7 @@ Possible actions:
    Fields in "data":
    - "searchQuery": string
 
-13. save_location:
+16. save_location:
    When the user wants to save a physical location, house, office, shop, landmark, address, or place they visited or want to remember!
    Examples in Bengali/Banglish:
    - "এই লোকেশনটা সেভ করে রাখো: গুলশান ১ বন্ধুর বাসা" -> action: "save_location", data: { title: "গুলশান ১ বন্ধুর বাসা", address: "গুলশান ১, ঢাকা" }
@@ -1006,7 +1041,7 @@ Possible actions:
    - "title": string (Specific place/house name)
    - "address": string (The road, house, area, or description)
 
-14. get_location:
+17. get_location:
    When the user asks for a saved location, address, Google Maps link, or asks to see their saved locations.
    Examples in Bengali/Banglish:
    - "গুলশান ১ এর বাসার লোকেশনটা দাও" বা "গুলশান ১ বাসার এড্রেস কি" বা "gulshan 1 basar location dao" -> action: "get_location", data: { searchQuery: "গুলশান ১" }
@@ -1015,7 +1050,18 @@ Possible actions:
    Fields in "data":
    - "searchQuery": string (Place name or "সব" to list all saved locations)
 
-15. general_reply (for greetings, conversational questions, or help)
+18. general_reply (for greetings, conversational questions, or help)
+
+### ABSOLUTE PROHIBITION ON HALLUCINATED DELETIONS:
+You MUST NEVER return "general_reply" with a conversational text claiming that an item was deleted (e.g., "আপনার রিমাইন্ডার/ডকুমেন্ট/প্রেসক্রিপশন/নোট মুছে দেওয়া হয়েছে")!
+If the user asks to delete or remove anything, you MUST return the corresponding deletion action:
+- Documents/Prescriptions/Reports: "delete_document"
+- Reminders/Alarms/Tasks: "delete_reminder" (or "delete_all_reminders" if all)
+- Notes/Addresses/Passwords: "delete_note"
+- Contacts/Phone numbers: "delete_contact"
+- Locations: "delete_location"
+- Checklist / To-Do items: "manage_todolist" with type: "clear"
+- Expenses: "delete_reminder"
 
 Example Response for Wish:
 {
@@ -1526,30 +1572,43 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // C. Save Note / Info Storage Intent (e.g. "বাসার ঠিকানা: বাড়ি ১২...", "বাসার এড্রেস মনে রেখো: ...")
-    const isExplicitSavePrefix =
-      /^(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর)|সেভ\s*(?:করে\s*রাখো|করো|রাখো|কর)|মনে\s*(?:রেখো|রাখো|রাখ)|save\s*note)\s*[:：\-]?\s*(.+)$/i.test(text);
+    // C. Save Note / Info Storage Intent (e.g. "বাসার ঠিকানা: বাড়ি ১২...", "note kore rakho...", "নোট করে রাখো...")
+    const hasNoteKeyword =
+      /(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর|তুলে\s*রাখো|লিখো)|লিখে\s*রাখো|মনে\s*(?:রেখো|রাখো|রাখ)|সেভ\s*(?:করে\s*রাখো|করো|রাখো|কর)|note\s*(?:kore\s*rakho|kore\s*rakh|koro|rakh|rakho|likhe\s*rakho|save\s*koro)|save\s*note|note\s*down|take\s*a\s*note|\bnote\s*[:：])/i.test(text);
+
+    const hasExplicitReminderTrigger =
+      /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|মনে\s*করিয়ে|mone\s*koriye|deke\s*dio|ডেকে\s*দিও|তুলে\s*দিও|tule\s*dio)/i.test(text);
 
     const isInfoPattern =
       /(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|\bis\b|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i.test(text);
 
-    if (isExplicitSavePrefix || isInfoPattern) {
+    if ((hasNoteKeyword && !hasExplicitReminderTrigger) || isInfoPattern) {
       let title = 'ব্যক্তিগত নোট';
       let content = '';
       let category = 'Personal';
 
-      if (isExplicitSavePrefix) {
-        const match = text.match(/^(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর)|সেভ\s*(?:করে\s*রাখো|করো|রাখো|কর)|মনে\s*(?:রেখো|রাখো|রাখ)|save\s*note)\s*[:：\-]?\s*(.+)$/i);
-        const payload = match ? match[1].trim() : '';
+      if (hasNoteKeyword) {
+        // Strip the note trigger phrase
+        const payload = text
+          .replace(/(?:আমার\s*)?(?:একটি|একটা|akta|ekta)?\s*(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর|তুলে\s*রাখো|লিখো)|লিখে\s*রাখো|মনে\s*(?:রেখো|রাখো|রাখ)|সেভ\s*(?:করে\s*রাখো|করো|রাখো|কর)|note\s*(?:kore\s*rakho|kore\s*rakh|koro|rakh|rakho|likhe\s*rakho|save\s*koro)|save\s*note|note\s*down|take\s*a\s*note|\bnote)\s*[:：\-]?\s*(?:যে\s*|j\s*)?/gi, '')
+          .trim();
+
         if (payload.includes(':') || payload.includes('：')) {
           const parts = payload.split(/[:：]/);
           title = parts[0].trim();
           content = parts.slice(1).join(':').trim();
         } else {
-          title = payload.length > 25 ? payload.substring(0, 25) + '...' : payload;
+          // Extract a concise title (first 3-4 words, max 30 chars) and full text as content
+          const words = payload.split(/\s+/);
+          let shortTitle = '';
+          for (const w of words) {
+            if ((shortTitle + ' ' + w).trim().length > 25) break;
+            shortTitle = (shortTitle + ' ' + w).trim();
+          }
+          title = shortTitle || 'নোট';
           content = payload;
         }
-      } else {
+      } else if (isInfoPattern) {
         const match = text.match(/(?:আমার\s*)?(বাসার|অফিসের|বাড়ির|ঘরের|ব্যক্তিগত)?\s*(ঠিকানা|অ্যাড্রেস|এড্রেস|address|লোকেশন|location|রক্তের\s*গ্রুপ|ব্লাড\s*গ্রুপ|blood\s*group|পাসওয়ার্ড|password|এনআইডি|nid|টিন|tin|ওয়াইফাই|wifi)\s*(?:হলো|হচ্ছে|\bis\b|সেভ\s*করো|মনে\s*রেখো|মনে\s*রাখো|[:：=])\s*(.+)/i);
         if (match) {
           const prefix = match[1] || '';
@@ -1631,14 +1690,16 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 4. Modify / Reschedule / Edit Reminder Detection
-    const hasModifyVerb = /(?:পরিবর্তন|আপডেট|এডিট|বদল|reschedule|update|modify|change|পিছিয়ে|এগিয়ে|somoy|সময়|time)/i.test(text);
+    const hasModifyVerb = /(?:পরিবর্তন|আপডেট|এডিট|বদল|বদলাও|চেঞ্জ|change|edit|update|modify|reschedule|পিছিয়ে|এগিয়ে)/i.test(text);
     const hasIndexMention = /(\d+|[০-৯]+)\s*(?:number|nmbr|numbr|mnbr|nbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি|tar|টার)?/i.test(enText) ||
       /(?:protom|first|প্রথম|last|shesh|শেষ|লাস্ট)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি|tar|টার))?/i.test(text);
     const hasExplicitReminderWord = text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder');
     const hasTimeInText = /(\d{1,2}|[০-৯]{1,2})(?::(\d{2}|[০-৯]{2}))?\s*(?:টা|টায়|টায়|am|pm|AM|PM)/i.test(text) || /(?:minute|ghonta|hour|মিনিট|ঘণ্টা)/i.test(text);
 
-    const isModifyIntent = (hasModifyVerb && (hasExplicitReminderWord || hasIndexMention)) ||
-      (hasIndexMention && /(?:দাও|করো|দিন|কর|koro|dao|daw|diba|set)/i.test(text) && hasTimeInText);
+    const isModifyIntent = (hasModifyVerb && (hasExplicitReminderWord || hasIndexMention || hasTimeInText)) ||
+      (hasExplicitReminderWord && hasModifyVerb) ||
+      (hasIndexMention && /(?:দাও|করো|দিন|কর|koro|dao|daw|diba|set)/i.test(text) && hasTimeInText) ||
+      (hasExplicitReminderWord && hasTimeInText && /(?:নতুন|বদলে|date|somoy|সময়|time|বদল)/i.test(text));
 
     if (isModifyIntent) {
       // Check if user specified a list index
@@ -1658,8 +1719,11 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       }
 
       let date: string | undefined = undefined;
-      const targetDate = parseRelativeDate(text, time);
-      date = targetDate.toISOString().split('T')[0];
+      const hasDateWord = /(?:কাল|আগামীকাল|পরশু|আজ|tarikh|তারিখ|রবিবার|সোমবার|মঙ্গলবার|বুধবার|বৃহস্পতিবার|শুক্রবার|শনিবার|sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i.test(text);
+      if (hasDateWord) {
+        const targetDate = parseRelativeDate(text, time);
+        date = targetDate.toISOString().split('T')[0];
+      }
 
       const query = text
         .replace(/(\d{1,2}(?::\d{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?|[০-৯]{1,2}(?::[০-৯]{2})?\s*(?:টা|টায়|টায়|am|pm|AM|PM)?)/gi, '')
@@ -1679,12 +1743,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       };
     }
 
-    // 5. Cancel / Delete Specific Reminder Detection
+    // 5. Cancel / Delete Specific Item Detection (Reminders, Documents, Contacts, Locations, Notes)
     const hasDeleteVerb = /(?:ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|বাদ|ফেলে)/i.test(text);
 
     if (hasDeleteVerb) {
-      const isDelete = /(?:ডিলিট|মুছে|delete|remove|ফেলে)/i.test(text);
-
       // Check if user specified a list index: e.g. "1 number ta", "১ নম্বরটা", "2 no", "প্রথমটা", "লাস্টেরটা"
       let targetIndex: number | undefined = undefined;
       const indexMatch = enText.match(/(\d+)\s*(?:number|nmbr|numbr|mnbr|nbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি)?/i);
@@ -1696,9 +1758,82 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
         targetIndex = -1;
       }
 
+      // 5A: Document Vault deletion
+      const isDocDelete = /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|ডকুমেন্ট|ভল্ট|সার্টিফিকেট|রিপোর্ট|এনআইডি|nid|বিল|রশিদ|ছবি|ফাইল|document|prescription|report|file)/i.test(text);
+      if (isDocDelete) {
+        const cleanDocQuery = text
+          .replace(/(?:আমার|amr|amar|ডকুমেন্ট|document|প্রেসক্রিপশন|prescription|রিপোর্ট|report|ফাইল|file|ভল্ট|vault|সার্টিফিকেট|certificate|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে|এর|র|টা|টি)/gi, '')
+          .trim();
+        return {
+          action: 'delete_document',
+          data: {
+            index: targetIndex,
+            searchQuery: cleanDocQuery || 'ডকুমেন্ট'
+          }
+        };
+      }
+
+      // 5B: Contact deletion
+      const isContactDelete = /(?:কন্ট্যাক্ট|contact|নম্বর|নাম্বার|ফোন|phone|number)/i.test(text) && !/(?:রিমাইন্ডার|reminder)/i.test(text);
+      if (isContactDelete) {
+        const cleanContactName = text
+          .replace(/(?:আমার|amr|amar|কন্ট্যাক্ট|contact|নম্বর|নাম্বার|ফোন|phone|number|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে|এর|র|টা|টি)/gi, '')
+          .trim();
+        return {
+          action: 'delete_contact',
+          data: {
+            index: targetIndex,
+            name: cleanContactName
+          }
+        };
+      }
+
+      // 5C: Location deletion
+      const isLocDelete = /(?:লোকেশন|location|ম্যাপ|map|ঠিকানা|address)/i.test(text) && !/(?:রিমাইন্ডার|reminder)/i.test(text);
+      if (isLocDelete) {
+        const cleanLocQuery = text
+          .replace(/(?:আমার|amr|amar|লোকেশন|location|ম্যাপ|map|ঠিকানা|address|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে|এর|র|টা|টি)/gi, '')
+          .trim();
+        return {
+          action: 'delete_location',
+          data: {
+            searchQuery: cleanLocQuery
+          }
+        };
+      }
+
+      // 5D: Note deletion
+      const isNoteDelete = /(?:নোট|note|পাসওয়ার্ড|password|তথ্য)/i.test(text);
+      if (isNoteDelete) {
+        const cleanNoteQuery = text
+          .replace(/(?:আমার|amr|amar|নোট|note|পাসওয়ার্ড|password|তথ্য|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে|এর|র|টা|টি)/gi, '')
+          .trim();
+        return {
+          action: 'delete_note',
+          data: {
+            index: targetIndex,
+            searchQuery: cleanNoteQuery || 'নোট',
+            deleteAll: /(?:সব|সকল|all)/i.test(text)
+          }
+        };
+      }
+
+      // 5E: To-Do list deletion
+      const isTodoDelete = /(?:টু[\-\s]*ডু|todo|চেকলিস্ট|checklist|ফর্দ|বাজারের\s*লিস্ট)/i.test(text);
+      if (isTodoDelete) {
+        return {
+          action: 'manage_todolist',
+          data: {
+            type: 'clear',
+            title: text.includes('বাজার') ? 'বাজারের লিস্ট' : 'আজকের টু-ডু'
+          }
+        };
+      }
+
+      // 5F: Reminder deletion by index
       if (targetIndex !== undefined) {
         return {
-          action: isDelete ? 'delete_reminder' : 'cancel_reminder',
+          action: 'delete_reminder',
           data: {
             index: targetIndex,
             searchQuery: `${targetIndex}`
@@ -1712,7 +1847,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
       if (query.length >= 2 || text.includes('রিমাইন্ডার') || text.toLowerCase().includes('reminder')) {
         return {
-          action: isDelete ? 'delete_reminder' : 'cancel_reminder',
+          action: 'delete_reminder',
           data: {
             searchQuery: query || 'জরুরি'
           }
@@ -1935,7 +2070,7 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
-Analyze what task, reminder, action (create_reminder, list_reminders, modify_reminder, delete_all_reminders, delete_reminder, cancel_reminder, create_wish, save_note, get_note, save_location, get_location, save_contact, get_contact, manage_todolist, general_reply) the user wants to perform, and return EXACTLY the JSON action format specified in system instructions.
+Analyze what task, reminder, action (create_reminder, list_reminders, modify_reminder, delete_all_reminders, delete_reminder, cancel_reminder, delete_document, delete_contact, delete_location, create_wish, save_note, get_note, delete_note, save_location, get_location, save_contact, get_contact, manage_todolist, general_reply) the user wants to perform, and return EXACTLY the JSON action format specified in system instructions.
 Today's date in Bangladesh is ${dhakaDate}. If the user says 'কাল' or 'tomorrow', set tomorrow's date.
 Remember to return ONLY the raw JSON object.`;
 

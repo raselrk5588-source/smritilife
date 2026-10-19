@@ -691,3 +691,85 @@ export function formatDocumentListMessage(docs: IUserDocument[]): string {
   msg += '💡 যেকোনো ফাইল ফেরত পেতে শুধু ফাইলের নামটি লিখে মেসেজ দিন (যেমন: *"আমার প্রেসক্রিপশন দাও"*, বা নির্দিষ্ট বছরের ফাইল পেতে *"২০২৬ সালের ফাইল দাও"*)।';
   return msg;
 }
+
+/**
+ * Cleanly extracts a concise title (max 35-40 chars) and puts long descriptions into notes.
+ * Prevents long sentences or full paragraphs from becoming the document title in the Document Vault.
+ */
+export function extractCleanDocumentTitleAndNotes(
+  rawText: string,
+  fallbackFilename: string = '',
+  isImage: boolean = false
+): { title: string; notes?: string } {
+  if (!rawText || !rawText.trim()) {
+    const defaultTitle = isImage ? 'প্রেসক্রিপশন / ছবি' : (fallbackFilename ? path.parse(fallbackFilename).name : 'ডকুমেন্ট');
+    return { title: defaultTitle };
+  }
+
+  let text = rawText.trim();
+  // Strip common conversational prefixes like "এটা আমার", "aita amr", "save kore rakh", etc.
+  text = text.replace(/^(?:এটা|ita|aita|eta|amr|amar|আমার|দয়া\s*করে|please|নোট\s*করো|সেভ\s*করো|save\s*koro)\s+/i, '').trim();
+
+  // 1. If text has a colon or newline, use the first part as title and rest as notes!
+  if (text.includes(':') || text.includes('：') || text.includes('\n')) {
+    const parts = text.split(/[:：\n]/);
+    const candidateTitle = parts[0].trim();
+    const candidateNotes = parts.slice(1).join('\n').trim();
+    if (candidateTitle.length >= 2 && candidateTitle.length <= 40) {
+      return {
+        title: candidateTitle,
+        notes: candidateNotes || undefined
+      };
+    }
+  }
+
+  // 2. Look for well-known document types in text
+  const docKeywords = [
+    { regex: /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|prescription)/i, defaultTitle: 'প্রেসক্রিপশন' },
+    { regex: /(?:ব্লাড\s*টেস্ট\s*রিপোর্ট|blood\s*test\s*report|রক্তের\s*রিপোর্ট)/i, defaultTitle: 'ব্লাড টেস্ট রিপোর্ট' },
+    { regex: /(?:মেডিকেল\s*রিপোর্ট|medical\s*report|টেস্ট\s*রিপোর্ট|ল্যাব\s*রিপোর্ট)/i, defaultTitle: 'মেডিকেল টেস্ট রিপোর্ট' },
+    { regex: /(?:এনআইডি\s*কার্ড|nid\s*card|জাতীয়\s*পরিচয়পত্র|ভোটার\s*আইডি)/i, defaultTitle: 'এনআইডি কার্ড' },
+    { regex: /(?:পাসপোর্ট|passport)/i, defaultTitle: 'পাসপোর্ট' },
+    { regex: /(?:ড্রাইভিং\s*লাইসেন্স|driving\s*license|লাইসেন্স|license)/i, defaultTitle: 'ড্রাইভিং লাইসেন্স' },
+    { regex: /(?:বিদ্যুৎ\s*বিল|কারেন্ট\s*বিল|electricity\s*bill)/i, defaultTitle: 'বিদ্যুৎ বিল' },
+    { regex: /(?:গ্যাস\s*বিল|gas\s*bill|পানি\s*বিল|water\s*bill|ইন্টারনেট\s*বিল)/i, defaultTitle: 'ইউটিলিটি বিল' },
+    { regex: /(?:সার্টিফিকেট|certificate|সনদ)/i, defaultTitle: 'সার্টিফিকেট' },
+    { regex: /(?:রসিদ|চালান|invoice|ভাউচার|মেমো|memo|receipt)/i, defaultTitle: 'রসিদ / ইনভয়েস' },
+    { regex: /(?:টিন\s*সার্টিফিকেট|tin\s*certificate|ট্যাক্স|tax)/i, defaultTitle: 'টিন সার্টিফিকেট' }
+  ];
+
+  // If text is relatively short (<= 35 chars), use it directly as the title!
+  if (text.length <= 35) {
+    return { title: text };
+  }
+
+  // If text is long (> 35 chars), see if it matches any document keyword
+  for (const item of docKeywords) {
+    if (item.regex.test(text)) {
+      let prefix = '';
+      if (/(?:আম্মুর|মায়ের|আম্মার|mother)/i.test(text)) prefix = 'আম্মুর ';
+      else if (/(?:বাবার|আব্বুর|father)/i.test(text)) prefix = 'বাবার ';
+      else if (/(?:আমার|নিজের|personal)/i.test(text)) prefix = 'আমার ';
+
+      return {
+        title: `${prefix}${item.defaultTitle}`,
+        notes: text
+      };
+    }
+  }
+
+  // Fallback for long text without specific keyword: take first 4-5 words (up to 32 chars)
+  const words = text.split(/\s+/);
+  let shortTitle = '';
+  for (const w of words) {
+    if ((shortTitle + ' ' + w).trim().length > 32) break;
+    shortTitle = (shortTitle + ' ' + w).trim();
+  }
+  if (!shortTitle) shortTitle = text.slice(0, 32);
+
+  return {
+    title: shortTitle,
+    notes: text
+  };
+}
+

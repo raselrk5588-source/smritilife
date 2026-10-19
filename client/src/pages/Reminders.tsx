@@ -246,28 +246,43 @@ export default function Reminders() {
 
   const handleSaveReminder = async () => {
     if (editingReminderId) {
-      if (!reminderTitle.trim()) {
+      const targetTitle = reminderTitle.trim() || (reminderType === 'medicine' ? '💊 ওষুধের রিমাইন্ডার' : '');
+      if (!targetTitle) {
         toast.error(t('রিমাইন্ডারের বিষয় লিখুন', 'Enter a reminder subject'));
         return;
       }
       try {
-        await fetchWithAuth(`${import.meta.env.VITE_API_URL}/reminders/${editingReminderId}`, {
+        const body: any = {
+          title: targetTitle,
+          category: reminderType,
+          date: reminderDate ? new Date(reminderDate).toISOString() : new Date().toISOString(),
+          time: reminderTime || '09:00',
+          status: isAlertOn ? 'Pending' : 'Cancelled'
+        };
+
+        if (reminderType === 'medicine') {
+          const validMeds = medicines.filter(m => m.name.trim() !== '');
+          if (validMeds.length > 0) {
+            body.medicines = validMeds;
+          }
+        }
+
+        const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/reminders/${editingReminderId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: reminderTitle,
-            category: reminderType,
-            date: reminderDate || new Date().toISOString(),
-            time: reminderTime || '09:00',
-            status: isAlertOn ? 'Pending' : 'Cancelled'
-          })
+          body: JSON.stringify(body)
         });
-        fetchReminders();
-        setEditingReminderId(null);
-        setReminderTitle('');
-        setReminderDate(getCurrentDate());
-        setReminderTime(getCurrentTime());
-        toast.success(t('রিমাইন্ডার আপডেট হয়েছে!', 'Reminder updated!'));
+
+        if (res.ok) {
+          fetchReminders();
+          setEditingReminderId(null);
+          setReminderTitle('');
+          setReminderDate(getCurrentDate());
+          setReminderTime(getCurrentTime());
+          toast.success(t('রিমাইন্ডার সফলভাবে আপডেট হয়েছে!', 'Reminder updated successfully!'));
+        } else {
+          toast.error(t('রিমাইন্ডার আপডেট ব্যর্থ হয়েছে', 'Failed to update reminder'));
+        }
       } catch (e) {
         toast.error('Failed to update');
       }
@@ -451,9 +466,34 @@ export default function Reminders() {
     let type = rem.type === 'General' || !rem.type ? 'other' : rem.type;
     setReminderType(type as any);
     
-    setReminderTitle(rem.title);
-    setReminderDate(rem.originalDate ? rem.originalDate.split('T')[0] : '');
-    setReminderTime(rem.originalTime || '');
+    setReminderTitle(rem.title || '');
+
+    // If it's a medicine reminder, populate medicines
+    if (rem.type === 'medicine' && rem.medicines && Array.isArray(rem.medicines) && rem.medicines.length > 0) {
+      setMedicines(rem.medicines.map((m: any, i: number) => ({
+        id: Date.now() + i,
+        name: m.name || '',
+        routine: [rem.medicineRoutine || 'সকাল'],
+        mealTiming: m.mealTiming || 'after',
+        durationDays: m.durationDays || 7
+      })));
+    }
+
+    if (rem.originalDate) {
+      const d = new Date(rem.originalDate);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        setReminderDate(`${y}-${m}-${day}`);
+      } else {
+        setReminderDate(getCurrentDate());
+      }
+    } else {
+      setReminderDate(getCurrentDate());
+    }
+
+    setReminderTime(rem.originalTime || getCurrentTime());
     setIsAlertOn(rem.active);
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -474,12 +514,41 @@ export default function Reminders() {
 
       <div className="px-4 mt-6">
         
-        {/* Add New Reminder Form */}
-        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm mb-6 relative overflow-hidden">
-          <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-[100px] -z-0 opacity-50 transition-colors ${reminderType === 'medicine' ? 'bg-red-50' : reminderType === 'work' ? 'bg-blue-50' : 'bg-purple-50'}`}></div>
+        {/* Add / Edit Reminder Form */}
+        <div className={`bg-white rounded-3xl p-5 border shadow-sm mb-6 relative overflow-hidden transition-all ${editingReminderId ? 'border-amber-400 ring-4 ring-amber-100 shadow-md' : 'border-slate-100'}`}>
+          <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-[100px] -z-0 opacity-50 transition-colors ${editingReminderId ? 'bg-amber-100/60' : reminderType === 'medicine' ? 'bg-red-50' : reminderType === 'work' ? 'bg-blue-50' : 'bg-purple-50'}`}></div>
+
+          {editingReminderId && (
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 sm:p-3.5 mb-4 flex items-center justify-between shadow-2xs relative z-10 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center font-bold text-base shrink-0">
+                  ✏️
+                </span>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-amber-950 flex items-center gap-1.5">
+                    <span>{t('রিমাইন্ডার এডিট করছেন', 'Editing Reminder')}</span>
+                    <span className="text-[10px] font-semibold bg-amber-200/80 text-amber-800 px-2 py-0.5 rounded-full">সক্রিয় মোড</span>
+                  </h4>
+                  <p className="text-[11px] text-amber-800 font-medium truncate max-w-[180px] sm:max-w-xs">{reminderTitle}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingReminderId(null);
+                  setReminderTitle('');
+                  setReminderDate(getCurrentDate());
+                  setReminderTime(getCurrentTime());
+                }}
+                className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs hover:bg-slate-100 transition cursor-pointer flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" /> {t('বাতিল', 'Cancel')}
+              </button>
+            </div>
+          )}
           
           <h2 className="text-[15px] font-bold text-slate-800 mb-4 flex items-center relative z-10">
-            <Plus className={`w-4 h-4 mr-1 ${reminderType === 'medicine' ? 'text-red-500' : reminderType === 'work' ? 'text-blue-500' : 'text-purple-500'}`} /> 
+            <Plus className={`w-4 h-4 mr-1 ${editingReminderId ? 'text-amber-600' : reminderType === 'medicine' ? 'text-red-500' : reminderType === 'work' ? 'text-blue-500' : 'text-purple-500'}`} /> 
             {t(editingReminderId ? 'রিমাইন্ডার আপডেট করুন' : 'নতুন রিমাইন্ডার যোগ করুন', editingReminderId ? 'Update Reminder' : 'Add New Reminder')}
           </h2>
 
@@ -530,7 +599,7 @@ export default function Reminders() {
           </div>
           
           <div className="space-y-4 relative z-10">
-            {reminderType === 'medicine' && !editingReminderId ? (
+            {reminderType === 'medicine' ? (
               <div className="space-y-4">
                 {medicines.map((med, idx) => (
                   <div key={med.id} className="p-3.5 bg-red-50/40 border border-red-200/70 rounded-2xl relative shadow-2xs">
@@ -838,15 +907,13 @@ export default function Reminders() {
 
                     <div className="flex flex-col items-end justify-center ml-2 gap-3 shrink-0">
                       <div className="flex items-center space-x-2">
-                        {rem.type !== 'medicine' && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleEditReminder(rem); }}
-                            className="text-slate-300 hover:text-blue-500 transition-colors"
-                            title={t('এডিট করুন', 'Edit')}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEditReminder(rem); }}
+                          className="text-slate-300 hover:text-blue-500 transition-colors"
+                          title={t('এডিট করুন', 'Edit')}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteReminder(rem.id, rem.legacyIds); }}
                           className="text-slate-300 hover:text-red-500 transition-colors"

@@ -76,6 +76,15 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
         const data = await res.json();
         
         if (data.success) {
+          if (data.data.intent === 'delete_success') {
+            toast.success(data.data.message || 'সফলভাবে ডিলিট করা হয়েছে!');
+            setMode('idle');
+            setTimeout(() => {
+              onClose();
+              window.location.reload();
+            }, 1000);
+            return;
+          }
           setParsedData(data.data);
           setParsedText(data.data.content || data.data.title || textToProcess);
           setMode('parsed');
@@ -121,7 +130,16 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
       
       if (parsedData.intent === 'create_note') {
         url = `${import.meta.env.VITE_API_URL}/notes`;
-        body = { title: parsedText, content: parsedText } as any;
+        const noteTitle = parsedData.title && parsedData.title !== 'Quick Note' && parsedData.title !== 'নোট'
+          ? parsedData.title 
+          : (parsedText.length > 25 ? parsedText.slice(0, 25).trim() + '...' : parsedText);
+        body = { title: noteTitle, content: parsedData.content || parsedText, category: 'Personal' } as any;
+      } else if (parsedData.intent === 'document_vault') {
+        toast.dismiss('save');
+        toast('ডকুমেন্ট বা প্রেসক্রিপশন সংরক্ষণ করতে ডকুমেন্ট ভল্টে আপলোড করুন', { icon: '📁' });
+        window.location.href = '/app/documents';
+        onClose();
+        return;
       } else if (parsedData.intent === 'create_special_date') {
         url = `${import.meta.env.VITE_API_URL}/special-dates`;
         body = { title: parsedText, date: parsedData.date || new Date().toISOString(), type: parsedData.type || 'Birthday', recurring: true } as any;

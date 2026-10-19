@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { matchRelativeDuration } from '../services/aiWhatsAppService';
 import { handleMedicineInquiry } from './whatsappController';
+import Reminder from '../models/Reminder';
+import Note from '../models/Note';
+import UserDocument from '../models/UserDocument';
 
 export const parseCommand = async (req: Request, res: Response) => {
   const extractTime = (text: string): string => {
@@ -126,6 +129,74 @@ export const parseCommand = async (req: Request, res: Response) => {
     const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(command);
     const isDaily = /প্রতিদিন|দৈনিক|রোজ|রোজই|daily|everyday|every\s*day|protidin|potidin|roj|sob\s*din|shob\s*din/i.test(command);
     const isWakeup = isSehri || /ঘুম|ঘুমের|ঘুমিয়ে|ঘুমাবো|ঘুমাব|ঘুমাচ্ছি|nap|dip\s*nap|deep\s*nap|rest|বিশ্রাম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|তুলে|ডেকে|ডাকা|ডেকে দিও|ডেকে দাও|তুলে দিও|তুলে দাও|ঘুম ভাঙা|ঘুম ভাঙ্গানি/i.test(command);
+    const isNote = /(?:নোট\s*(?:করে|করো|রাখো|কর|লিখে|তুল)|note|লিখে\s*রাখো|টুকে\s*রাখো|মনে\s*রেখো)/i.test(command);
+    const isExplicitReminder = /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|মনে\s*করিয়ে|mone\s*koriye|deke\s*dio|ডেকে\s*দিও)/i.test(command);
+    const isDoc = /(?:ডকুমেন্ট|প্রেসক্রিপশন|প্রেস্ক্রিপশন|সার্টিফিকেট|রিপোর্ট|ভল্ট|document|prescription|vault)/i.test(command);
+    const isDelete = /(?:ডিলিট|মুছে|delete|remove|ফেলে|ক্লিয়ার|বাতিল|ক্যান্সেল)/i.test(command);
+    if (isDelete) {
+      if (isDoc) {
+        let doc: any = null;
+        if (userId) {
+          const rawSub = extractSubject(command);
+          if (rawSub && rawSub.length >= 2) {
+            doc = await UserDocument.findOneAndDelete({ userId, title: { $regex: new RegExp(rawSub, 'i') } });
+          }
+          if (!doc) {
+            doc = await UserDocument.findOneAndDelete({ userId }).sort({ createdAt: -1 });
+          }
+        }
+        return res.json({
+          success: true,
+          data: {
+            intent: "delete_success",
+            message: doc ? `ডকুমেন্ট "${doc.title}" সফলভাবে ডিলিট করা হয়েছে!` : "ডকুমেন্টটি সফলভাবে ডিলিট করা হয়েছে!"
+          }
+        });
+      } else if (isNote) {
+        let note: any = null;
+        if (userId) {
+          const rawSub = extractSubject(command);
+          if (rawSub && rawSub.length >= 2) {
+            note = await Note.findOneAndDelete({ userId, title: { $regex: new RegExp(rawSub, 'i') } });
+          }
+          if (!note) {
+            note = await Note.findOneAndDelete({ userId }).sort({ createdAt: -1 });
+          }
+        }
+        return res.json({
+          success: true,
+          data: {
+            intent: "delete_success",
+            message: note ? `নোট "${note.title}" সফলভাবে মুছে ফেলা হয়েছে!` : "নোটটি সফলভাবে মুছে ফেলা হয়েছে!"
+          }
+        });
+      } else {
+        let rem: any = null;
+        if (userId) {
+          const rawSub = extractSubject(command);
+          if (rawSub && rawSub.length >= 2) {
+            rem = await Reminder.findOneAndDelete({
+              userId,
+              $or: [
+                { title: { $regex: new RegExp(rawSub, 'i') } },
+                { description: { $regex: new RegExp(rawSub, 'i') } },
+                { 'medicines.name': { $regex: new RegExp(rawSub, 'i') } }
+              ]
+            });
+          }
+          if (!rem) {
+            rem = await Reminder.findOneAndDelete({ userId }).sort({ date: 1, time: 1 });
+          }
+        }
+        return res.json({
+          success: true,
+          data: {
+            intent: "delete_success",
+            message: rem ? `রিমাইন্ডার "${rem.title}" সফলভাবে ডিলিট করা হয়েছে!` : "রিমাইন্ডারটি সফলভাবে ডিলিট করা হয়েছে!"
+          }
+        });
+      }
+    }
 
     if (isWakeup) {
       intent = "create_reminder";
@@ -151,6 +222,31 @@ export const parseCommand = async (req: Request, res: Response) => {
         repeat: isDaily ? "Daily" : "Once",
         timezone: "Asia/Dhaka"
       };
+    } else if (isNote && !isExplicitReminder) {
+      intent = "create_note";
+      const cleanContent = command.replace(/^(?:একটি|একটা|akta|ekta)?\s*(?:নোট\s*(?:করে\s*রাখো|করো|রাখো|কর|লিখে)|লিখে\s*রাখো|note\s*(?:kore\s*rakho|koro|rakh)|save\s*note|\bnote)\s*[:：\-]?\s*(?:যে\s*)?/gi, '').trim();
+      let shortTitle = 'নোট';
+      if (cleanContent.includes(':') || cleanContent.includes('：')) {
+        shortTitle = cleanContent.split(/[:：]/)[0].trim().slice(0, 30);
+      } else {
+        const words = cleanContent.split(/\s+/);
+        let t = '';
+        for (const w of words) {
+          if ((t + ' ' + w).trim().length > 25) break;
+          t = (t + ' ' + w).trim();
+        }
+        shortTitle = t || 'নোট';
+      }
+      parsedData = {
+        title: shortTitle,
+        content: cleanContent || command
+      };
+    } else if (isDoc && !isExplicitReminder) {
+      intent = "document_vault";
+      parsedData = {
+        title: "ডকুমেন্ট ভল্ট",
+        content: command
+      };
     } else if (command.toLowerCase().includes('phone') || command.toLowerCase().includes('call') || command.includes('ফোন') || command.includes('রিমাইন্ডার') || command.includes('মনে') || command.includes('কাল') || command.includes('আজ')) {
       intent = "create_reminder";
       parsedData = {
@@ -167,12 +263,6 @@ export const parseCommand = async (req: Request, res: Response) => {
         type: "Birthday",
         date: "1995-09-28",
         recurring: true
-      };
-    } else if (command.toLowerCase().includes('note') || command.includes('নোট')) {
-      intent = "create_note";
-      parsedData = {
-        title: "Quick Note",
-        content: command
       };
     } else {
       // Default to reminder
