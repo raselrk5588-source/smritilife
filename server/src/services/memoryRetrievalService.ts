@@ -456,14 +456,18 @@ export async function searchUnifiedMemory(
 
   // 1. Check Notes first if exact or strong match
   const noteCore = cleanQ
-    .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|খুঁজে|daw|dao|ki|bolo|koto)/gi, '')
+    .replace(/(?:\b(?:আমার|amr|amar|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|খুঁজে|daw|dao|ki|bolo|koto|koi|kothay|ache|ase|certificate)\b|টা|টি|দাও|বলো|বলোতো|কি|কী|কত|কতো|খুঁজে|কই|কোথায়|আছে|\?)/gi, '')
     .trim();
 
   if (noteCore) {
-    const searchRegex = new RegExp(noteCore.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const escaped = noteCore.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchRegex = new RegExp(escaped, 'i');
+    const contentRegex = /^[a-zA-Z0-9]+$/.test(noteCore)
+      ? new RegExp(`\\b${escaped}\\b`, 'i')
+      : searchRegex;
     const matchedNote = await Note.findOne({
       userId,
-      $or: [{ title: searchRegex }, { content: searchRegex }]
+      $or: [{ title: searchRegex }, { content: contentRegex }]
     });
 
     if (matchedNote) {

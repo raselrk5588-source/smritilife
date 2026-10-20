@@ -4935,16 +4935,21 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             // Search by specific title or content
             const coreQuery = query
-              .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|খুঁজে|daw|dao|ki|bolo|koto)/gi, '')
+              .replace(/(?:\b(?:আমার|amr|amar|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|খুঁজে|daw|dao|ki|bolo|koto|koi|kothay|ache|ase|certificate)\b|টা|টি|দাও|বলো|বলোতো|কি|কী|কত|কতো|খুঁজে|কই|কোথায়|আছে|\?)/gi, '')
               .trim();
 
-            const searchRegex = new RegExp((coreQuery || query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const queryToSearch = coreQuery || query;
+            const escaped = queryToSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const searchRegex = new RegExp(escaped, 'i');
+            const contentRegex = /^[a-zA-Z0-9]+$/.test(queryToSearch)
+              ? new RegExp(`\\b${escaped}\\b`, 'i')
+              : searchRegex;
 
             let matchedNote = await Note.findOne({
               userId: user._id,
               $or: [
                 { title: searchRegex },
-                { content: searchRegex }
+                { content: contentRegex }
               ]
             });
 
@@ -4990,6 +4995,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 matchedNote = await Note.findOne({ userId: user._id, title: /ওয়াইফাই|wifi/i });
               } else if (/এনআইডি|nid/i.test(query)) {
                 matchedNote = await Note.findOne({ userId: user._id, title: /এনআইডি|nid/i });
+              } else if (/টিন|tin/i.test(query)) {
+                matchedNote = await Note.findOne({ userId: user._id, title: /টিন|tin/i });
               }
             }
 
@@ -5155,26 +5162,24 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             // Search for specific location
             const coreQuery = query
-              .replace(/(?:আমার|amr|amar|এর|র|er|ar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কোথায়|kothay|খুঁজে|লোকেশন|ঠিকানা|এড্রেস|address|location|daw|dao|ki|bolo)/gi, '')
+              .replace(/(?:\b(?:আমার|amr|amar|এর|র|er|ar|ta|ti|দাও|বলো|বলোতো|কি|কী|কোথায়|kothay|খুঁজে|লোকেশন|ঠিকানা|এড্রেস|address|location|daw|dao|ki|bolo)\b|টা|টি|দাও|বলো|বলোতো|কি|কী|কোথায়|কই|খুঁজে|লোকেশন|ঠিকানা|এড্রেস|\?)/gi, '')
               .trim();
 
-            const searchRegex = new RegExp((coreQuery || query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const queryLoc = coreQuery || query;
+            const escapedLoc = queryLoc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const searchRegex = new RegExp(escapedLoc, 'i');
+            const contentRegex = /^[a-zA-Z0-9]+$/.test(queryLoc)
+              ? new RegExp(`\\b${escapedLoc}\\b`, 'i')
+              : searchRegex;
 
             let matchedLoc = await Note.findOne({
               userId: user._id,
               $or: [
                 { title: searchRegex },
-                { content: searchRegex },
+                { content: contentRegex },
                 { 'location.address': searchRegex }
               ]
             });
-
-            if (!matchedLoc) {
-              matchedLoc = await Note.findOne({
-                userId: user._id,
-                $or: [{ category: 'Location' }, { category: 'Address' }]
-              }).sort({ updatedAt: -1 });
-            }
 
             if (matchedLoc) {
               const addr = matchedLoc.location?.address || matchedLoc.content.replace(/📍\s*Google Maps:.*$/s, '').trim();

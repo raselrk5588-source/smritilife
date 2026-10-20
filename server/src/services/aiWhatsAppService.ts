@@ -1560,9 +1560,10 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       else if (/ওয়াইফাই|wifi/i.test(text)) queryTopic = 'ওয়াইফাই পাসওয়ার্ড';
       else if (/এনআইডি|nid/i.test(text)) queryTopic = 'এনআইডি নম্বর';
       else if (/পাসওয়ার্ড|password/i.test(text)) queryTopic = 'পাসওয়ার্ড';
+      else if (/টিন|tin/i.test(text)) queryTopic = 'TIN';
       else {
         queryTopic = text
-          .replace(/(?:আমার|amr|amar|টা|টি|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto|koi|kothay|kothai|kobe|kokhon|koytay|কবে|কখন|কয়টায়|তারিখ|\?)/gi, '')
+          .replace(/(?:\b(?:আমার|amr|amar|ta|ti|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|daw|dao|bolo|ki|koto|koi|kothay|kothai|kobe|kokhon|koytay|ache|ase|certificate)\b|টা|টি|দাও|বলো|বলোতো|কি|কী|কত|কতো|দেখাও|খুঁজে\s*দাও|মনে\s*আছে|কবে|কখন|কয়টায়|তারিখ|কই|কোথায়|কোথাই|\?)/gi, '')
           .trim();
       }
 
