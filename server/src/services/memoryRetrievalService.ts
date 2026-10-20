@@ -335,7 +335,7 @@ async function matchReminderWithGemini(reminders: IReminder[], userQuery: string
   if (!apiKey) return null;
 
   const candidateList = reminders.slice(0, 15).map((r, i) => {
-    const dStr = r.date ? new Date(r.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+    const dStr = r.date ? new Date(r.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' }) : '';
     return `${i + 1}. Title: "${r.title}", Date: ${dStr}, Time: ${r.time}, Category: ${r.category}`;
   }).join('\n');
 
@@ -370,7 +370,7 @@ Return JSON ONLY:
 export function formatReminderMatchMessage(reminder: IReminder, honorific?: string): string {
   const d = new Date(reminder.date);
   const dayBn = convertEnglishDigitsToBengali(d.getDate());
-  const monthBn = d.toLocaleDateString('bn-BD', { month: 'long' });
+  const monthBn = d.toLocaleDateString('bn-BD', { month: 'long', timeZone: 'Asia/Dhaka' });
   const yearBn = convertEnglishDigitsToBengali(d.getFullYear());
   const timeBn = formatTime12Hour(reminder.time);
 
@@ -421,7 +421,7 @@ export function formatMultipleRemindersMessage(reminders: IReminder[], query: st
 
   reminders.forEach((r, idx) => {
     const d = new Date(r.date);
-    const dStr = d.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+    const dStr = d.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' });
     const timeStr = formatTime12Hour(r.time);
     msg += `${idx + 1}. 📌 *${r.title}*\n   ⏰ সময়: ${timeStr} (${dStr})\n\n`;
   });

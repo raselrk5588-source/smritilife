@@ -167,7 +167,7 @@ export const startReminderScheduler = () => {
             const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE_NAME || 'smriti_schedule_reminder';
             const templateLang = process.env.WHATSAPP_REMINDER_TEMPLATE_LANG || 'bn';
             const displayTime = formatTime12Hour(reminder.time);
-            const dStr = reminder.date ? new Date(reminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : 'আজ';
+            const dStr = reminder.date ? new Date(reminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' }) : 'আজ';
             const formattedTimeDate = `${displayTime} (${dStr})`;
             const senderDisplay = senderNumber ? `${senderName} (${senderNumber})` : senderName;
 

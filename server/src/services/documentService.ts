@@ -401,23 +401,27 @@ export function calculateItemDuration(createdAt: Date | string | number): {
   const savedDateBn = created.toLocaleDateString('bn-BD', {
     day: 'numeric',
     month: 'long',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: 'Asia/Dhaka'
   });
   const savedTimeBn = created.toLocaleTimeString('bn-BD', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: true
+    hour12: true,
+    timeZone: 'Asia/Dhaka'
   });
 
   const savedDateEn = created.toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'long',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: 'Asia/Dhaka'
   });
   const savedTimeEn = created.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: true
+    hour12: true,
+    timeZone: 'Asia/Dhaka'
   });
 
   return {
@@ -791,7 +795,8 @@ export function formatDocumentListMessage(docs: IUserDocument[]): string {
     const dateStr = new Date(d.createdAt).toLocaleDateString('bn-BD', {
       day: 'numeric',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
+      timeZone: 'Asia/Dhaka'
     });
     msg += `${i + 1}. ${icon} *${d.title}*\n   📂 ${d.category} • 📅 ${dateStr}\n\n`;
   });

@@ -1784,7 +1784,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
+              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dhaka' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
             );
             return;
           } else {
@@ -1852,7 +1852,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে ডকুমেন্ট ভল্টে সেভ করা হয়েছে${salutation}!* 📁${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
+              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে ডকুমেন্ট ভল্টে সেভ করা হয়েছে${salutation}!* 📁${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dhaka' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
             );
             return;
           }
@@ -1885,7 +1885,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               userReminderEditState.delete(fromNumber);
 
               const formattedTime = formatTime12Hour(targetReminder.time);
-              const dStr = targetReminder.date ? new Date(targetReminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) : '';
+              const dStr = targetReminder.date ? new Date(targetReminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' }) : '';
               await sendMetaWhatsAppMessage(
                 fromNumber,
                 `✏️ আপনার *"${targetReminder.title}"* রিমাইন্ডারটি সফলভাবে আপডেট করা হয়েছে!\n⏰ নতুন সময়: ${formattedTime} (${dStr})`
