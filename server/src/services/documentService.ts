@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import UserDocument, { IUserDocument } from '../models/UserDocument';
+import SystemSettings from '../models/SystemSettings';
 
 const UPLOADS_DIR = path.join(__dirname, '../../uploads/documents');
 
@@ -11,14 +13,76 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 /**
+ * Check if an item is a consumable/grocery item tracked for lifespan duration
+ */
+export function isConsumableItem(text: string): boolean {
+  if (!text) return false;
+  return /(?:সিলিন্ডার|cylinder|গ্যাস\s*সিলিন্ডার|টিস্যু|tissue|তেল|oil|চাল|rice|ডাল|চিনি|ব্যাটারি|battery|ফিল্টার|filter|সাবান|soap|শ্যাম্পু|shampoo|লাইফস্প্যান|grocery)/i.test(text);
+}
+
+/**
  * Automatically categorize document based on text/title/filename
  */
 export function detectDocumentCategory(text: string): {
-  category: 'Prescription' | 'Medical Report' | 'NID/Card' | 'Certificate' | 'Invoice/Bill' | 'Other';
+  category: 'Prescription' | 'Medical Report' | 'NID/Card' | 'Certificate' | 'Invoice/Bill' | 'Logo/Design' | 'Company/Office' | 'Utility Bill' | 'Photo/Memory' | 'Legal/Agreement' | 'Item Lifespan/Grocery' | 'Other' | string;
   tags: string[];
 } {
   const lower = (text || '').toLowerCase();
   const tags: string[] = [];
+
+  // Logo / Design / Branding
+  if (
+    lower.includes('logo') ||
+    lower.includes('লোগো') ||
+    lower.includes('design') ||
+    lower.includes('ডিজাইন') ||
+    lower.includes('branding') ||
+    lower.includes('ব্র্যান্ডিং') ||
+    lower.includes('icon') ||
+    lower.includes('আইকন') ||
+    lower.includes('banner') ||
+    lower.includes('ব্যানার') ||
+    lower.includes('poster') ||
+    lower.includes('পোস্টার') ||
+    lower.includes('mascot') ||
+    lower.includes('মাসকট')
+  ) {
+    tags.push('logo', 'লোগো', 'design', 'ডিজাইন', 'branding');
+    return { category: 'Logo/Design', tags };
+  }
+
+  // Company / Office / Business
+  if (
+    lower.includes('company') ||
+    lower.includes('কোম্পানি') ||
+    lower.includes('অফিস') ||
+    lower.includes('office') ||
+    lower.includes('business') ||
+    lower.includes('ব্যবসা') ||
+    lower.includes('meeting') ||
+    lower.includes('মিটিং')
+  ) {
+    tags.push('company', 'কোম্পানি', 'office', 'অফিস', 'business');
+    return { category: 'Company/Office', tags };
+  }
+
+  // Utility Bill
+  if (
+    lower.includes('বিদ্যুৎ') ||
+    lower.includes('কারেন্ট') ||
+    lower.includes('electricity') ||
+    lower.includes('gas bill') ||
+    lower.includes('গ্যাস বিল') ||
+    lower.includes('পানি বিল') ||
+    lower.includes('water bill') ||
+    lower.includes('wifi') ||
+    lower.includes('ওয়াইফাই') ||
+    lower.includes('ইন্টারনেট') ||
+    lower.includes('internet')
+  ) {
+    tags.push('utility', 'bill', 'বিদ্যুৎ বিল', 'ইউটিলিটি');
+    return { category: 'Utility Bill', tags };
+  }
 
   // Prescription
   if (
@@ -101,6 +165,50 @@ export function detectDocumentCategory(text: string): {
   ) {
     tags.push('receipt', 'রিসিপ্ট', 'bill', 'বিল', 'invoice');
     return { category: 'Invoice/Bill', tags };
+  }
+
+  // Photo / Personal Memory
+  if (
+    lower.includes('ছবি') ||
+    lower.includes('photo') ||
+    lower.includes('pic') ||
+    lower.includes('picture') ||
+    lower.includes('সেলফি') ||
+    lower.includes('selfie') ||
+    lower.includes('স্মৃতি') ||
+    lower.includes('memory')
+  ) {
+    tags.push('photo', 'ছবি', 'memory', 'স্মৃতি');
+    return { category: 'Photo/Memory', tags };
+  }
+
+  // Legal / Agreement
+  if (
+    lower.includes('চুক্তিপত্র') ||
+    lower.includes('agreement') ||
+    lower.includes('দলিল') ||
+    lower.includes('deed') ||
+    lower.includes('stamp') ||
+    lower.includes('স্ট্যাম্প') ||
+    lower.includes('ভাড়া চুক্তি')
+  ) {
+    tags.push('legal', 'agreement', 'চুক্তিপত্র');
+    return { category: 'Legal/Agreement', tags };
+  }
+
+  // Item Lifespan / Grocery
+  if (
+    lower.includes('সিলিন্ডার') ||
+    lower.includes('cylinder') ||
+    lower.includes('টিস্যু') ||
+    lower.includes('tissue') ||
+    lower.includes('তেল') ||
+    lower.includes('oil') ||
+    lower.includes('চাল') ||
+    lower.includes('rice')
+  ) {
+    tags.push('consumable', 'lifespan', 'grocery', 'ব্যবহার');
+    return { category: 'Item Lifespan/Grocery', tags };
   }
 
   tags.push('document', 'file', 'ফাইল');
@@ -694,7 +802,8 @@ export function formatDocumentListMessage(docs: IUserDocument[]): string {
 
 /**
  * Cleanly extracts a concise title (max 35-40 chars) and puts long descriptions into notes.
- * Prevents long sentences or full paragraphs from becoming the document title in the Document Vault.
+ * Strips conversational command phrases (like "save koro", "rekhe dao", "aita amr", etc.)
+ * so user commands never leak into document titles.
  */
 export function extractCleanDocumentTitleAndNotes(
   rawText: string,
@@ -702,60 +811,81 @@ export function extractCleanDocumentTitleAndNotes(
   isImage: boolean = false
 ): { title: string; notes?: string } {
   if (!rawText || !rawText.trim()) {
-    const defaultTitle = isImage ? 'প্রেসক্রিপশন / ছবি' : (fallbackFilename ? path.parse(fallbackFilename).name : 'ডকুমেন্ট');
+    const defaultTitle = isImage ? 'ছবি / ডকুমেন্ট' : (fallbackFilename ? path.parse(fallbackFilename).name : 'ডকুমেন্ট');
     return { title: defaultTitle };
   }
 
   let text = rawText.trim();
-  // Strip common conversational prefixes like "এটা আমার", "aita amr", "save kore rakh", etc.
-  text = text.replace(/^(?:এটা|ita|aita|eta|amr|amar|আমার|দয়া\s*করে|please|নোট\s*করো|সেভ\s*করো|save\s*koro)\s+/i, '').trim();
 
-  // 1. If text has a colon or newline, use the first part as title and rest as notes!
+  // 1. If text has a colon or newline, use the first part as candidate title and rest as notes!
+  let notesFromDelimiter: string | undefined = undefined;
   if (text.includes(':') || text.includes('：') || text.includes('\n')) {
     const parts = text.split(/[:：\n]/);
     const candidateTitle = parts[0].trim();
     const candidateNotes = parts.slice(1).join('\n').trim();
-    if (candidateTitle.length >= 2 && candidateTitle.length <= 40) {
-      return {
-        title: candidateTitle,
-        notes: candidateNotes || undefined
-      };
+    if (candidateTitle.length >= 2 && candidateTitle.length <= 50) {
+      text = candidateTitle;
+      notesFromDelimiter = candidateNotes || undefined;
     }
   }
 
-  // 2. Look for well-known document types in text
+  // 2. Strip starting conversational prefixes:
+  text = text.replace(/^(?:এটা\s*আমার|এইটা\s*আমার|এটা|এইটা|এই|aita\s*amr|ayta\s*amr|aita|ayta|eta|eita|ei|amr|amar|আমার|দয়া\s*করে|দয়া\s*করে|please|plz|নোট\s*করো|নোট\s*রাখো|স্মৃতি\s*এটা|স্মৃতি|সেভ\s*করো|save\s*koro|save\s*kore\s*rakho|save\s*kore\s*rakhba|ছবি|ছবিটি|পিক|ডকুমেন্ট|ফাইল|photo|pic|image|file|doc|document)\s+/gi, '').trim();
+
+  // 3. Strip ending action commands:
+  text = text.replace(/\s+(?:save\s*koro|save\s*kore\s*rakho|save\s*kore\s*rakhba|save\s*kore\s*dao|save\s*korba|save\s*koren|save\s*korun|save\s*korbi|seve\s*koro|save\s*this|save\s*it|save|সেভ\s*করো|সেভ\s*করে\s*রাখো|সেভ\s*করুন|সেভ\s*করে\s*দাও|সেভ\s*করে\s*দিন|সেভ|রাখো|রেখে\s*দাও|রেখে\s*দিন|রেখে\s*দে|সংরক্ষণ\s*করো|সংরক্ষণ\s*করুন|store\s*koro|keep\s*this|rakho|rekhe\s*dao|rekhe\s*den|rakhba|kore\s*rakho|kore\s*rakh|koro|korba|korun)$/gi, '').trim();
+
+  // 4. Strip trailing articles/particles (e.g. 'ta', 'ti', 'টা', 'টি'):
+  text = text.replace(/\s+(?:ta|tai|ti|টি|টা)$/gi, '').trim();
+
+  // 5. Look for well-known document types in text
   const docKeywords = [
+    { regex: /^(?:company\s*logo|logo|কোম্পানি\s*লোগো|লোগো)$/i, defaultTitle: 'Company Logo' },
     { regex: /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|prescription)/i, defaultTitle: 'প্রেসক্রিপশন' },
     { regex: /(?:ব্লাড\s*টেস্ট\s*রিপোর্ট|blood\s*test\s*report|রক্তের\s*রিপোর্ট)/i, defaultTitle: 'ব্লাড টেস্ট রিপোর্ট' },
     { regex: /(?:মেডিকেল\s*রিপোর্ট|medical\s*report|টেস্ট\s*রিপোর্ট|ল্যাব\s*রিপোর্ট)/i, defaultTitle: 'মেডিকেল টেস্ট রিপোর্ট' },
-    { regex: /(?:এনআইডি\s*কার্ড|nid\s*card|জাতীয়\s*পরিচয়পত্র|ভোটার\s*আইডি)/i, defaultTitle: 'এনআইডি কার্ড' },
+    { regex: /(?:এনআইডি\s*কার্ড|nid\s*card|জাতীয়\s*পরিচয়পত্র|ভোটার\s*আইডি|\bnid\b)/i, defaultTitle: 'এনআইডি কার্ড' },
     { regex: /(?:পাসপোর্ট|passport)/i, defaultTitle: 'পাসপোর্ট' },
     { regex: /(?:ড্রাইভিং\s*লাইসেন্স|driving\s*license|লাইসেন্স|license)/i, defaultTitle: 'ড্রাইভিং লাইসেন্স' },
     { regex: /(?:বিদ্যুৎ\s*বিল|কারেন্ট\s*বিল|electricity\s*bill)/i, defaultTitle: 'বিদ্যুৎ বিল' },
-    { regex: /(?:গ্যাস\s*বিল|gas\s*bill|পানি\s*বিল|water\s*bill|ইন্টারনেট\s*বিল)/i, defaultTitle: 'ইউটিলিটি বিল' },
+    { regex: /(?:গ্যাস\s*বিল|gas\s*bill)/i, defaultTitle: 'গ্যাস বিল' },
+    { regex: /(?:পানি\s*বিল|water\s*bill)/i, defaultTitle: 'পানির বিল' },
+    { regex: /(?:ইন্টারনেট\s*বিল|wifi\s*bill)/i, defaultTitle: 'ইন্টারনেট বিল' },
     { regex: /(?:সার্টিফিকেট|certificate|সনদ)/i, defaultTitle: 'সার্টিফিকেট' },
     { regex: /(?:রসিদ|চালান|invoice|ভাউচার|মেমো|memo|receipt)/i, defaultTitle: 'রসিদ / ইনভয়েস' },
-    { regex: /(?:টিন\s*সার্টিফিকেট|tin\s*certificate|ট্যাক্স|tax)/i, defaultTitle: 'টিন সার্টিফিকেট' }
+    { regex: /(?:টিন\s*সার্টিফিকেট|tin\s*certificate|ট্যাক্স|tax)/i, defaultTitle: 'টিন সার্টিফিকেট' },
+    { regex: /(?:গ্যাস\s*সিলিন্ডার|gas\s*cylinder|সিলিন্ডার|cylinder)/i, defaultTitle: 'গ্যাস সিলিন্ডার' },
+    { regex: /(?:টিস্যু\s*বক্স|tissue\s*box|টিস্যু|tissue)/i, defaultTitle: 'টিস্যু বক্স' }
   ];
 
-  // If text is relatively short (<= 35 chars), use it directly as the title!
-  if (text.length <= 35) {
-    return { title: text };
-  }
-
-  // If text is long (> 35 chars), see if it matches any document keyword
   for (const item of docKeywords) {
     if (item.regex.test(text)) {
       let prefix = '';
-      if (/(?:আম্মুর|মায়ের|আম্মার|mother)/i.test(text)) prefix = 'আম্মুর ';
-      else if (/(?:বাবার|আব্বুর|father)/i.test(text)) prefix = 'বাবার ';
-      else if (/(?:আমার|নিজের|personal)/i.test(text)) prefix = 'আমার ';
+      if (/(?:আম্মুর|মায়ের|আম্মার|mother)/i.test(rawText)) prefix = 'আম্মুর ';
+      else if (/(?:বাবার|আব্বুর|father)/i.test(rawText)) prefix = 'বাবার ';
+      else if (/(?:আমার|নিজের|personal)/i.test(rawText) && !item.defaultTitle.startsWith('Company')) prefix = 'আমার ';
 
       return {
         title: `${prefix}${item.defaultTitle}`,
-        notes: text
+        notes: notesFromDelimiter || (text !== item.defaultTitle ? rawText : undefined)
       };
     }
+  }
+
+  // Capitalize English titles nicely:
+  if (/^[a-zA-Z0-9\s-_]+$/.test(text)) {
+    text = text
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  // If text is relatively short (<= 35 chars), use it directly as the title!
+  if (text.length >= 2 && text.length <= 35) {
+    return {
+      title: text,
+      notes: notesFromDelimiter
+    };
   }
 
   // Fallback for long text without specific keyword: take first 4-5 words (up to 32 chars)
@@ -769,7 +899,144 @@ export function extractCleanDocumentTitleAndNotes(
 
   return {
     title: shortTitle,
-    notes: text
+    notes: notesFromDelimiter || rawText
   };
+}
+
+/**
+ * Intelligent AI Multimodal & NLP Analyzer for user-uploaded documents and images.
+ * Uses Gemini AI with vision/multimodal capabilities when available,
+ * and falls back to advanced rule-based NLP parser.
+ */
+export async function analyzeDocumentWithAI(params: {
+  rawText: string;
+  buffer?: Buffer | null;
+  mimeType?: string;
+  filename?: string;
+  isImage?: boolean;
+}): Promise<{
+  title: string;
+  category: string;
+  notes?: string;
+  tags: string[];
+  isConsumable: boolean;
+}> {
+  // Step 1: Base rule-based fallback
+  const fallbackClean = extractCleanDocumentTitleAndNotes(params.rawText, params.filename, params.isImage);
+  const fallbackCat = detectDocumentCategory(fallbackClean.title + ' ' + (params.filename || '') + ' ' + (fallbackClean.notes || ''));
+  const isConsumableFallback = isConsumableItem(fallbackClean.title);
+
+  const fallbackResult = {
+    title: fallbackClean.title,
+    category: fallbackCat.category,
+    notes: fallbackClean.notes,
+    tags: fallbackCat.tags,
+    isConsumable: isConsumableFallback
+  };
+
+  // Step 2: Try Gemini AI analysis
+  try {
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      const settings = await SystemSettings.findOne().lean();
+      apiKey = (settings as any)?.geminiApiKey;
+    }
+
+    if (!apiKey) {
+      return fallbackResult;
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const prompt = `You are Smriti Life AI, an intelligent personal memory and vault assistant in Bangladesh.
+A user has uploaded a file to save in their personal vault with user message/caption: "${params.rawText || ''}".
+
+TASK:
+Identify the clean, professional, concise SUBJECT TITLE (in English or Bengali, e.g. "Company Logo", "বিদ্যুৎ বিল", "এনআইডি কার্ড", "প্রেসক্রিপশন"), CATEGORY, TAGS, and whether it is a CONSUMABLE item (like gas cylinder, groceries).
+
+CRITICAL RULES:
+1. Title MUST be a clean noun phrase (2-4 words). NEVER include command words, verbs, or pronouns!
+   - STRIP: "save koro", "save", "seve", "rekhe dao", "rakho", "kore rakh", "koro", "please", "aita", "amr", "amar", "dya kore", "ta", "ti", etc.
+   - Example: "company logo save koro" -> "Company Logo"
+   - Example: "aita amr nid card save koro" -> "এনআইডি কার্ড"
+   - Example: "daktar er prescription ta save koro" -> "প্রেসক্রিপশন"
+   - Example: "current er bill rekhe dao" -> "বিদ্যুৎ বিল"
+   - Example: "gas cylinder save koro" -> "গ্যাস সিলিন্ডার"
+2. CATEGORY must be one of:
+   ["Logo / Design", "Company / Office", "Prescription", "Medical Report", "NID / Card / Passport", "Certificate", "Invoice / Bill", "Utility Bill", "Photo / Memory", "Legal / Agreement", "Item Lifespan / Grocery", "Other"].
+3. Set isConsumable to true ONLY for consumables/groceries tracked for lifespan (like cylinder, oil, rice, tissue box). For logos/cards/photos/certificates/docs set isConsumable: false.
+
+Return JSON ONLY with this exact format:
+{
+  "title": "Clean Subject Title",
+  "category": "Logo / Design",
+  "notes": "Short optional notes or empty string",
+  "tags": ["tag1", "tag2"],
+  "isConsumable": false
+}`;
+
+    const contentParts: any[] = [prompt];
+    // If image buffer is available and mimeType is an image (under 4MB)
+    if (params.buffer && params.buffer.length > 0 && params.buffer.length < 4 * 1024 * 1024) {
+      const mime = params.mimeType || (params.isImage ? 'image/jpeg' : '');
+      if (mime && (mime.startsWith('image/') || mime === 'application/pdf')) {
+        contentParts.push({
+          inlineData: {
+            data: params.buffer.toString('base64'),
+            mimeType: mime.startsWith('image/') ? mime : 'application/pdf'
+          }
+        });
+      }
+    }
+
+    const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.5-flash-lite'];
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 300
+          }
+        });
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout ${modelName}`)), 4500)
+        );
+
+        const result: any = await Promise.race([
+          model.generateContent(contentParts),
+          timeoutPromise
+        ]);
+
+        const textResponse = result.response.text().trim();
+        const cleanJson = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+
+        if (parsed && parsed.title && typeof parsed.title === 'string') {
+          // Double sanitize title to remove any accidental command words
+          let cleanAiTitle = parsed.title.trim();
+          cleanAiTitle = cleanAiTitle.replace(/\s+(?:save\s*koro|save|seve|rekhe\s*dao|rakho|koro|korun|সেভ\s*করো|সেভ|রাখো|রেখে\s*দাও)$/gi, '').trim();
+          cleanAiTitle = cleanAiTitle.replace(/^(?:এটা|aita|ayta|eta|amr|amar|আমার|save\s*koro|সেভ\s*করো)\s+/gi, '').trim();
+
+          if (cleanAiTitle.length >= 2 && cleanAiTitle.length <= 50) {
+            return {
+              title: cleanAiTitle,
+              category: parsed.category || fallbackResult.category,
+              notes: parsed.notes ? parsed.notes.trim() : fallbackResult.notes,
+              tags: Array.isArray(parsed.tags) && parsed.tags.length > 0 ? Array.from(new Set([...parsed.tags, ...fallbackResult.tags])) : fallbackResult.tags,
+              isConsumable: Boolean(parsed.isConsumable)
+            };
+          }
+        }
+        break;
+      } catch (err) {
+        // try next candidate model
+      }
+    }
+  } catch (err) {
+    console.warn('[DocAI] AI analysis failed, using fallback:', err);
+  }
+
+  return fallbackResult;
 }
 

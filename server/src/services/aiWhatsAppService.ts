@@ -1428,8 +1428,8 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     // 2. Delete All Reminders Detection (Bengali, Banglish & English)
     // CRITICAL: MUST explicitly include the word reminder/রিমাইন্ডার to prevent wiping reminders on generic delete phrases
     const isDeleteAllReminders =
-      /(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s+(?:রিমাইন্ডার|reminder)\s*.*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|delete|clear|remove)/i.test(text) ||
-      /(?:ডিলিট|মুছে|delete|clear|remove)\s*(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s+(?:রিমাইন্ডার|reminder)/i.test(text);
+      /(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s+(?:রিমাইন্ডার|reminder)\s*.*(?:ডিলিট|মুছে|ক্লিয়ার|বাতিল|বন্ধ|অফ|delete|clear|remove|bondo|bondho|off|stop|cancel)/i.test(text) ||
+      /(?:ডিলিট|মুছে|বাতিল|বন্ধ|অফ|delete|clear|remove|bondo|bondho|off|stop|cancel)\s*(?:সব|সকল|all|sob|shob)(?:\s*(?:গুলা|গুলো|gula|gulo))?\s+(?:রিমাইন্ডার|reminder)/i.test(text);
 
     if (isDeleteAllReminders) {
       return {
@@ -1438,7 +1438,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     }
 
     // 3. List Reminders Detection (Bengali, Banglish & English) - Only if NOT a delete/cancel command
-    const hasDeleteWord = /(?:ডিলিট|মুছে|delete|remove|ক্লিয়ার|clear|বাতিল|ক্যান্সেল|cancel)/i.test(text);
+    const hasDeleteWord = /(?:ডিলিট|মুছে|delete|remove|ক্লিয়ার|clear|বাতিল|ক্যান্সেল|cancel|বন্ধ|অফ|bondo|bondho|off|stop)/i.test(text);
     const isListReminders = !hasDeleteWord && (
       /(?:সব\s*রিমাইন্ডার|রিমাইন্ডার\s*(?:লিস্ট|গুলো|গুলা|কয়টা|কতগুলো|কয়টা|দেখা|দেখাও|দেখতে)|list\s*reminder|show\s*(?:my\s*)?reminders?|my\s*reminders|reminder\s*list)/i.test(text) ||
       /(?:কি\s*কি\s*রিমাইন্ডার|কোন\s*কোন\s*রিমাইন্ডার|কি\s*রিমাইন্ডার|কিসের\s*রিমাইন্ডার)/i.test(text) ||

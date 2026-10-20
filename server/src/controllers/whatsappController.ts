@@ -40,7 +40,7 @@ import {
   bnToEnDigits
 } from '../services/expenseService';
 import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
-import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes } from '../services/documentService';
+import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes, analyzeDocumentWithAI, isConsumableItem } from '../services/documentService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -1748,8 +1748,20 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           if (mediaDocCaption && mediaDocCaption.trim()) {
-            const { title, notes } = extractCleanDocumentTitleAndNotes(mediaDocCaption, mediaDocFilename, isImage);
-            const { category, tags } = detectDocumentCategory(title + ' ' + mediaDocFilename + ' ' + (notes || ''));
+            const aiAnalysis = await analyzeDocumentWithAI({
+              rawText: mediaDocCaption,
+              buffer: media.buffer,
+              mimeType: media.mimeType || mediaDocMimeType,
+              filename: mediaDocFilename,
+              isImage
+            });
+
+            const title = aiAnalysis.title;
+            const category = aiAnalysis.category;
+            const tags = aiAnalysis.tags;
+            const notes = aiAnalysis.notes;
+            const isConsumable = aiAnalysis.isConsumable;
+
             const diskResult = await saveFileToDisk(media.buffer, mediaDocFilename, media.mimeType || mediaDocMimeType);
 
             await UserDocument.create({
@@ -1768,9 +1780,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             });
 
             const salutation = user.honorific ? ` ${user.honorific}` : '';
+            const categoryLine = category && category !== 'Other' ? `\n📂 *ক্যাটাগরি:* ${category}` : '';
+
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে যেকোনো সময় লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*\nস্মৃতি তৎক্ষণাৎ ছবি ও তারিখসহ হিসাব পাঠিয়ে দেবে!`
+              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
             );
             return;
           } else {
@@ -1786,7 +1800,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const salutation = user.honorific ? ` ${user.honorific}` : '';
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `📄 *আসসালামু আলাইকুম${salutation}! আপনার ${isImage ? 'ছবিটি' : 'ডকুমেন্টটি'} পেয়েছি।*\n\nএই ফাইলটি স্মৃতিতে কি নামে সেভ করে রাখবো?\n\n(যেমন লিখে পাঠান: *"আমার প্রেসক্রিপশন"*, *"আম্মুর ব্লাড টেস্ট রিপোর্ট"*, *"এনআইডি কার্ড"* ইত্যাদি)`
+              `📄 *আসসালামু আলাইকুম${salutation}! আপনার ${isImage ? 'ছবিটি' : 'ডকুমেন্টটি'} পেয়েছি।*\n\nএই ফাইলটি স্মৃতিতে কি নামে সেভ করে রাখবো?\n\n(যেমন লিখে পাঠান: *"Company Logo"*, *"প্রেসক্রিপশন"*, *"আম্মুর ব্লাড টেস্ট রিপোর্ট"*, *"এনআইডি কার্ড"* ইত্যাদি)`
             );
             return;
           }
@@ -1800,8 +1814,20 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           if (Date.now() > pending.expiresAt) {
             userDocPendingState.delete(fromNumber);
           } else if (cleanText && !cleanText.startsWith('/')) {
-            const { title, notes } = extractCleanDocumentTitleAndNotes(cleanText, pending.filename, pending.isImage);
-            const { category, tags } = detectDocumentCategory(title + ' ' + pending.filename + ' ' + (notes || ''));
+            const aiAnalysis = await analyzeDocumentWithAI({
+              rawText: cleanText,
+              buffer: pending.buffer,
+              mimeType: pending.mimeType,
+              filename: pending.filename,
+              isImage: pending.isImage
+            });
+
+            const title = aiAnalysis.title;
+            const category = aiAnalysis.category;
+            const tags = aiAnalysis.tags;
+            const notes = aiAnalysis.notes;
+            const isConsumable = aiAnalysis.isConsumable;
+
             const diskResult = await saveFileToDisk(pending.buffer, pending.filename, pending.mimeType);
 
             await UserDocument.create({
@@ -1822,9 +1848,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             userDocPendingState.delete(fromNumber);
 
             const salutation = user.honorific ? ` ${user.honorific}` : '';
+            const categoryLine = category && category !== 'Other' ? `\n📂 *ক্যাটাগরি:* ${category}` : '';
+
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে ডকুমেন্ট ভল্টে সেভ করা হয়েছে${salutation}!* 📁\n\n📂 *ক্যাটাগরি:* ${category}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}\n\n💡 *পরবর্তীতে ফাইল বা ব্যবহারের হিসাব পেতে লিখুন:*\n👉 *"আমার ${title} দাও"*\n👉 *"${title} কবে সেভ করা হয়েছিল?"* বা *"${title} কয়দিন চলছে?"*`
+              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে ডকুমেন্ট ভল্টে সেভ করা হয়েছে${salutation}!* 📁${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
             );
             return;
           }
@@ -1948,10 +1976,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 : `\n\n💡 তথ্য: আপনার কাছে *${otherYearsBn}* সালের ফাইলও সংরক্ষিত আছে।\nনির্দিষ্ট সালের ফাইল পেতে লিখুন: "${sampleYrBn} সালের ${doc.title} দাও"।`;
             }
 
+            const isConsumable = isConsumableItem(doc.title) || /(?:কত\s*দিন|কয়\s*দিন|কদ্দিন|দিন\s*হলো|চলছে|চলতেছে|koto\s*din|koy\s*din|koddin|cholche)/i.test(cleanText);
+            const durationLabel = isConsumable ? 'কতদিন চলছে:' : 'মেমোরিতে সংরক্ষিত:';
+            const durationLabelEn = isConsumable ? 'Active Duration:' : 'Stored Duration:';
+
             if (isTrackingOrDateQuery) {
               const msg = isEng
-                ? `📦 *${doc.title}* ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}${multiYearNote}\n\n💡 Here is the original photo you saved to track this item:`
-                : `📦 *${doc.title}* ${docResult.matchedByYear ? `(${yrBn} সাল) ` : ''}এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}${multiYearNote}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`;
+                ? `📦 *${doc.title}* ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *${durationLabelEn}* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}${multiYearNote}\n\n💡 Here is the original photo you saved to track this item:`
+                : `📦 *${doc.title}* ${docResult.matchedByYear ? `(${yrBn} সাল) ` : ''}এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *${durationLabel}* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}${multiYearNote}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`;
               await sendMetaWhatsAppMessage(fromNumber, msg);
             } else {
               const msg = isEng
@@ -2240,6 +2272,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         if (buttonId.startsWith('rem_done_')) {
           const remId = buttonId.replace('rem_done_', '');
           cancelAlarmRinger(remId);
+          cancelAlarmRinger(user._id.toString());
+          cancelAlarmRinger(fromNumber);
           const reminder = await Reminder.findById(remId);
           if (reminder && reminder.repeat && reminder.repeat !== 'Once') {
             await Reminder.findByIdAndUpdate(remId, { status: 'Pending' });
@@ -2251,13 +2285,31 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           const salutation = user.honorific ? ` ${user.honorific}` : '';
           const isSehri = /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i.test(title);
 
+          const now = new Date();
+          const dhakaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+
           if (isSehri) {
+            // CRITICAL FIX: Silence all same-morning Sehri reminders for this user
+            await Reminder.updateMany(
+              {
+                userId: user._id,
+                title: { $regex: /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i },
+                lastDispatchedDate: { $ne: dhakaDateStr }
+              },
+              { $set: { lastDispatchedDate: dhakaDateStr } }
+            );
+
+            // Also mark user's ramadanAlerts to avoid automated alert re-triggering
+            await User.findByIdAndUpdate(user._id, {
+              'ramadanAlerts.lastSehriAlertDate': dhakaDateStr
+            });
+
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `🤲 মাশাআল্লাহ${salutation}! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। 🌙`
+              `🤲 মাশাআল্লাহ${salutation}! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। আজকের মতো সেহরির অ্যালার্ম সমাপ্ত করা হলো। 🌙`
             );
           } else if (reminder?.category === 'wakeup' || reminder?.isAlarm) {
-            const dhakaH = parseInt(new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', hour12: false }), 10);
+            const dhakaH = parseInt(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', hour12: false }), 10);
             let ackMsg = `☀️ শুভ সকাল${salutation}! আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো। দিনটি সফল ও সুন্দর হোক!`;
             if (dhakaH >= 12 && dhakaH < 16) {
               ackMsg = `☕ আপনার দুপুরের বিশ্রামের সংকেত নিশ্চিত করা হলো${salutation}! বাকি দিনটি সুন্দর ও কর্মচঞ্চল কাটুক!`;
@@ -2443,12 +2495,81 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
-        const isYesIntent = /^(?:হ্যাঁ|হ্যা|হাঁ|হুম|জি|করেছি|করছি|হয়ে\s*গেছে|হয়েগেছে|সম্পন্ন|yes|done|completed|yep|yeah|koresi|hoise|join\s*koresi|জেগে\s*গেছি|জেগেছি|উঠেছি|উঠে\s*গেছি|উঠেগেছি|jegechi|uthechi|uthesi)\b/i.test(cleanText);
+        const isWakeupAckIntent = /(?:জেগে\s*গেছি|জেগেছি|উঠেছি|উঠে\s*গেছি|উঠেগেছি|উঠে\s*পড়েছি|উঠে\s*পরছি|উঠে\s*পড়লাম|\b(?:jegechi|jege\s*gechi|uthechi|uthe\s*gechi|uthe\s*gesi|uthegechi|uthesi|uthsi|uthlam|awake|woke\s*up|wake\s*up)\b)/i.test(cleanText);
+        const isYesIntent = /^(?:হ্যাঁ|হ্যা|হাঁ|হুম|জি|করেছি|করছি|হয়ে\s*গেছে|হয়েগেছে|সম্পন্ন|yes|done|completed|yep|yeah|koresi|hoise|join\s*koresi)\b/i.test(cleanText);
         const isSnoozeIntent = /^(?:স্নুজ|snooze|৫\s*মিনিট|5\s*mnt|5\s*min|পরে\s*ডাকো|pore\s*dako)\b/i.test(cleanText);
         const isNoIntent = /^(?:না|নো|না\s*করিনি|না\s*করি\s*নাই|করি\s*নাই|করিনি|no|nope|reschedule|kori\s*ni|hoy\s*ni|join\s*kori\s*ni)\b/i.test(cleanText);
 
+        if (isWakeupAckIntent) {
+          cancelAlarmRinger(user._id.toString());
+          cancelAlarmRinger(fromNumber);
+          if (activeState) {
+            cancelAlarmRinger(activeState.reminderId);
+          }
+
+          const now = new Date();
+          const dhakaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+          const dhakaH = parseInt(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', hour12: false }), 10);
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
+
+          if (activeState) {
+            const activeRem = await Reminder.findById(activeState.reminderId);
+            if (activeRem && activeRem.repeat && activeRem.repeat !== 'Once') {
+              await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Pending' });
+            } else {
+              await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Completed' });
+            }
+            userReminderState.delete(user._id.toString());
+          }
+
+          const isSehriContext = (dhakaH >= 2 && dhakaH < 6) || (activeState && /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i.test(activeState.title));
+
+          if (isSehriContext) {
+            await Reminder.updateMany(
+              {
+                userId: user._id,
+                title: { $regex: /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i },
+                lastDispatchedDate: { $ne: dhakaDateStr }
+              },
+              { $set: { lastDispatchedDate: dhakaDateStr } }
+            );
+
+            await User.findByIdAndUpdate(user._id, {
+              'ramadanAlerts.lastSehriAlertDate': dhakaDateStr
+            });
+
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🤲 মাশাআল্লাহ${salutation}! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। আজকের মতো সেহরির অ্যালার্ম সমাপ্ত করা হলো। 🌙`
+            );
+            return;
+          } else {
+            await Reminder.updateMany(
+              {
+                userId: user._id,
+                category: { $in: ['wakeup', 'alarm'] },
+                lastDispatchedDate: { $ne: dhakaDateStr }
+              },
+              { $set: { lastDispatchedDate: dhakaDateStr } }
+            );
+
+            let ackMsg = `☀️ শুভ সকাল${salutation}! আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো। দিনটি সফল ও সুন্দর হোক!`;
+            if (dhakaH >= 12 && dhakaH < 16) {
+              ackMsg = `☕ আপনার দুপুরের বিশ্রামের সংকেত নিশ্চিত করা হলো${salutation}! বাকি দিনটি সুন্দর ও কর্মচঞ্চল কাটুক!`;
+            } else if (dhakaH >= 16 && dhakaH < 19) {
+              ackMsg = `🌅 শুভ বিকাল${salutation}! আপনার বিশ্রামের সংকেত নিশ্চিত করা হলো। আনন্দময় সন্ধ্যা কাটুক!`;
+            } else if (dhakaH >= 19 || dhakaH < 2) {
+              ackMsg = `🌙 আপনার ঘুম ভাঙার সংকেত নিশ্চিত করা হলো${salutation}! আপনার রাতের সময় শুভ হোক!`;
+            }
+            await sendMetaWhatsAppMessage(fromNumber, ackMsg);
+            return;
+          }
+        }
+
         if (activeState && isYesIntent) {
           cancelAlarmRinger(activeState.reminderId);
+          cancelAlarmRinger(user._id.toString());
+          cancelAlarmRinger(fromNumber);
           const activeRem = await Reminder.findById(activeState.reminderId);
           if (activeRem && activeRem.repeat && activeRem.repeat !== 'Once') {
             await Reminder.findByIdAndUpdate(activeState.reminderId, { status: 'Pending' });
@@ -2458,9 +2579,22 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           userReminderState.delete(user._id.toString());
           const isSehri = /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i.test(activeState.title);
           if (isSehri) {
+            const now = new Date();
+            const dhakaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+            await Reminder.updateMany(
+              {
+                userId: user._id,
+                title: { $regex: /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i },
+                lastDispatchedDate: { $ne: dhakaDateStr }
+              },
+              { $set: { lastDispatchedDate: dhakaDateStr } }
+            );
+            await User.findByIdAndUpdate(user._id, {
+              'ramadanAlerts.lastSehriAlertDate': dhakaDateStr
+            });
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `🤲 মাশাআল্লাহ! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। 🌙`
+              `🤲 মাশাআল্লাহ! সেহরির খাবার খেয়ে রোজা রাখার নিয়ত করে নিন। আল্লাহ আপনার রোজা কবুল করুন। আজকের মতো সেহরির অ্যালার্ম সমাপ্ত করা হলো। 🌙`
             );
           } else {
             await sendMetaWhatsAppMessage(
@@ -2737,54 +2871,134 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // 1.2. Cancellation of Islamic / Ramadan / Prayer reminders
-        const isIslamicCancel = /(?:বন্ধ|বাতিল|cancel|stop|delete|muche|মুছে|ফেলে|bad|বাদ)\s*(?:করো|কর|করে\s*দাও|koro|dao|din|দিন)?/i.test(cleanText) &&
-                                /(?:নামাজ|namaj|namaz|ওয়াক্ত|সেহরি|সাহরি|sehri|sahari|ইফতার|iftar|রোজা)/i.test(cleanText);
-        if (isIslamicCancel) {
-          const isCancelPrayer = /(?:নামাজ|namaj|namaz|ওয়াক্ত)/i.test(cleanText);
-          const isCancelSehri = /(?:সেহরি|সাহরি|sehri|sahari)/i.test(cleanText);
-          const isCancelIftar = /(?:ইফতার|iftar)/i.test(cleanText);
-          const isCancelAll = !isCancelPrayer && !isCancelSehri && !isCancelIftar;
+        // --- 1.2. Cancellation of Islamic / Ramadan / Prayer reminders (Bengali & Banglish) ---
+        const bnCancelRegex = /(?:বন্ধ|বাতিল|ডিলিট|মুছে|ফেলে|বাদ|কেটে|অফ|স্টপ|ক্যানসেল|লাগবে\s*না|দরকার\s*(?:নাই|নেই)|চাই\s*না|(?:আর\s*)?দিও\s*না|(?:আর\s*)?দিবা\s*না|(?:আর\s*)?দিবেন\s*না|পাঠিও\s*না|থামো)/;
+        const enCancelRegex = /\b(?:bondo|bondho|bontho|bondhu|bond|bnd|bndh|off|turn\s*off|stop|stopp|stope|cancel|cancle|kancel|kancle|delete|dlt|del|remove|muche|mucho|muce|bad|batil|kete|lagbe\s*na|lagbena|lagbo\s*na|lagbona|dorkar\s*(?:nai|nei)|drkr\s*(?:nai|nei)|chai\s*na|chaina|cai\s*na|caina|(?:ar\s*)?dio\s*na|(?:ar\s*)?diona|(?:ar\s*)?diba\s*na|(?:ar\s*)?diben\s*na|pathio\s*na)\b/i;
 
-          const query: any = { userId: user._id, status: { $in: ['Pending', 'Snoozed'] } };
-          const categories: string[] = [];
-          if (isCancelPrayer || isCancelAll) categories.push('prayer');
-          if (isCancelSehri || isCancelAll) categories.push('wakeup');
-          if (isCancelIftar || isCancelAll) categories.push('event');
+        const hasCancelIntent = bnCancelRegex.test(cleanText) || enCancelRegex.test(cleanText);
 
-          query.category = { $in: categories };
-          if (isCancelSehri && !isCancelAll) {
-            query.title = { $regex: /সেহরি|সাহরি|sehri/i };
-          }
-          if (isCancelIftar && !isCancelAll) {
-            query.title = { $regex: /ইফতার|iftar/i };
-          }
+        const prayerPattern = /(?:নামাজ|ওয়াক্ত|ওয়াক্ত|সালাত|ফজর|জোহর|যোহর|আসর|মাগরিব|এশা|\b(?:namaj|namaz|prayer|salat|waqt|oakt|owakt|fajr|fojor|fazr|dhuhr|zuhr|zohar|johor|asr|asor|maghrib|magrib|isha)\b)/i;
+        const sehriPattern = /(?:সেহরি|সাহরি|সেহেরি|সাহেরি|\b(?:sehri|sahari|seheri|saheri)\b)/i;
+        const iftarPattern = /(?:ইফতার|\b(?:iftar|iftaar)\b)/i;
+        const islamicAllPattern = /(?:রমজান|রোজা|ইসলামিক|\b(?:romjan|ramadan|roja|islamic)\b)/i;
 
-          await Reminder.updateMany(query, { $set: { status: 'Cancelled' } });
-          const parts: string[] = [];
-          if (isCancelPrayer || isCancelAll) parts.push('নামাজের');
-          if (isCancelSehri || isCancelAll) parts.push('সেহরির');
-          if (isCancelIftar || isCancelAll) parts.push('ইফতারের');
+        const isIslamicTopic = prayerPattern.test(cleanText) || sehriPattern.test(cleanText) || iftarPattern.test(cleanText) || islamicAllPattern.test(cleanText);
 
-          if (user.ramadanAlerts?.enabled) {
+        // A. General "All Reminders" Cancellation (e.g. "সব রিমাইন্ডার বন্ধ করো", "all reminder off koro", "shob reminder cancel")
+        const isAllGeneralCancel = hasCancelIntent &&
+          (/(?:সব|সকল|সকলগুলো|সবগুলো|\b(?:shob|sob|all)\b)\s*(?:রিমাইন্ডার|reminder|alarm|অ্যালার্ম)/i.test(cleanText) ||
+           /(?:রিমাইন্ডার|reminder|alarm|অ্যালার্ম)\s*.*(?:সব|সকল|\b(?:shob|sob|all)\b)/i.test(cleanText)) &&
+          !isIslamicTopic;
+
+        if (isAllGeneralCancel) {
+          await Reminder.updateMany(
+            { userId: user._id, status: { $in: ['Pending', 'Snoozed'] } },
+            { $set: { status: 'Cancelled' } }
+          );
+          if (user.ramadanAlerts) {
             user.ramadanAlerts.enabled = false;
+            user.ramadanAlerts.sehriAlert = false;
+            user.ramadanAlerts.iftarAlert = false;
             await user.save();
           }
+          cancelAlarmRinger(user._id.toString());
+          cancelAlarmRinger(fromNumber);
 
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
           await sendMetaWhatsAppMessage(
             fromNumber,
-            `✅ আপনার ${parts.join(', ')} সক্রিয় রিমাইন্ডারসমূহ সফলভাবে বন্ধ করা হয়েছে।`
+            `✅ আসসালামু আলাইকুম${salutation}! আপনার সকল সক্রিয় রিমাইন্ডার সফলভাবে বন্ধ (Stop) করা হয়েছে।`
           );
           return;
         }
 
-        // 1.3. Setting Islamic Reminders (Sehri, Iftar, 5-Waqt Namaz / Specific Prayer)
-        const hasReminderIntent = /(?:রিমাইন্ডার|reminder|মনে\s*করিয়ে|ডাকবে|ডাকবা|তুলে\s*দিও|তুলে\s*দেও|তুলে\s*দাও|ডেকে\s*দিও|ডেকে\s*দাও|অ্যালার্ম|alarm|alert|দেও|দাও|dio|daw|উঠা|wake)/i.test(cleanText);
-        const mentionsSehri = /(?:সেহরি|সাহরি|সেহেরি|সাহেরি|sehri|sahari|seheri|saheri)/i.test(cleanText);
-        const mentionsIftar = /(?:ইফতার|iftar|iftaar)/i.test(cleanText);
-        const mentionsPrayer = /(?:নামাজ|ওয়াক্ত|namaj|namaz|prayer|ফজর|জোহর|যোহর|আসর|মাগরিব|এশা)/i.test(cleanText);
+        // B. Islamic / Prayer / Sehri / Iftar Cancellation
+        if (hasCancelIntent && isIslamicTopic) {
+          const isCancelPrayer = prayerPattern.test(cleanText);
+          const isCancelSehri = sehriPattern.test(cleanText);
+          const isCancelIftar = iftarPattern.test(cleanText);
+          const isCancelAllIslamic = (!isCancelPrayer && !isCancelSehri && !isCancelIftar) || /(?:সব|সকল|\b(?:shob|sob|all)\b)/i.test(cleanText);
 
-        if (hasReminderIntent && (mentionsSehri || mentionsIftar || mentionsPrayer)) {
+          const queryParts: any[] = [];
+          const cancelledNames: string[] = [];
+
+          if (isCancelPrayer || isCancelAllIslamic) {
+            const specificWaqt = [
+              { nameBn: 'ফজর', regex: /(?:ফজর|\b(?:fajr|fojor|fazr)\b)/i },
+              { nameBn: 'জোহর', regex: /(?:জোহর|যোহর|\b(?:dhuhr|zuhr|zohar|johor)\b)/i },
+              { nameBn: 'আসর', regex: /(?:আসর|\b(?:asr|asor)\b)/i },
+              { nameBn: 'মাগরিব', regex: /(?:মাগরিব|\b(?:maghrib|magrib)\b)/i },
+              { nameBn: 'এশা', regex: /(?:এশা|এশার|\b(?:isha|eshar)\b)/i },
+            ].filter(w => w.regex.test(cleanText));
+
+            if (specificWaqt.length > 0 && !isCancelAllIslamic && !/(?:সব|সকল|৫\s*ওয়াক্ত|পাঁচ|\b(?:shob|sob|all)\b)/i.test(cleanText)) {
+              for (const w of specificWaqt) {
+                queryParts.push({ title: { $regex: new RegExp(w.nameBn, 'i') } });
+                cancelledNames.push(`${w.nameBn} নামাজের`);
+              }
+            } else {
+              queryParts.push({ category: 'prayer' });
+              queryParts.push({ title: { $regex: /নামাজ|namaj|namaz|ওয়াক্ত|ওয়াক্ত|prayer|সালাত|salat|ফজর|fajr|জোহর|যোহর|dhuhr|zuhr|আসর|asr|মাগরিব|maghrib|এশা|isha/i } });
+              cancelledNames.push('নামাজের');
+            }
+          }
+
+          if (isCancelSehri || isCancelAllIslamic) {
+            queryParts.push({ category: 'wakeup', title: { $regex: /সেহরি|সাহরি|sehri|sahari/i } });
+            queryParts.push({ title: { $regex: /সেহরি|সাহরি|sehri|sahari/i } });
+            cancelledNames.push('সেহরির');
+          }
+
+          if (isCancelIftar || isCancelAllIslamic) {
+            queryParts.push({ category: 'event', title: { $regex: /ইফতার|iftar/i } });
+            queryParts.push({ title: { $regex: /ইফতার|iftar/i } });
+            cancelledNames.push('ইফতারের');
+          }
+
+          if (queryParts.length > 0) {
+            await Reminder.updateMany(
+              {
+                userId: user._id,
+                status: { $in: ['Pending', 'Snoozed'] },
+                $or: queryParts
+              },
+              { $set: { status: 'Cancelled' } }
+            );
+          }
+
+          if (isCancelSehri || isCancelAllIslamic) {
+            if (user.ramadanAlerts) {
+              user.ramadanAlerts.sehriAlert = false;
+            }
+            cancelAlarmRinger(user._id.toString());
+            cancelAlarmRinger(fromNumber);
+          }
+          if (isCancelIftar || isCancelAllIslamic) {
+            if (user.ramadanAlerts) {
+              user.ramadanAlerts.iftarAlert = false;
+            }
+          }
+          if (isCancelAllIslamic && user.ramadanAlerts) {
+            user.ramadanAlerts.enabled = false;
+          }
+          await user.save();
+
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
+          const itemText = cancelledNames.length > 0 ? cancelledNames.join(', ') : 'ইসলামিক';
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `✅ আসসালামু আলাইকুম${salutation}! আপনার ${itemText} রিমাইন্ডার সফলভাবে বন্ধ (Stop) করা হয়েছে। এখন থেকে আর এ বিষয়ে কোনো অ্যালার্ট পাঠানো হবে না।\n\n💡 পুনরায় চালু করতে চাইলে যেকোনো সময় বলুন: "নামাজের রিমাইন্ডার দাও" বা "সেহরি অ্যালার্ম সেট করো"।`
+          );
+          return;
+        }
+
+        // --- 1.3. Setting Islamic Reminders (Sehri, Iftar, 5-Waqt Namaz / Specific Prayer) ---
+        const hasReminderIntent = /(?:রিমাইন্ডার|reminder|মনে\s*করিয়ে|ডাকবে|ডাকবা|তুলে\s*দিও|তুলে\s*দেও|তুলে\s*দাও|ডেকে\s*দিও|ডেকে\s*দাও|অ্যালার্ম|alarm|alert|দেও|দাও|\b(?:dio|daw|wake)\b|উঠা)/i.test(cleanText);
+        const mentionsSehri = sehriPattern.test(cleanText);
+        const mentionsIftar = iftarPattern.test(cleanText);
+        const mentionsPrayer = prayerPattern.test(cleanText);
+
+        if (!hasCancelIntent && hasReminderIntent && (mentionsSehri || mentionsIftar || mentionsPrayer)) {
           const userDist = user.district || 'Dhaka';
           const isDaily = /(?:প্রতিদিন|প্রতি\s*দিন|daily|roj|protidin|shob\s*din|সব\s*দিন)/i.test(cleanText);
           const isTomorrow = /(?:কাল|কালকে|আগামীকাল|tomorrow|agamikal)/i.test(cleanText);

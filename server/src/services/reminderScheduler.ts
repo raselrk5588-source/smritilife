@@ -201,6 +201,38 @@ export const startReminderScheduler = () => {
                 /সেহরি|সাহরি|সেহেরি|সাহেরি|রোজা|রমজান|sehri|sahari|seheri|saheri|romjan|ramadan/i.test(reminder.category || '')
               );
 
+              // Prevent duplicate Sehri alarms on the same morning
+              if (isSehri) {
+                const alreadyAlertedToday = (
+                  user?.ramadanAlerts?.lastSehriAlertDate === dhakaDateStr ||
+                  await Reminder.exists({
+                    userId: reminder.userId,
+                    _id: { $ne: reminder._id },
+                    title: { $regex: /সেহরি|সাহরি|রোজা|রমজান|sehri|sahari|ramadan/i },
+                    lastDispatchedDate: dhakaDateStr
+                  })
+                );
+
+                if (alreadyAlertedToday) {
+                  console.log(`🌙 [ReminderScheduler] Suppressed duplicate Sehri alert for user ${reminder.userId} - already alerted or awake today.`);
+                  if (reminder.repeat && reminder.repeat !== 'Once') {
+                    const nextDate = new Date(reminder.date || new Date());
+                    nextDate.setDate(nextDate.getDate() + 1);
+                    await Reminder.findByIdAndUpdate(reminder._id, {
+                      date: nextDate,
+                      status: 'Pending',
+                      lastDispatchedDate: dhakaDateStr
+                    });
+                  } else {
+                    await Reminder.findByIdAndUpdate(reminder._id, {
+                      status: 'Completed',
+                      lastDispatchedDate: dhakaDateStr
+                    });
+                  }
+                  continue;
+                }
+              }
+
               const categoryMap: Record<string, string> = {
                 wakeup: isSehri ? '🌙 সেহরি ওয়েক-আপ' : '⏰ ওয়েক-আপ অ্যালার্ম',
                 alarm: isSehri ? '🌙 সেহরি ওয়েক-আপ' : '⏰ ওয়েক-আপ অ্যালার্ম',
@@ -616,6 +648,8 @@ export const startReminderScheduler = () => {
         minute: '2-digit'
       }); // Format: "HH:mm"
       const dhakaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }); // "YYYY-MM-DD"
+      const todayStart = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+      const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
 
       const users = await User.find({
         isSubscribed: true,
@@ -651,18 +685,32 @@ export const startReminderScheduler = () => {
         if (u.ramadanAlerts?.sehriAlert === true && dhakaTimeStr === sehriAlarmTime && u.ramadanAlerts?.lastSehriAlertDate !== dhakaDateStr) {
           await User.findByIdAndUpdate(u._id, { 'ramadanAlerts.lastSehriAlertDate': dhakaDateStr });
 
-          const sehriRem = await Reminder.create({
+          let sehriRem = await Reminder.findOne({
             userId: u._id,
-            title: `সেহরির অ্যালার্ম (${times.districtBn} জেলা)`,
-            date: new Date(`${dhakaDateStr}T00:00:00.000Z`),
-            time: dhakaTimeStr,
-            priority: 'Urgent',
             category: 'wakeup',
-            repeat: 'Daily',
-            status: 'Snoozed',
-            lastDispatchedDate: dhakaDateStr,
-            isAlarm: true
+            date: { $gte: todayStart, $lte: todayEnd },
+            title: { $regex: /সেহরি|সাহরি|sehri/i }
           });
+
+          if (!sehriRem) {
+            sehriRem = await Reminder.create({
+              userId: u._id,
+              title: `সেহরির অ্যালার্ম (${times.districtBn} জেলা)`,
+              date: new Date(`${dhakaDateStr}T00:00:00.000Z`),
+              time: dhakaTimeStr,
+              priority: 'Urgent',
+              category: 'wakeup',
+              repeat: 'Once', // Use 'Once' so it never creates ghost daily recurring records
+              status: 'Snoozed',
+              lastDispatchedDate: dhakaDateStr,
+              isAlarm: true
+            });
+          } else {
+            await Reminder.findByIdAndUpdate(sehriRem._id, {
+              status: 'Snoozed',
+              lastDispatchedDate: dhakaDateStr
+            });
+          }
 
           const alertBody = `🌙🔔⏰ আসসালামু আলাইকুম ${salutation}! সেহরির সময় হয়েছে! ঘুম থেকে উঠুন! (রিং ১/৩)\n\n📍 আপনার জেলা: ${times.districtBn}\n⏳ সেহরি শেষ: ${times.sehriFormatted} (আর ${sehriMinsBefore} মিনিট বাকি)\n\nরোজা রাখার প্রস্তুতি নিতে এবং বরকতময় সেহরি খেতে নিচের বাটনে চাপ দিন:`;
 
