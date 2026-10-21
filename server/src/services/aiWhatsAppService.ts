@@ -1328,8 +1328,9 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
     // Candidate models: Adaptive ordering with fastest active model first
     const baseCandidateModels = [
       'gemini-3.5-flash-lite',
-      'gemini-2.5-flash',
+      'gemini-3.8-flash',
       'gemini-3.5-flash',
+      'gemini-1.5-flash',
       'gemini-3-flash-preview'
     ];
     const candidateModels = [
@@ -2062,8 +2063,9 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
     const candidateModels = [
       activeFastModel,
       'gemini-3.5-flash-lite',
-      'gemini-2.5-flash',
+      'gemini-3.8-flash',
       'gemini-3.5-flash',
+      'gemini-1.5-flash',
       'gemini-3-flash-preview'
     ];
 

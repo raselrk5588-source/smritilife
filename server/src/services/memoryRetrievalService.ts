@@ -204,6 +204,33 @@ export function extractSearchTokens(text: string): string[] {
   return Array.from(new Set(words));
 }
 
+/**
+ * Safely match a search term within target text without mid-word false positives
+ * (e.g. avoids 'tin' matching 'meeting' or 'congratulations' matching 'rat')
+ */
+export function matchesTerm(target: string, term: string): boolean {
+  if (!target || !term) return false;
+  const cleanTarget = target.toLowerCase();
+  const cleanTerm = term.toLowerCase().trim();
+  if (!cleanTerm) return false;
+
+  // For ASCII/alphanumeric words: use strict word boundaries
+  if (/^[a-zA-Z0-9]+$/.test(cleanTerm)) {
+    const escaped = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx = new RegExp(`(?:^|[^a-zA-Z0-9])${escaped}(?:[^a-zA-Z0-9]|$)`, 'i');
+    return rx.test(cleanTarget);
+  }
+
+  // For Bengali words: if short (< 4 chars), ensure not inside another Bengali word
+  if (cleanTerm.length < 4) {
+    const escaped = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx = new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?:$|[^\\p{L}\\p{N}])`, 'u');
+    return rx.test(cleanTarget);
+  }
+
+  return cleanTarget.includes(cleanTerm);
+}
+
 export interface ReminderSearchResult {
   topReminder: IReminder | null;
   matchingReminders: IReminder[];
@@ -218,7 +245,7 @@ export async function searchReminders(
   query: string,
   rawText?: string
 ): Promise<ReminderSearchResult> {
-  const tokens = Array.from(new Set([
+  const rawTokens = Array.from(new Set([
     ...extractSearchTokens(query),
     ...extractSearchTokens(rawText || '')
   ]));
@@ -238,6 +265,20 @@ export async function searchReminders(
     return { topReminder: null, matchingReminders: [], score: 0 };
   }
 
+  // Group tokens by semantic concept variants so Bengali & English transliterations of the same word (e.g. "tin" and "টিন")
+  // do not artificially trigger double-counted token scores or multi-token bonuses.
+  const conceptTokens: Array<{ token: string; variants: string[] }> = [];
+  const seenVariantKeys = new Set<string>();
+
+  for (const t of rawTokens) {
+    const vars = getTermVariants(t);
+    const key = [...vars].sort().join('|');
+    if (!seenVariantKeys.has(key)) {
+      seenVariantKeys.add(key);
+      conceptTokens.push({ token: t, variants: vars });
+    }
+  }
+
   const scored: Array<{ reminder: IReminder; score: number }> = [];
 
   for (const rem of userReminders) {
@@ -247,23 +288,31 @@ export async function searchReminders(
     let score = 0;
 
     // 1. Direct match: Entire raw inquiry matches title substring
-    if (rawClean && (rawClean.includes(titleLower) || titleLower.includes(rawClean))) {
+    if (rawClean && titleLower.length >= 3 && (rawClean.includes(titleLower) || (titleLower.length >= 6 && titleLower.includes(rawClean)))) {
       score += 150;
     }
 
     // 2. Token variant matching
     let matchedTokenCount = 0;
-    for (const token of tokens) {
-      const variants = getTermVariants(token);
+    let titleOrDescOrMedsMatched = false;
 
-      const inTitle = variants.some((v) => titleLower.includes(v));
-      const inDesc = variants.some((v) => descLower.includes(v));
-      const inCat = variants.some((v) => catLower.includes(v));
-      const inMeds = rem.medicines?.some((m) => variants.some((v) => m.name.toLowerCase().includes(v)));
+    for (const { token, variants } of conceptTokens) {
+      const inTitle = variants.some((v) => matchesTerm(titleLower, v));
+      const inDesc = variants.some((v) => matchesTerm(descLower, v));
+      const inMeds = rem.medicines?.some((m) => variants.some((v) => matchesTerm(m.name, v)));
+      // Category matches only if a variant exactly equals the category or known category synonyms (NOT substring!)
+      const inCat = variants.some((v) => {
+        if (v === catLower) return true;
+        if (catLower === 'meeting' && ['meeting', 'মিটিং', 'বৈঠক'].includes(v)) return true;
+        if (catLower === 'medicine' && ['medicine', 'osudh', 'ঔষধ', 'ওষুধ', 'ট্যাবলেট'].includes(v)) return true;
+        if (catLower === 'birthday' && ['birthday', 'jonmodin', 'জন্মদিন'].includes(v)) return true;
+        return false;
+      });
 
       if (inTitle) {
         score += 50;
         matchedTokenCount++;
+        titleOrDescOrMedsMatched = true;
         // Extra boost for distinct names or specific keywords
         if (token.length >= 4 || ['tin', 'টিন', 'বউ', 'মা', 'son', 'দাও'].includes(token)) {
           score += 25;
@@ -271,21 +320,24 @@ export async function searchReminders(
       } else if (inMeds) {
         score += 45;
         matchedTokenCount++;
+        titleOrDescOrMedsMatched = true;
       } else if (inDesc) {
         score += 30;
         matchedTokenCount++;
-      } else if (inCat) {
-        score += 25;
-        matchedTokenCount++;
+        titleOrDescOrMedsMatched = true;
+      } else if (inCat && titleOrDescOrMedsMatched) {
+        // Category only boosts if title, description, or medicine already matched!
+        score += 20;
       }
     }
 
     // High bonus if multiple distinct tokens matched (e.g. "Raiyan" AND "jonmodin")
-    if (matchedTokenCount >= 2) {
+    if (matchedTokenCount >= 2 && titleOrDescOrMedsMatched) {
       score += 60;
     }
 
-    if (score >= 40) {
+    // Must have matched at least title, description, or medicine to qualify!
+    if (titleOrDescOrMedsMatched && score >= 40) {
       scored.push({ reminder: rem, score });
     }
   }
@@ -343,13 +395,15 @@ async function matchReminderWithGemini(reminders: IReminder[], userQuery: string
 Here is the user's list of saved reminders:
 ${candidateList}
 
-Does ANY reminder in the list answer the user's question (e.g. asking when a birthday, meeting, medicine, or event is)?
+Does ANY reminder in the list specifically match or answer what the user is asking for (e.g. asking when a birthday, meeting, medicine, or event is)?
+CRITICAL: If the user is asking for a document, certificate, passport, NID, photo, or something NOT in the reminder list, you MUST return { "found": false }.
+Do NOT guess or pick a random reminder if it does not genuinely match.
 Return JSON ONLY:
 { "found": true, "index": 1 } or { "found": false }`;
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const res = await model.generateContent(prompt);
     const text = res.response.text();
     const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -480,7 +534,26 @@ export async function searchUnifiedMemory(
     }
   }
 
-  // 2. Check Reminders (Birthdays, events, medicine, tasks)
+  // 2. Check if this is explicitly a Document inquiry (certificates, reports, NID, etc.)
+  const isDocQuery = /(?:certificate|সার্টিফিকেট|সনদ|প্রেসক্রিপশন|prescription|ডকুমেন্ট|document|ফাইল|file|কাগজ|nid|এনআইডি|passport|পাসপোর্ট|কার্ড|card|রশিদ|বিল|receipt|টিন|tin|ছাড়পত্র|দলিল|খতিয়ান|ভাউচার|voucher|photo|ছবি|pic|image)/i.test(
+    `${cleanQ} ${rawQ}`
+  );
+
+  if (isDocQuery) {
+    let docResult = await findMatchingDocumentWithVersion(userId, rawQ || cleanQ);
+    if (!docResult.doc && cleanQ && cleanQ !== rawQ) {
+      docResult = await findMatchingDocumentWithVersion(userId, cleanQ);
+    }
+    if (docResult.doc || (docResult.yearNotFound && docResult.targetYear)) {
+      return {
+        found: true,
+        type: 'document',
+        data: docResult
+      };
+    }
+  }
+
+  // 3. Check Reminders (Birthdays, events, medicine, tasks)
   const remResult = await searchReminders(userId, cleanQ, rawQ);
   if (remResult.topReminder) {
     if (remResult.matchingReminders.length > 1 && remResult.score < 90) {
