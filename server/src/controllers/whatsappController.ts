@@ -1781,10 +1781,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             const salutation = user.honorific ? ` ${user.honorific}` : '';
             const categoryLine = category && category !== 'Other' ? `\n📂 *ক্যাটাগরি:* ${category}` : '';
+            const cleanDisplayNotes = notes && !/(?:save\s*kore\s*rakho|save\s*koro|সেভ\s*করে\s*রাখো|সেভ\s*করো)/i.test(notes) ? `\n📝 *নোট:* ${notes}` : '';
 
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dhaka' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
+              `✅ *আপনার ফাইলটি সফলভাবে মেমোরিতে সংরক্ষণ করেছি${salutation}!* 📁\n\n📄 *ফাইলের নাম:* ${title}${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dhaka' })}${cleanDisplayNotes}`
             );
             return;
           } else {
@@ -1849,10 +1850,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
             const salutation = user.honorific ? ` ${user.honorific}` : '';
             const categoryLine = category && category !== 'Other' ? `\n📂 *ক্যাটাগরি:* ${category}` : '';
+            const cleanDisplayNotes = notes && !/(?:save\s*kore\s*rakho|save\s*koro|সেভ\s*করে\s*রাখো|সেভ\s*করো)/i.test(notes) ? `\n📝 *নোট:* ${notes}` : '';
 
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে ডকুমেন্ট ভল্টে সেভ করা হয়েছে${salutation}!* 📁${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dhaka' })}${notes ? `\n📝 *নোট:* ${notes}` : ''}`
+              `✅ *আপনার ফাইলটি "${title}" নামে সফলভাবে ডকুমেন্ট ভল্টে সেভ করা হয়েছে${salutation}!* 📁${categoryLine}\n📅 *তারিখ:* ${new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dhaka' })}${cleanDisplayNotes}`
             );
             return;
           }
