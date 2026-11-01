@@ -403,7 +403,7 @@ Return JSON ONLY:
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
     const res = await model.generateContent(prompt);
     const text = res.response.text();
     const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();

@@ -29,8 +29,38 @@ export const BDAPPS_ERROR_CODES: Record<string, { desc: string; bnDesc: string }
  */
 export const initBkashSubscription = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id || req.body.userId;
-    const { msisdn, redirectUrl } = req.body;
+    let userId = (req as any).user?.id || req.body.userId;
+    const { redirectUrl } = req.body;
+    let msisdn: string | undefined = req.body.msisdn;
+
+    // Resolve logged-in user (optional) from Bearer token so we can prefill their mobile
+    if (!userId) {
+      const authHeader = req.headers.authorization || '';
+      if (authHeader.startsWith('Bearer ')) {
+        try {
+          const decoded = jwt.verify(authHeader.substring(7), JWT_SECRET) as { id: string };
+          userId = decoded.id;
+        } catch (e) {}
+      }
+    }
+    if (!msisdn && userId) {
+      try {
+        const user = await User.findById(userId).select('mobile');
+        if (user?.mobile) msisdn = user.mobile;
+      } catch (e) {}
+    }
+
+    // Normalise to 01XXXXXXXXX. bdapps skips its bKash/Robi selection page and
+    // redirects straight to the bKash payment page only when a valid msisdn is sent.
+    const cleaned = (msisdn || '').replace(/[^\d]/g, '').replace(/^88(?=01)/, '');
+    if (!/^01\d{9}$/.test(cleaned)) {
+      return res.status(400).json({
+        success: false,
+        needMsisdn: true,
+        message: 'অনুগ্রহ করে আপনার সঠিক মোবাইল নম্বর দিন (01XXXXXXXXX)'
+      });
+    }
+    msisdn = cleaned;
 
     // Check fee from settings
     let amount = 190;

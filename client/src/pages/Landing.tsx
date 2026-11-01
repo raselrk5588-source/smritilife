@@ -132,14 +132,24 @@ export default function Landing() {
   const [isSubscribing, setIsSubscribing] = useState(false);
 
   // Direct 1-click checkout: Initiates BDApps charging gateway directly
-  const handleSubscribe = async () => {
+  const [showMsisdnModal, setShowMsisdnModal] = useState(false);
+  const [msisdnInput, setMsisdnInput] = useState(() => localStorage.getItem('subscribeMsisdn') || '');
+
+  const handleSubscribe = async (msisdnOverride?: unknown) => {
+    const msisdn = (typeof msisdnOverride === 'string' ? msisdnOverride : localStorage.getItem('subscribeMsisdn') || '').trim();
+    const token = localStorage.getItem('token');
+    // Not logged in and no known number → ask for it first (bdapps needs msisdn to skip the bKash/Robi selection page)
+    if (!isSubscribing && !token && !/^01\d{9}$/.test(msisdn)) {
+      setMobileMenuOpen(false);
+      setShowMsisdnModal(true);
+      return;
+    }
     if (isSubscribing) return;
     setMobileMenuOpen(false);
     setIsSubscribing(true);
     toast.loading('পেমেন্ট গেটওয়েতে পাঠানো হচ্ছে...', { id: 'gatewayRedirect' });
 
     try {
-      const token = localStorage.getItem('token');
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
@@ -153,7 +163,8 @@ export default function Landing() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          redirectUrl
+          redirectUrl,
+          ...(msisdn ? { msisdn } : {})
         })
       });
 
@@ -164,7 +175,12 @@ export default function Landing() {
           localStorage.setItem('pendingBkashRequestId', data.requestId);
         }
         toast.success('পেমেন্ট পেজে নিয়ে যাওয়া হচ্ছে...', { id: 'gatewayRedirect' });
+        if (msisdn) localStorage.setItem('subscribeMsisdn', msisdn);
         window.location.href = data.authorizationUrl;
+      } else if (data.needMsisdn) {
+        setIsSubscribing(false);
+        toast.dismiss('gatewayRedirect');
+        setShowMsisdnModal(true);
       } else {
         setIsSubscribing(false);
         const errMsg = data.message || 'সাবস্ক্রিপশন শুরু করা যাচ্ছে না। অনুগ্রহ করে আবার চেষ্টা করুন।';
@@ -914,6 +930,51 @@ export default function Landing() {
           </>
         )}
       </button>
+
+      {/* Mobile number prompt → goes straight to bKash payment page */}
+      {showMsisdnModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4" onClick={() => setShowMsisdnModal(false)}>
+          <form
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const cleaned = msisdnInput.replace(/[^\d]/g, '').replace(/^88(?=01)/, '');
+              if (!/^01\d{9}$/.test(cleaned)) {
+                toast.error('সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (01XXXXXXXXX)');
+                return;
+              }
+              setShowMsisdnModal(false);
+              handleSubscribe(cleaned);
+            }}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800">আপনার মোবাইল নম্বর দিন</h3>
+              <button type="button" onClick={() => setShowMsisdnModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <input
+              autoFocus
+              type="tel"
+              inputMode="tel"
+              maxLength={14}
+              placeholder="01XXXXXXXXX"
+              value={msisdnInput}
+              onChange={(e) => setMsisdnInput(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-lg tracking-wider outline-none focus:border-[#E2136E] focus:ring-2 focus:ring-[#E2136E]/20"
+            />
+            <p className="mt-2 text-xs text-slate-500">মাসিক ১৯০ টাকা — bKash দিয়ে পেমেন্ট</p>
+            <button
+              type="submit"
+              disabled={isSubscribing}
+              className="mt-4 w-full rounded-xl bg-[#E2136E] py-3 font-bold text-white transition hover:bg-[#c4105f] disabled:opacity-60"
+            >
+              bKash দিয়ে পেমেন্ট করুন
+            </button>
+          </form>
+        </div>
+      )}
 
     </div>
   );
