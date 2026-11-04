@@ -29,9 +29,12 @@ router.post('/robi/verify-otp', verifyRobiSubscriptionOtp);
 // Callback / User return verification
 router.post('/verify', verifySubscriptionReturn);
 
-// bdapps asynchronous notification webhook
-router.post('/webhook', bdappsNotificationWebhook);
-router.post('/notify', bdappsNotificationWebhook);
+// bdapps asynchronous notification webhook (handles both GET and POST)
+router.all('/webhook', bdappsNotificationWebhook);
+router.all('/notify', bdappsNotificationWebhook);
+router.all('/callback', bdappsNotificationWebhook);
+router.all('/subscription/notify', bdappsNotificationWebhook);
+router.all('/subscription/webhook', bdappsNotificationWebhook);
 
 // Subscriptions list for Admin
 router.get('/list', getAllSubscriptions);

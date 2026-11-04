@@ -260,21 +260,26 @@ export const verifySubscriptionReturn = async (req: Request, res: Response) => {
  */
 export const bdappsNotificationWebhook = async (req: Request, res: Response) => {
   try {
-    const payload = req.body || {};
+    const payload: any = { ...(req.query || {}), ...(req.body || {}) };
     console.log('[bdapps Subscription Webhook]:', JSON.stringify(payload));
 
-    const { requestId, subscriberId, status, statusCode } = payload;
-    let msisdn = payload.msisdn;
+    const { requestId, statusCode } = payload;
+    let rawSubscriber =
+      payload.msisdn ||
+      payload.subscriberId ||
+      payload.sourceAddress ||
+      payload.destinationAddress ||
+      payload.mobile ||
+      payload.phone ||
+      payload.address ||
+      '';
 
-    if (!msisdn && subscriberId) {
-      const cleanDigits = String(subscriberId).replace(/[^\d]/g, '');
-      if (cleanDigits.startsWith('880')) {
-        msisdn = cleanDigits.substring(2);
-      } else if (cleanDigits.startsWith('88')) {
-        msisdn = cleanDigits.substring(2);
-      } else if (cleanDigits.startsWith('01')) {
-        msisdn = cleanDigits;
-      }
+    const cleanDigits = String(rawSubscriber).replace(/[^\d]/g, '');
+    let msisdn = cleanDigits;
+    if (cleanDigits.startsWith('880')) {
+      msisdn = cleanDigits.substring(2);
+    } else if (cleanDigits.startsWith('88')) {
+      msisdn = cleanDigits.substring(2);
     }
 
     // Accurately parse status from bdapps payload
@@ -302,28 +307,16 @@ export const bdappsNotificationWebhook = async (req: Request, res: Response) => 
       rawStatus === 'ACTIVE'
     );
 
-    if (requestId) {
-      await Subscription.findOneAndUpdate(
-        { requestId },
-        {
-          status: isSub ? 'SUBSCRIBED' : 'CANCELLED',
-          statusCode,
-          subscriberId,
-          meta: payload
-        },
-        { upsert: true }
-      );
-    } else if (msisdn && isSub) {
-      // Record subscription event (e.g. from Robi OTP portal or USSD)
-      await Subscription.create({
-        requestId: `ROBI_${Date.now()}`,
-        subscriberId: subscriberId || `tel:88${msisdn}`,
-        status: 'SUBSCRIBED',
-        statusCode: statusCode || 'S1000',
-        amount: 4,
-        meta: payload
-      }).catch(err => console.error('[bdapps Webhook] Subscription record error:', err));
-    }
+    // Save webhook event to Subscription collection for full traceability
+    await Subscription.create({
+      requestId: requestId || `WEBHOOK_${Date.now()}`,
+      subscriberId: rawSubscriber || (msisdn ? `tel:88${msisdn}` : undefined),
+      msisdn: msisdn || undefined,
+      status: isSub ? 'SUBSCRIBED' : 'CANCELLED',
+      statusCode: statusCode || 'S1000',
+      amount: 190,
+      meta: payload
+    }).catch(err => console.error('[bdapps Webhook] Subscription record error:', err));
 
     if (msisdn) {
       const cleanPhone = msisdn.replace(/[^\d]/g, '');
@@ -368,6 +361,8 @@ export const bdappsNotificationWebhook = async (req: Request, res: Response) => 
         );
       }
     }
+
+    return res.status(200).json({ statusCode: 'S1000', statusDetail: 'Success' });
 
     // Acknowledge receipt
     res.json({ statusCode: 'S1000', statusDetail: 'Success' });

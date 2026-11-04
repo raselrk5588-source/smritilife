@@ -86,6 +86,8 @@ app.use('/api/expenses', protect, expenseRoutes);
 app.use('/api/debts', protect, debtRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/bdapps', subscriptionRoutes);
+app.use('/api/bdapps/subscription', subscriptionRoutes);
 app.use('/api/documents', protect, documentRoutes);
 app.use('/api/visitors', visitorRoutes);
 app.use('/api/messenger', messengerRoutes);
