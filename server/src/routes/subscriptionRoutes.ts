@@ -6,13 +6,17 @@ import {
   bdappsNotificationWebhook,
   getAllSubscriptions,
   sendRobiSubscriptionOtp,
-  verifyRobiSubscriptionOtp
+  verifyRobiSubscriptionOtp,
+  cancelUserSubscription
 } from '../controllers/subscriptionController';
 
 const router = express.Router();
 
 // Initialize bKash authorization from frontend
 router.post('/bkash/init', initBkashSubscription);
+
+// Direct cancellation endpoint
+router.post('/cancel', cancelUserSubscription);
 
 // Direct 302 redirect for server-side authorization flow
 router.get('/bkash/authorize', directSubscribeRedirect);

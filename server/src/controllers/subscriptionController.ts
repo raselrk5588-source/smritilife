@@ -277,11 +277,30 @@ export const bdappsNotificationWebhook = async (req: Request, res: Response) => 
       }
     }
 
-    const isSub =
-      status === 'REGISTERED' ||
-      status === '1' ||
-      status === 'SUBSCRIBED' ||
-      statusCode === 'S1000';
+    // Accurately parse status from bdapps payload
+    const rawStatus = (
+      payload.subscriptionStatus ||
+      payload.status ||
+      payload.action ||
+      payload.type ||
+      ''
+    ).toString().toUpperCase().trim();
+
+    const isUnsub =
+      rawStatus === 'UNREGISTERED' ||
+      rawStatus === 'UNSUBSCRIBED' ||
+      rawStatus === 'CANCELLED' ||
+      rawStatus === 'DEACTIVATED' ||
+      rawStatus === 'UNREGISTER' ||
+      rawStatus === 'UNSUBSCRIBE' ||
+      rawStatus === '0';
+
+    const isSub = !isUnsub && (
+      rawStatus === 'REGISTERED' ||
+      rawStatus === 'SUBSCRIBED' ||
+      rawStatus === '1' ||
+      rawStatus === 'ACTIVE'
+    );
 
     if (requestId) {
       await Subscription.findOneAndUpdate(
@@ -307,11 +326,27 @@ export const bdappsNotificationWebhook = async (req: Request, res: Response) => 
     }
 
     if (msisdn) {
-      let user = await User.findOne({ mobile: msisdn });
+      const cleanPhone = msisdn.replace(/[^\d]/g, '');
+      const short10 = cleanPhone.length > 10 ? cleanPhone.slice(-10) : cleanPhone;
+      let user = await User.findOne({
+        $or: [
+          { mobile: { $regex: new RegExp(short10 + '$') } },
+          { whatsapp: { $regex: new RegExp(short10 + '$') } }
+        ]
+      });
+
       if (user) {
         user.isSubscribed = isSub;
         await user.save();
         console.log(`[bdapps Webhook] User ${msisdn} subscription set to ${isSub}`);
+
+        if (!isSub) {
+          // Send polite WhatsApp unsubscription notification
+          const unsubMsg = `👋 প্রিয় গ্রাহক,\nআপনার স্মৃতি লাইফ (Smriti Life) সাবস্ক্রিপশনটি বিকাশ/bdapps থেকে সফলভাবে বাতিল করা হয়েছে। আমাদের সাথে থাকার জন্য ধন্যবাদ! 🌸\n\nপুনরায় সাবস্ক্রিপশন চালু করতে যেকোনো সময় ভিজিট করুন:\n👉 https://smritilife.com`;
+          sendMetaWhatsAppMessage(user.whatsapp || msisdn, unsubMsg).catch(e =>
+            console.error('[bdapps Webhook] WhatsApp unsub alert error:', e)
+          );
+        }
       } else if (isSub) {
         user = new User({
           name: 'রবি ব্যবহারকারী',
@@ -575,6 +610,57 @@ export const verifyRobiSubscriptionOtp = async (req: Request, res: Response) => 
     });
   } catch (error: any) {
     console.error('verifyRobiSubscriptionOtp error:', error);
+    res.status(500).json({ success: false, message: error.message || 'সার্ভার সমস্যা হয়েছে।' });
+  }
+};
+
+/**
+ * Direct user unsubscription endpoint
+ */
+export const cancelUserSubscription = async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    let userId: string | null = null;
+    if (authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.substring(7), JWT_SECRET) as { id: string };
+        userId = decoded.id;
+      } catch (e) {}
+    }
+
+    const { mobile } = req.body || {};
+    let targetUser = null;
+    if (userId) {
+      targetUser = await User.findById(userId);
+    } else if (mobile) {
+      const clean = String(mobile).replace(/[^\d]/g, '');
+      const short10 = clean.length > 10 ? clean.slice(-10) : clean;
+      targetUser = await User.findOne({
+        $or: [
+          { mobile: { $regex: new RegExp(short10 + '$') } },
+          { whatsapp: { $regex: new RegExp(short10 + '$') } }
+        ]
+      });
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'ব্যবহারকারী খুঁজে পাওয়া যায়নি।' });
+    }
+
+    targetUser.isSubscribed = false;
+    await targetUser.save();
+
+    await Subscription.updateMany(
+      { userId: targetUser._id },
+      { $set: { status: 'CANCELLED' } }
+    );
+
+    return res.json({
+      success: true,
+      message: 'আপনার সাবস্ক্রিপশন সফলভাবে বাতিল করা হয়েছে।'
+    });
+  } catch (error: any) {
+    console.error('cancelUserSubscription error:', error);
     res.status(500).json({ success: false, message: error.message || 'সার্ভার সমস্যা হয়েছে।' });
   }
 };
