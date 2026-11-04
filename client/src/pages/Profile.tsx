@@ -1,5 +1,5 @@
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { ChevronRight, Camera, Settings, Cloud, Crown, Palette, Globe, Shield, User, LogOut, Mail, Phone, MessageSquare, FileText, Bell, Gift, Sparkles } from 'lucide-react';
+import { ChevronRight, Camera, Settings, Cloud, Crown, Palette, Globe, Shield, User, LogOut, Mail, Phone, MessageSquare, FileText, Bell, Gift, Sparkles, Smartphone, ExternalLink, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchWithAuth } from '../utils/api';
@@ -496,23 +496,56 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Unsubscribe Confirmation Modal */}
+      {/* Unsubscribe Information Modal (bKash Subscription) */}
       {showUnsubscribeConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-xl text-center animate-in zoom-in-95 duration-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-2">{t('আনসাবস্ক্রাইব করতে চান?', 'Want to unsubscribe?')}</h2>
-            <p className="text-sm text-slate-500 mb-6">{t('আপনি কি নিশ্চিত যে আপনি আনসাবস্ক্রাইব করতে চান? এতে আপনার প্রোফাইলের সাবস্ক্রিপশন বাতিল হয়ে যাবে।', 'Are you sure you want to unsubscribe? This will cancel your profile subscription.')}</p>
-            <div className="flex space-x-3">
-              <button onClick={() => setShowUnsubscribeConfirm(false)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
-                {t('ফিরে যান', 'Go back')}
-              </button>
-              <button onClick={() => {
-                toast.success(t('সাবস্ক্রিপশন বাতিল করা হয়েছে', 'Subscription cancelled'));
-                setTimeout(() => { window.location.href = '/'; }, 1500);
-              }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-sm transition">
-                {t('নিশ্চিত করুন', 'Confirm')}
-              </button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowUnsubscribeConfirm(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl text-center animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 bg-[#e2136e]/10 text-[#e2136e] rounded-full flex items-center justify-center mx-auto mb-4">
+              <Smartphone className="w-8 h-8" />
             </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-[#e2136e]/10 text-[#e2136e] mb-2">
+              bKash Auto-Subscription
+            </div>
+
+            <h2 className="text-xl font-black text-slate-800 mb-2">
+              {t('বিকাশ অ্যাপ থেকে আনসাবস্ক্রাইব করুন', 'Unsubscribe from bKash App')}
+            </h2>
+
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+              {t(
+                'আপনার সাবস্ক্রিপশনটি বিকাশ (bKash Auto-Pay)-এর মাধ্যমে চালু করা হয়েছে। নিরাপত্তার কারণে এটি সরাসরি আপনার বিকাশ অ্যাপ থেকেই বন্ধ করতে হবে।',
+                'Your subscription was enabled via bKash Auto-Pay. For your financial security, please cancel it directly from your bKash app.'
+              )}
+            </p>
+
+            {/* Step-by-step guidance */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-left text-xs text-slate-700 space-y-2 mb-5">
+              <div className="font-bold text-slate-800 flex items-center gap-1.5 pb-1 border-b border-slate-200">
+                <HelpCircle className="w-4 h-4 text-[#e2136e]" />
+                <span>{t('কীভাবে বন্ধ করবেন:', 'How to cancel:')}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#e2136e] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">১</span>
+                <span>{t('আপনার ফোনে বিকাশ (bKash) অ্যাপ ওপেন করুন।', 'Open your bKash app.')}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#e2136e] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">২</span>
+                <span>{t('হোম স্ক্রিনের ডান পাশের মেনু থেকে "অটো পে (Auto Pay)" অপশনে যান।', 'Go to "Auto Pay" from the bKash home screen menu.')}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#e2136e] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">৩</span>
+                <span>{t('"স্মৃতি লাইফ / bdapps" সাবস্ক্রিপশন সিলেক্ট করে "বন্ধ করুন (Cancel)"-এ ক্লিক করুন।', 'Select "Smriti Life / bdapps" and click "Cancel".')}</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowUnsubscribeConfirm(false)}
+              className="w-full py-3.5 bg-gradient-to-r from-[#0A7756] to-[#12A57A] hover:opacity-95 text-white font-extrabold rounded-2xl shadow-lg transition cursor-pointer text-sm"
+            >
+              {t('বুঝতে পেরেছি', 'Got it')}
+            </button>
           </div>
         </div>
       )}
