@@ -88,8 +88,9 @@ jobs:
             mkdir -p /var/www/roni/smritilife.com/static
             cp client/public/maintenance.html /var/www/roni/smritilife.com/static/maintenance.html || true
 
-            # Build images first so running containers stay alive during build
-            $COMPOSE_CMD build --parallel || $COMPOSE_CMD build
+            # Build client without cache to ensure latest code is deployed
+            $COMPOSE_CMD build --no-cache client
+            $COMPOSE_CMD up -d --force-recreate client
             $COMPOSE_CMD up -d --remove-orphans
             
             # Print running containers and check status
