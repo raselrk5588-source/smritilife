@@ -179,23 +179,13 @@ export default function SubscriptionReturn() {
               </div>
             )}
 
-            <div className="pt-2 space-y-3">
-              <a
-                href={`https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full bg-[#25D366] hover:bg-[#1ebd59] text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group cursor-pointer"
-              >
-                <MessageSquare className="w-5 h-5 fill-current" />
-                <span>হোয়াটসঅ্যাপে এআই চালু করুন</span>
-              </a>
-
+            <div className="pt-2">
               <button
                 onClick={handleContinue}
-                className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group text-sm cursor-pointer"
+                className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group cursor-pointer text-base"
               >
-                <span>নাম ও হোয়াটসঅ্যাপ নম্বর সেট করুন ({countdown}s)</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <span>প্রোফাইল সেটআপ করুন ({countdown}s)</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           </div>
