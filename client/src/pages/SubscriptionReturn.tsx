@@ -80,35 +80,30 @@ export default function SubscriptionReturn() {
           localStorage.removeItem('pendingBkashRequestId');
           localStorage.removeItem('pendingMsisdn');
           localStorage.removeItem('isProfileCompleted');
+
+          // Navigate directly to profile setup
+          navigate('/complete-profile', { replace: true });
+          return;
         } else {
           setSuccess(false);
           setErrorMessage(data.message || 'বিকাশ সাবস্ক্রিপশন যাচাই করতে সমস্যা হয়েছে।');
         }
       } catch (err: any) {
         console.error('Subscription verification failed:', err);
-        // Fallback: if user got redirected back, assume subscribed or allow proceeding
-        setSuccess(true);
+        // Fallback: if user got redirected back, assume subscribed and navigate directly
         localStorage.setItem('isSubscribed', 'true');
+        navigate('/complete-profile', { replace: true });
+        return;
       } finally {
         setLoading(false);
       }
     };
 
     verifyPayment();
-  }, [searchParams]);
-
-  // Countdown timer on success
-  useEffect(() => {
-    if (success && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (success && countdown === 0) {
-      handleContinue();
-    }
-  }, [success, countdown]);
+  }, [searchParams, navigate]);
 
   const handleContinue = () => {
-    navigate('/complete-profile');
+    navigate('/complete-profile', { replace: true });
   };
 
   const getFriendlyErrorMessage = (code: string) => {
@@ -184,7 +179,7 @@ export default function SubscriptionReturn() {
                 onClick={handleContinue}
                 className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group cursor-pointer text-base"
               >
-                <span>প্রোফাইল সেটআপ করুন ({countdown}s)</span>
+                <span>প্রোফাইল সেটআপ করুন</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
