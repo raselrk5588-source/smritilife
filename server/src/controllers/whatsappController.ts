@@ -2017,8 +2017,26 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // If user explicitly asked for a known document type but doesn't have it saved:
-        const isExplicitDocRequest = hasFetchIntent && /(?:প্রেসক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|বিল|bill|দলিল|পাসপোর্ট|passport|কাগজ|ডকুমেন্ট|document|টিন|tin)\b/i.test(cleanText);
+        const isDocKeyword = /(?:প্রেসক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|বিল|bill|দলিল|পাসপোর্ট|passport|কাগজ|ডকুমেন্ট|document|টিন|tin)\b/i.test(cleanText);
+        const isExplicitDocRequest = isDocKeyword && (hasFetchIntent || cleanText.split(/\s+/).length <= 6);
         if (isExplicitDocRequest) {
+          // Also check Note in case user saved NID, TIN or document info as a text note
+          const cleanDocQuery = cleanText
+            .replace(/(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে|dao|daw|dau|dis|diben|den|pathao|pathan|dehao|dekhaw|dekhan|chai|cay|lagbe|give|send|show|আমার|amar|amr|ta|ti|টা|টি|এর|র|er|ar)/gi, '')
+            .trim();
+          const queryRegex = new RegExp((cleanDocQuery || cleanText).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+          const noteMatch = await Note.findOne({
+            userId: user._id,
+            $or: [{ title: queryRegex }, { content: queryRegex }]
+          });
+          if (noteMatch) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `📌 আপনার সংরক্ষিত *${noteMatch.title}*:\n\n📍 ${noteMatch.content}`
+            );
+            return;
+          }
+
           const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
           await sendMetaWhatsAppMessage(
             fromNumber,
@@ -5411,6 +5429,53 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const replyMsg = (aiResponse.replyText || '').trim();
             const userSaidDelete = /(?:ডিলিট|মুছে|delete|remove|ক্লিয়ার|clear|বাতিল|ক্যান্সেল|বাদ\s*দাও)/i.test(cleanText);
             const aiClaimedDeleted = /(?:ডিলিট\s*করা\s*হয়েছে|মুছে\s*ফেলা\s*হয়েছে|বাতিল\s*করা\s*হয়েছে|ডিলিট\s*করেছি|মুছে\s*দিয়েছি|deleted|removed)/i.test(replyMsg);
+
+            // Intercept fake searching hallucination: immediately search Document Vault and Notes!
+            const aiClaimedSearching = /(?:খুঁজে\s*দেখছি|অপেক্ষা\s*করুন|খুঁজে\s*বের\s*করার?\s*চেষ্টা|খুঁজছি|সংক্রান্ত\s*ডকুমেন্ট|ডকুমেন্টটি\s*আমি)/i.test(replyMsg);
+            if (aiClaimedSearching) {
+              const docRes = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
+              if (docRes.doc) {
+                const fileBuffer = await getDocumentBuffer(docRes.doc);
+                const duration = calculateItemDuration(docRes.doc.createdAt);
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `📄 এই যে আপনার সংরক্ষিত ফাইল: *${docRes.doc.title}* (${docRes.doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn}`
+                );
+                if (fileBuffer) {
+                  await sendMetaWhatsAppFile(
+                    fromNumber,
+                    fileBuffer,
+                    docRes.doc.fileName,
+                    docRes.doc.mimeType,
+                    `📸 ${docRes.doc.title}`
+                  );
+                }
+                break;
+              }
+
+              const cleanCore = cleanText
+                .replace(/(?:আমার|amr|amar|ডকুমেন্ট|document|ফাইল|file|সার্টিফিকেট|certificate|nid|এনআইডি|tin|টিন|দাও|dao|daw|dau|পাঠাও|pathao|দেখাও|dekhao|এর|র|er|ar|ta|ti|টা|টি)/gi, '')
+                .trim();
+              const queryRegex = new RegExp((cleanCore || cleanText).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+              const noteMatch = await Note.findOne({
+                userId: user._id,
+                $or: [{ title: queryRegex }, { content: queryRegex }]
+              });
+              if (noteMatch) {
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `📌 আপনার সংরক্ষিত *${noteMatch.title}*:\n\n📍 ${noteMatch.content}`
+                );
+                break;
+              }
+
+              const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `📁${salutation}, এই সংক্রান্ত কোনো ফাইল বা তথ্য আপনার স্মৃতি মেমোরিতে সেভ করা নেই।\n\nআপনি ফাইলটি (ছবি বা PDF) আমাকে পাঠিয়ে ক্যাপশনে নামটি লিখলে আমি মেমোরিতে সেভ করে রাখবো!`
+              );
+              break;
+            }
 
             if (userSaidDelete || aiClaimedDeleted) {
               // Intercept potential hallucinated deletion so it's actually removed from the database and portal

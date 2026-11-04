@@ -88,9 +88,10 @@ jobs:
             mkdir -p /var/www/roni/smritilife.com/static
             cp client/public/maintenance.html /var/www/roni/smritilife.com/static/maintenance.html || true
 
-            # Build client without cache to ensure latest code is deployed
+            # Build images to ensure latest client and server code are deployed
             $COMPOSE_CMD build --no-cache client
-            $COMPOSE_CMD up -d --force-recreate client
+            $COMPOSE_CMD build server worker
+            $COMPOSE_CMD up -d --force-recreate client server worker
             $COMPOSE_CMD up -d --remove-orphans
             
             # Print running containers and check status

@@ -1252,6 +1252,20 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       return { action: 'get_note', data: { searchQuery: q } };
     }
 
+    // 2G: Document / Identification / Certificate / Report / Vault Fetch
+    const isDocFetch = /(?:nid|এনআইডি|tin|টিন|certificate|সার্টিফিকেট|সনদ|prescription|প্রেসক্রিপশন|report|রিপোর্ট|পাসপোর্ট|passport|দলিল|রশিদ|ভাউচার|voucher|receipt|bill|বিল|কাগজ|document|ডকুমেন্ট|ভল্ট|vault)/i.test(cleanMsg);
+    const hasFetchWord = /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে|dao|daw|dau|dis|diben|den|pathao|pathan|dehao|dekhaw|dekhan|chai|cay|lagbe|give|send|show|need|kothay|কোথায়|আছে)/i.test(cleanMsg);
+    if (isDocFetch && (hasFetchWord || cleanMsg.split(/\s+/).length <= 5)) {
+      const cleanDocQuery = cleanMsg
+        .replace(/(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে|dao|daw|dau|dis|diben|den|pathao|pathan|dehao|dekhaw|dekhan|chai|cay|lagbe|give|send|show|আমার|amar|amr|ta|ti|টা|টি|please|kindly)/gi, '')
+        .trim();
+      return {
+        action: 'get_note',
+        data: { searchQuery: cleanDocQuery || cleanMsg },
+        replyText: ''
+      };
+    }
+
     // Fetch settings to get API key
     let apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
