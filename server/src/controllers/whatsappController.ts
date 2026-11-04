@@ -1934,7 +1934,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           /(?:কবে|কবেকার|কত\s*দিন|কয়\s*দিন|কদ্দিন|তারিখ|তারিখে|দিন\s*হলো|দিন\s*গেছে|চলছে|চলতেছে|কিনেছি|কিনেছিলাম|এনেছি|এনেছিলাম|নিয়েছি|নিয়েছিলাম|সেভ\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|আপলোড\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|রাখলাম|রেখেছি|kobe|kobekar|koto\s*din|koy\s*din|koddin|tarikh|tarikhe|din\s*holo|din\s*geche|cholche|choltese|kinesi|kinesilam|enechi|enesilam|niesi|niesilam|save\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|upload\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|rekhechi|rakhlam|when\s*(?:was|did)|how\s*(?:many\s*days|long))\b/i.test(cleanText);
 
         const hasFetchIntent =
-          /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|lagbe|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText);
+          /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dau|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|lagbe|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText);
 
         const isShortQuery = cleanText.split(/\s+/).length <= 4;
         const userDocsCount = await UserDocument.countDocuments({ userId: user._id });
@@ -2017,11 +2017,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // If user explicitly asked for a known document type but doesn't have it saved:
-        const isExplicitDocRequest = hasFetchIntent && /(?:প্রেসক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|বিল|bill|দলিল|পাসপোর্ট|passport|কাগজ|ডকুমেন্ট|document)\b/i.test(cleanText);
+        const isExplicitDocRequest = hasFetchIntent && /(?:প্রেসক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|বিল|bill|দলিল|পাসপোর্ট|passport|কাগজ|ডকুমেন্ট|document|টিন|tin)\b/i.test(cleanText);
         if (isExplicitDocRequest) {
+          const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
           await sendMetaWhatsAppMessage(
             fromNumber,
-            `📁 ভাই, এই নামে কোনো ফাইল আপনার স্মৃতি মেমোরিতে সেভ করা নেই।\n\nআপনি ফাইলটি (ছবি বা PDF) আমাকে পাঠিয়ে ক্যাপশনে নামটি লিখলে আমি মেমোরিতে সেভ করে রাখবো এবং পরবর্তীতে চাওয়ামাত্র পাঠিয়ে দেবো!`
+            `📁${salutation}, এই নামে কোনো ফাইল আপনার স্মৃতি মেমোরিতে সেভ করা নেই।\n\nআপনি ফাইলটি (ছবি বা PDF) আমাকে পাঠিয়ে ক্যাপশনে নামটি লিখলে আমি মেমোরিতে সেভ করে রাখবো এবং পরবর্তীতে চাওয়ামাত্র পাঠিয়ে দেবো!`
           );
           return;
         }

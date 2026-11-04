@@ -961,16 +961,20 @@ Possible actions:
 
 9. get_note:
    When the user asks for ANY saved personal info, address, notes, passwords, or asks about when an event, birthday, anniversary, deadline, task, reminder, or item was saved or scheduled (e.g. "Raiyan er jonmo din kobe?", "আমার ছেলের জন্মদিন কবে?", "TIN submit kobe?", "রাতের ওষুধ কখন খেতে হবে?", "Tishu box ta kobe save kora hoyechilo", "আমার বাসার ঠিকানাটা দাও").
+   Also use "get_note" when the user asks for their saved documents, certificates, NID card, TIN certificate, prescription, or files (e.g. "Roni sikder er NID card ta dau", "TIN certificate dao", "amar prescription ta pathao")!
+   CRITICAL: For "get_note", your "replyText" MUST be an empty string ""! NEVER fabricate or hallucinate conversational promises like "ডকুমেন্টটি খুঁজে দেখছি", "একটু অপেক্ষা করুন", "খুঁজে বের করছি" in replyText, because the backend system retrieves and sends the actual document/note directly!
    Examples in Bengali/Banglish:
-   - "Raiyan er jonmo din kobe?" বা "আমার ছেলের জন্মদিন কবে?" বা "raiyan er birthday kobe" -> action: "get_note", data: { searchQuery: "রাইয়ান জন্মদিন" }
-   - "TIN submit kobe?" বা "টিন সাবমিট কবে" -> action: "get_note", data: { searchQuery: "TIN সাবমিট" }
-   - "রাতের ওষুধ কখন খেতে হবে?" বা "rat er osudh kokhon" -> action: "get_note", data: { searchQuery: "রাতের ওষুধ" }
-   - "Tishu box ta kobe save kora hoyechilo" বা "tishu box ta kobe upload kora hoyechilo" -> action: "get_note", data: { searchQuery: "Tishu box" }
-   - "আমার বাসার ঠিকানাটা দাও" বা "বাসার ঠিকানা কি?" বা "বাসার এড্রেস বলো" বা "basar address ta daw" -> action: "get_note", data: { searchQuery: "বাসার ঠিকানা" }
-   - "অফিসের ঠিকানাটা দাও" বা "office address ta daw" -> action: "get_note", data: { searchQuery: "অফিসের ঠিকানা" }
-   - "আমার রক্তের গ্রুপ কি?" -> action: "get_note", data: { searchQuery: "রক্তের গ্রুপ" }
-   - "ওয়াইফাই পাসওয়ার্ড কত?" -> action: "get_note", data: { searchQuery: "ওয়াইফাই পাসওয়ার্ড" }
-   - "আমার নোটগুলো দেখাও" বা "সব নোট দেখাও" বা "নোট কি কি আছে" -> action: "get_note", data: { searchQuery: "সব" }
+   - "Roni sikder er NID card ta dau" বা "amar nid card dao" -> action: "get_note", data: { searchQuery: "NID" }, replyText: ""
+   - "TIN certificate dau" বা "টিন সার্টিফিকেট দাও" -> action: "get_note", data: { searchQuery: "TIN certificate" }, replyText: ""
+   - "Raiyan er jonmo din kobe?" বা "আমার ছেলের জন্মদিন কবে?" বা "raiyan er birthday kobe" -> action: "get_note", data: { searchQuery: "রাইয়ান জন্মদিন" }, replyText: ""
+   - "TIN submit kobe?" বা "টিন সাবমিট কবে" -> action: "get_note", data: { searchQuery: "TIN সাবমিট" }, replyText: ""
+   - "রাতের ওষুধ কখন খেতে হবে?" বা "rat er osudh kokhon" -> action: "get_note", data: { searchQuery: "রাতের ওষুধ" }, replyText: ""
+   - "Tishu box ta kobe save kora hoyechilo" বা "tishu box ta kobe upload kora hoyechilo" -> action: "get_note", data: { searchQuery: "Tishu box" }, replyText: ""
+   - "আমার বাসার ঠিকানাটা দাও" বা "বাসার ঠিকানা কি?" বা "বাসার এড্রেস বলো" বা "basar address ta daw" -> action: "get_note", data: { searchQuery: "বাসার ঠিকানা" }, replyText: ""
+   - "অফিসের ঠিকানাটা দাও" বা "office address ta daw" -> action: "get_note", data: { searchQuery: "অফিসের ঠিকানা" }, replyText: ""
+   - "আমার রক্তের গ্রুপ কি?" -> action: "get_note", data: { searchQuery: "রক্তের গ্রুপ" }, replyText: ""
+   - "ওয়াইফাই পাসওয়ার্ড কত?" -> action: "get_note", data: { searchQuery: "ওয়াইফাই পাসওয়ার্ড" }, replyText: ""
+   - "আমার নোটগুলো দেখাও" বা "সব নোট দেখাও" বা "নোট কি কি আছে" -> action: "get_note", data: { searchQuery: "সব" }, replyText: ""
    Fields in "data":
    - "searchQuery": string (The specific item, person, event, or topic name being asked about, e.g. "রাইয়ান জন্মদিন", "TIN সাবমিট", "বাসার ঠিকানা", or "সব" to view all saved notes)
 
@@ -1052,8 +1056,9 @@ Possible actions:
 
 18. general_reply (for greetings, conversational questions, or help)
 
-### ABSOLUTE PROHIBITION ON HALLUCINATED DELETIONS:
+### ABSOLUTE PROHIBITION ON HALLUCINATED DELETIONS AND DOCUMENT SEARCHES:
 You MUST NEVER return "general_reply" with a conversational text claiming that an item was deleted (e.g., "আপনার রিমাইন্ডার/ডকুমেন্ট/প্রেসক্রিপশন/নোট মুছে দেওয়া হয়েছে")!
+You MUST NEVER return "general_reply" or conversational "replyText" claiming that you are searching or fetching a document or note (e.g., "ডকুমেন্টটি খুঁজে দেখছি", "একটু অপেক্ষা করুন", "খুঁজে বের করার চেষ্টা করছি")! When user asks for a document, note, info, or file, ALWAYS return action "get_note" with replyText: "".
 If the user asks to delete or remove anything, you MUST return the corresponding deletion action:
 - Documents/Prescriptions/Reports: "delete_document"
 - Reminders/Alarms/Tasks: "delete_reminder" (or "delete_all_reminders" if all)
