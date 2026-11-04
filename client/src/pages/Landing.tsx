@@ -965,6 +965,9 @@ export default function Landing() {
               className="w-full rounded-xl border border-slate-300 px-4 py-3 text-lg tracking-wider outline-none focus:border-[#E2136E] focus:ring-2 focus:ring-[#E2136E]/20"
             />
             <p className="mt-2 text-xs text-slate-500">মাসিক ১৯০ টাকা — bKash দিয়ে পেমেন্ট</p>
+            <p className="mt-1 text-[11px] text-amber-700 bg-amber-50 rounded-lg p-2 border border-amber-200">
+              💡 রবি/এয়ারটেল নম্বরে পেজ আসলে <b>bKash</b> সিলেক্ট করে Subscribe চাপুন। GP ও বাংলালিংক নম্বরে সরাসরি বিকাশ পেজ আসবে।
+            </p>
             <button
               type="submit"
               disabled={isSubscribing}
