@@ -505,7 +505,7 @@ export default function Profile() {
             </div>
 
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-[#e2136e]/10 text-[#e2136e] mb-2">
-              bKash Auto-Subscription
+              bKash Subscription
             </div>
 
             <h2 className="text-xl font-black text-slate-800 mb-2">
@@ -514,13 +514,13 @@ export default function Profile() {
 
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
               {t(
-                'আপনার সাবস্ক্রিপশনটি বিকাশ (bKash Auto-Pay)-এর মাধ্যমে চালু করা হয়েছে। নিরাপত্তার কারণে এটি সরাসরি আপনার বিকাশ অ্যাপ থেকেই বন্ধ করতে হবে।',
-                'Your subscription was enabled via bKash Auto-Pay. For your financial security, please cancel it directly from your bKash app.'
+                'আপনার সাবস্ক্রিপশনটি বিকাশ (bKash)-এর মাধ্যমে চালু করা হয়েছে। নিরাপত্তার কারণে এটি সরাসরি আপনার বিকাশ অ্যাপ থেকেই বন্ধ করতে হবে।',
+                'Your subscription was enabled via bKash. For your security, please cancel it directly from your bKash app.'
               )}
             </p>
 
             {/* Step-by-step guidance */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-left text-xs text-slate-700 space-y-2 mb-5">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-left text-xs text-slate-700 space-y-2.5 mb-5">
               <div className="font-bold text-slate-800 flex items-center gap-1.5 pb-1 border-b border-slate-200">
                 <HelpCircle className="w-4 h-4 text-[#e2136e]" />
                 <span>{t('কীভাবে বন্ধ করবেন:', 'How to cancel:')}</span>
@@ -531,11 +531,11 @@ export default function Profile() {
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#e2136e] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">২</span>
-                <span>{t('হোম স্ক্রিনের ডান পাশের মেনু থেকে "অটো পে (Auto Pay)" অপশনে যান।', 'Go to "Auto Pay" from the bKash home screen menu.')}</span>
+                <span>{t('বিকাশ অ্যাপে "Subscription" (সাবস্ক্রিপশন) মেনু সার্চ করুন বা খুঁজুন।', 'Search for "Subscription" menu in your bKash app.')}</span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#e2136e] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">৩</span>
-                <span>{t('"স্মৃতি লাইফ / bdapps" সাবস্ক্রিপশন সিলেক্ট করে "বন্ধ করুন (Cancel)"-এ ক্লিক করুন।', 'Select "Smriti Life / bdapps" and click "Cancel".')}</span>
+                <span>{t('সেখান থেকে "SmritiLife" সিলেক্ট করে সাবস্ক্রিপশন বাতিল (Cancel) করুন।', 'Select "SmritiLife" and cancel the subscription.')}</span>
               </div>
             </div>
 
