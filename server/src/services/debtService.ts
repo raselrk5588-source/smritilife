@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import Debt, { IDebt, IDebtTransaction } from '../models/Debt';
 import { bnToEnDigits, enToBnDigits, formatTaka } from './expenseService';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import SystemSettings from '../models/SystemSettings';
 
 export interface ParsedDebtItem {
   type: 'lent' | 'borrowed';
@@ -53,11 +55,115 @@ export interface OverallDebtSummary {
 export const cleanPersonName = (raw: string): string => {
   return raw
     .trim()
-    .replace(/^(?:mr|md|মুহা|জনাব|কাকু|মামা|চাচা)\s+/i, '')
-    .replace(/\s+(?:-?কে|-?k|-?ke|-?er|এর|-?theke|থেকে|-?ar|ar)$/i, '')
-    .replace(/(?:-?এর|এর|-?er|-?ar|য়ের|\u09DF\u09C7\u09B0|ের|\u09C7\u09B0|র)$/i, '')
+    .replace(/^(?:mr|md|মুহা|জনাব)\s+/i, '')
+    // Strip trailing helper phrases like "ar kache ami", "এর কাছে আমি", "ami"
+    .replace(/\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:কাছে|kache|kase)\s*(?:আমি|ami)?\s*$/i, '')
+    .replace(/\s+(?:আমি|ami)$/i, '')
+    .replace(/\s+(?:-?কে|-?k|-?ke|-?er|এর|-?theke|থেকে|-?ar)$/i, '')
+    // Bengali possessive suffix only (never strip Latin letters from names like Omar/Peter)
+    .replace(/(?:\u09DF\u09C7\u09B0|\u09C7\u09B0)$/i, '')
     .trim();
 };
+
+/**
+ * Quick pre-filter: does this text look debt related at all?
+ */
+export const looksDebtRelated = (text: string): boolean =>
+  /(?:পাবো|পাব|পাবে|দেবো|দিবো|দেনা|পাওনা|ধার|বাকি|উধার|হাওলাত|করজ|ফেরত|শোধ|কাছে|kache|kase|pabo|debo|dibo|dhar|dena|baki|udhar|paona|pauna|pawna|ferot|sodh|shodh|hawlat)/i.test(text || '');
+
+/**
+ * Parse debt intent with Gemini (accurate person-name extraction for Bangla / Banglish).
+ * Returns null if AI is unavailable or the message is not debt related.
+ */
+export const parseDebtWithAI = async (text: string): Promise<ParsedDebt | null> => {
+  try {
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      const settings: any = await SystemSettings.findOne();
+      apiKey = settings?.geminiApiKey;
+    }
+    if (!apiKey) return null;
+
+    const prompt = `You are a parser for a Bangladeshi personal debt ledger (ধার-দেনা খাতা). Input may be Bangla, Banglish or English, possibly multi-line.
+Return ONLY raw JSON, no markdown:
+{"isDebt":boolean,"action":"add"|"settle"|"query"|"delete"|"none","items":[{"personName":string,"amount":number,"type":"lent"|"borrowed"}],"settlementType":"received"|"paid"|null,"personName":string|null,"deleteScope":"all"|"person"|"lent"|"borrowed"|null}
+Rules:
+- "lent" = user will GET money from the person (e.g. "asad ar kache pabo 3500", "asad ar kache ami pabo 3500 taka", "রনিকে ৫০০ ধার দিলাম", "karim 200 baki nilo").
+- "borrowed" = user OWES money to the person (e.g. "karim pabe 500", "রহিমের কাছ থেকে ১০০০ ধার নিলাম", "dokane baki 300").
+- personName = ONLY the person's name; keep honorifics like vai/bhai/apa if written (e.g. "Manik vai"). NEVER include words like ar, er, kache, ami, pabo, taka, এর, কাছে, আমি, পাবো. Bangla possessive "আসাদের" => "আসাদ".
+- amount: convert Bangla digits / words to a number.
+- action "settle": someone paid back ("asad 1000 ferot dilo" => received) or user paid back ("karim ke 500 sodh korlam" => paid). Put person+amount in items.
+- action "query": asking balance/list ("pawna taka daw", "koto taka pabo", "asad er hisab"). Set personName if a specific person is asked.
+- action "delete": deleting ledger entries ("pawna list delete koro" => lent, "dena delete" => borrowed, "asad er hisab delete" => person, "dhar dena sob delete" => all).
+- If it is NOT about personal debts (normal expense like "bazar 500", reminder, medicine, document), return {"isDebt":false,"action":"none","items":[]}.
+Message:
+"""${text}"""`;
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const models = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    let parsed: any = null;
+    for (const m of models) {
+      try {
+        const model = genAI.getGenerativeModel({ model: m, generationConfig: { temperature: 0, maxOutputTokens: 512 } });
+        const result: any = await Promise.race([
+          model.generateContent(prompt),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+        ]);
+        const raw = result.response.text().trim();
+        const json = raw.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(json ? json[0] : raw);
+        break;
+      } catch (e: any) {
+        console.warn(`Debt AI parse with ${m} failed:`, e?.message || e);
+      }
+    }
+    if (!parsed) return null; // AI unavailable -> caller falls back to regex
+    if (!parsed.isDebt || parsed.action === 'none') return { isQuery: false, notes: '__NOT_DEBT__' };
+
+    const items: ParsedDebtItem[] = (Array.isArray(parsed.items) ? parsed.items : [])
+      .map((i: any) => ({
+        personName: cleanPersonName(String(i.personName || '')),
+        amount: Number(i.amount),
+        type: (i.type === 'borrowed' ? 'borrowed' : 'lent') as 'lent' | 'borrowed'
+      }))
+      .filter((i: ParsedDebtItem) => i.personName && i.amount > 0);
+
+    const pName = parsed.personName ? cleanPersonName(String(parsed.personName)) : undefined;
+
+    switch (parsed.action) {
+      case 'query':
+        return pName ? { isQuery: true, queryType: 'person', personName: pName } : { isQuery: true, queryType: 'all' };
+      case 'delete':
+        return {
+          isQuery: false,
+          isDelete: true,
+          deleteScope: parsed.deleteScope || (pName ? 'person' : 'all'),
+          personName: pName
+        };
+      case 'settle':
+        if (!items[0]) return null;
+        return {
+          isQuery: false,
+          isSettlement: true,
+          settlementType: parsed.settlementType === 'paid' ? 'paid' : 'received',
+          personName: items[0].personName,
+          amount: items[0].amount
+        };
+      case 'add':
+        if (items.length === 0) return null;
+        if (items.length === 1) {
+          return { isQuery: false, isSettlement: false, type: items[0].type, personName: items[0].personName, amount: items[0].amount };
+        }
+        return { isQuery: false, multipleDebts: items };
+      default:
+        return null;
+    }
+  } catch (err) {
+    console.error('parseDebtWithAI error:', err);
+    return null;
+  }
+};
+
 
 /**
  * Parse a single debt/lent line (e.g. from WhatsApp multi-line text or a note)
@@ -70,7 +176,7 @@ export const parseSingleDebtLine = (line: string): ParsedDebtItem | null => {
   // Pattern 1 (lent with kache): [person] [এর/er/ar/র/ের/য়ের]? [কাছে/kache] [টাকা/taka]? [পাবো/পাব/pabo]? [:=]? [amount] [টাকা/tk]? [পাবো/পাব/pabo]?
   // E.g. "Asad ar kache taka pabo 3500", "Manik vai ar kache pabo 3000", "আসাদের কাছে পাবো: ৩,৫০০ টাকা"
   const lentKachePattern = cleanLine.match(
-    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|\u09C7\u09B0|য়ের|\u09DF\u09C7\u09B0)?\s*(?:কাছে|kache)\s*(?:টাকা|taka|tk)?\s*(?:পাবো|পাব|হবে|বাকি|ধার|পাওয়া|pabo|pabo\s*ami)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:পাবো|পাব|হবে|pabo)?$/i
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|\u09C7\u09B0|য়ের|\u09DF\u09C7\u09B0)?\s*(?:কাছে|kache|kase)\s*(?:আমি|ami)?\s*(?:টাকা|taka|tk)?\s*(?:পাবো|পাব|হবে|বাকি|ধার|পাওয়া|pabo|pabo\s*ami)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:পাবো|পাব|হবে|pabo)?$/i
   );
   if (lentKachePattern) {
     const rawPerson = lentKachePattern[1].trim();
@@ -86,7 +192,7 @@ export const parseSingleDebtLine = (line: string): ParsedDebtItem | null => {
 
   // Pattern 1b (lent without kache): [person] [পাবো/পাব/pabo] [:=]? [amount]
   const lentDirectPattern = cleanLine.match(
-    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|\u09C7\u09B0|য়ের|\u09DF\u09C7\u09B0)?\s*(?:পাবো|পাব|pabo)\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?$/i
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|\u09C7\u09B0|য়ের|\u09DF\u09C7\u09B0)?\s*(?:আমি|ami)?\s*(?:পাবো|পাব|pabo)\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?$/i
   );
   if (lentDirectPattern) {
     const rawPerson = lentDirectPattern[1].trim();
@@ -744,7 +850,7 @@ export const getPersonDebtSummary = async (
 };
 
 /**
- * Build WhatsApp Response: Debt Logged
+ * Build WhatsApp Response: Debt Logged (Concise)
  */
 export const buildDebtLoggedMessage = (
   personName: string,
@@ -753,49 +859,46 @@ export const buildDebtLoggedMessage = (
   personRemainingBalance: number
 ): string => {
   const isLent = type === 'lent';
-  const typeLabel = isLent ? 'আমি পাবো (পাওনা 🟢)' : 'আমি দেবো (দেনা 🔴)';
+  const icon = isLent ? '🟢' : '🔴';
+  const typeLabel = isLent ? 'পাওনা (পাবো)' : 'দেনা (দেবো)';
   const formattedAmount = formatTaka(amount);
   const formattedRemaining = formatTaka(personRemainingBalance);
 
+  const extraTotal = personRemainingBalance !== amount
+    ? `\n📊 মোট বাকি: *${formattedRemaining}*`
+    : '';
+
   return (
-    `🤝 *বাকি / ধার হিসাব সংরক্ষিত হয়েছে!*\n\n` +
-    `👤 ব্যক্তি/দোকান: *${personName}*\n` +
-    `💰 এন্ট্রি পরিমাণ: *${formattedAmount}*\n` +
-    `📌 ধরন: *${typeLabel}*\n\n` +
-    `📊 *${personName}-এর সাথে বর্তমান স্থিতি:*\n` +
-    `• মোট বাকি: *${formattedRemaining}* (${isLent ? 'পাওনা' : 'দেনা'})\n\n` +
-    `💡 _হিসাব দেখতে লিখুন: "ধার দেনা" বা "${personName}-এর হিসাব"_\n` +
-    `_স্মৃতি লাইফ - আপনার বিশ্বস্ত ডিজিটাল খাতা_`
+    `✅ *হিসাব সেভ হয়েছে!*\n` +
+    `👤 *${personName}*: *${formattedAmount}* (${icon} ${typeLabel})${extraTotal}`
   );
 };
 
 /**
- * Build WhatsApp Response: Multiple Debts Logged
+ * Build WhatsApp Response: Multiple Debts Logged (Concise)
  */
 export const buildMultipleDebtsLoggedMessage = (
   debts: Array<{ personName: string; amount: number; type: 'lent' | 'borrowed' }>,
   overallSummary: OverallDebtSummary
 ): string => {
-  let listText = '';
-  debts.forEach((d, idx) => {
-    const isLent = d.type === 'lent';
-    const icon = isLent ? '🟢' : '🔴';
-    const label = isLent ? 'পাবো' : 'দেবো';
-    listText += `${idx + 1}. ${icon} *${d.personName}*: ${formatTaka(d.amount)} (${label})\n`;
-  });
+  const listText = debts
+    .map((d, idx) => {
+      const isLent = d.type === 'lent';
+      const icon = isLent ? '🟢' : '🔴';
+      const label = isLent ? 'পাবো' : 'দেবো';
+      return `${idx + 1}. ${icon} *${d.personName}*: ${formatTaka(d.amount)} (${label})`;
+    })
+    .join('\n');
 
-  return (
-    `🤝 *ধার-দেনা ও বাকি হিসাব সংরক্ষিত হয়েছে!*\n\n` +
-    `${listText.trim()}\n\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `🟢 *মোট পাওনা:* ${formatTaka(overallSummary.totalReceivable)}\n` +
-    `🔴 *মোট দেনা:* ${formatTaka(overallSummary.totalPayable)}\n\n` +
-    `💡 _বিস্তারিত জানতে লিখুন: "পাওনা টাকা দাও" বা "ধার দেনা"_`
-  );
+  const totals: string[] = [];
+  if (overallSummary.totalReceivable > 0) totals.push(`🟢 মোট পাওনা: *${formatTaka(overallSummary.totalReceivable)}*`);
+  if (overallSummary.totalPayable > 0) totals.push(`🔴 মোট দেনা: *${formatTaka(overallSummary.totalPayable)}*`);
+
+  return `✅ *হিসাব সেভ হয়েছে!*\n\n${listText}${totals.length ? `\n\n${totals.join('\n')}` : ''}`;
 };
 
 /**
- * Build WhatsApp Response: Settlement Recorded
+ * Build WhatsApp Response: Settlement Recorded (Concise)
  */
 export const buildDebtSettledMessage = (
   personName: string,
@@ -804,22 +907,15 @@ export const buildDebtSettledMessage = (
   remainingForPerson: number
 ): string => {
   const isReceived = settlementType === 'received';
-  const actionLabel = isReceived ? 'পাওনা উসুল / ফেরত পেয়েছি 🟢' : 'দেনা পরিশোধ / শোধ করেছি 🔴';
+  const actionLabel = isReceived ? 'ফেরত পেয়েছি 🟢' : 'পরিশোধ করেছি 🔴';
   const formattedSettled = formatTaka(settledAmount);
-  const formattedRemaining = formatTaka(remainingForPerson);
-
   const statusNote = remainingForPerson <= 0
-    ? `✨ *হিসাব সম্পূর্ণ শোধ হয়ে গেছে!*`
-    : `• অবশিষ্ট বাকি: *${formattedRemaining}*`;
+    ? `✨ সম্পূর্ণ শোধ!`
+    : `📊 অবশিষ্ট বাকি: *${formatTaka(remainingForPerson)}*`;
 
   return (
-    `✅ *টাকা ফেরত / পরিশোধ হিসাব জমা হয়েছে!*\n\n` +
-    `👤 ব্যক্তি: *${personName}*\n` +
-    `💵 জমার পরিমাণ: *${formattedSettled}*\n` +
-    `📌 বিবরণ: *${actionLabel}*\n\n` +
-    `📊 *বর্তমান স্থিতি:*\n` +
-    `${statusNote}\n\n` +
-    `_স্মৃতি লাইফ - আপনার বিশ্বস্ত ডিজিটাল খাতা_`
+    `✅ *${personName}*: *${formattedSettled}* (${actionLabel})\n` +
+    `${statusNote}`
   );
 };
 
@@ -833,92 +929,68 @@ export const buildDebtDeletedMessage = (
 ): string => {
   if (deletedCount === 0) {
     if (scope === 'person' && personName) {
-      return `ℹ️ *${personName}*-এর নামে কোনো সক্রিয় ধার-দেনার রেকর্ড পাওয়া যায়নি।`;
+      return `ℹ️ *${personName}*-এর নামে কোনো সক্রিয় ধার-দেনার হিসাব পাওয়া যায়নি।`;
     }
-    return `ℹ️ আপনার কোনো সক্রিয় ধার-দেনার রেকর্ড পাওয়া যায়নি।`;
+    return `ℹ️ কোনো সক্রিয় ধার-দেনার হিসাব পাওয়া যায়নি।`;
   }
 
   if (scope === 'person' && personName) {
-    return `🗑️ *${personName}*-এর সব (${enToBnDigits(deletedCount)}টি) ধার-দেনার হিসাব সফলভাবে মুছে ফেলা হয়েছে!`;
+    return `🗑️ *${personName}*-এর ধার-দেনার হিসাব মুছে ফেলা হয়েছে।`;
   }
   if (scope === 'lent') {
-    return `🗑️ আপনার সব (${enToBnDigits(deletedCount)}টি) পাওনা টাকার হিসাব তালিকা সফলভাবে মুছে ফেলা হয়েছে!`;
+    return `🗑️ সব পাওনা টাকার হিসাব মুছে ফেলা হয়েছে।`;
   }
   if (scope === 'borrowed') {
-    return `🗑️ আপনার সব (${enToBnDigits(deletedCount)}টি) দেনার হিসাব তালিকা সফলভাবে মুছে ফেলা হয়েছে!`;
+    return `🗑️ সব দেনার হিসাব মুছে ফেলা হয়েছে।`;
   }
-  return `🗑️ আপনার ধার-দেনা খাতার সব (${enToBnDigits(deletedCount)}টি) হিসাব সফলভাবে মুছে ফেলা হয়েছে!`;
+  return `🗑️ ধার-দেনা খাতার সব হিসাব মুছে ফেলা হয়েছে।`;
 };
 
 /**
- * Build WhatsApp Response: Overall Debt Summary
+ * Build WhatsApp Response: Overall Debt Summary (Concise)
  */
 export const buildDebtSummaryMessage = (summary: OverallDebtSummary): string => {
   const formattedReceivable = formatTaka(summary.totalReceivable);
   const formattedPayable = formatTaka(summary.totalPayable);
 
-  const netBalanceSign = summary.netBalance >= 0 ? '+' : '';
-  const formattedNet = `${netBalanceSign}${formatTaka(Math.abs(summary.netBalance))}`;
-  const netBadge = summary.netBalance > 0
-    ? '🟢 উদ্বৃত্ত (পাওনা বেশি)'
-    : summary.netBalance < 0
-    ? '🔴 ঘাটতি (দেনা বেশি)'
-    : '⚪ ব্যালেন্স সমান (০)';
+  const lines: string[] = [
+    `🤝 *ধার-দেনা ও বাকি খাতা*`,
+    `🟢 মোট পাওনা: *${formattedReceivable}*`,
+    `🔴 মোট দেনা: *${formattedPayable}*`
+  ];
 
-  let receivableList = '• কোনো সক্রিয় পাওনা নেই';
   if (summary.topReceivables.length > 0) {
-    receivableList = summary.topReceivables
-      .slice(0, 5)
-      .map(r => `• ${r.personName}: *${formatTaka(r.amount)}*`)
-      .join('\n');
+    lines.push(`\n👥 *পাওনা তালিকা:*`);
+    summary.topReceivables.slice(0, 10).forEach(r => {
+      lines.push(`• ${r.personName}: *${formatTaka(r.amount)}*`);
+    });
   }
 
-  let payableList = '• কোনো দেনা নেই';
   if (summary.topPayables.length > 0) {
-    payableList = summary.topPayables
-      .slice(0, 5)
-      .map(p => `• ${p.personName}: *${formatTaka(p.amount)}*`)
-      .join('\n');
+    lines.push(`\n🏪 *দেনা তালিকা:*`);
+    summary.topPayables.slice(0, 10).forEach(p => {
+      lines.push(`• ${p.personName}: *${formatTaka(p.amount)}*`);
+    });
   }
 
-  return (
-    `🤝 *আপনার ধার-দেনা ও বাকি খাতা*\n\n` +
-    `🟢 *আমি পাবো (মোট পাওনা):* ${formattedReceivable}\n` +
-    `🔴 *আমি দেবো (মোট দেনা):* ${formattedPayable}\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `⚖️ *নেট ব্যালেন্স:* ${formattedNet} (${netBadge})\n\n` +
-    `👥 *কাদের কাছে পাওনা:*\n` +
-    `${receivableList}\n\n` +
-    `🏪 *দেনা তালিকা:*\n` +
-    `${payableList}\n\n` +
-    `💡 _কারো বিস্তারিত জানতে লিখুন: "[নাম]-এর হিসাব"_`
-  );
+  if (summary.topReceivables.length === 0 && summary.topPayables.length === 0) {
+    lines.push(`\n✨ বর্তমানে কোনো সক্রিয় দেনা-পাওনা নেই।`);
+  }
+
+  return lines.join('\n');
 };
 
 /**
- * Build WhatsApp Response: Person Debt Summary
+ * Build WhatsApp Response: Person Debt Summary (Concise)
  */
 export const buildPersonDebtMessage = (summary: DebtPersonSummary): string => {
   const pName = summary.personName;
-  let statusText = '';
-
   if (summary.status === 'receivable') {
-    statusText = `🟢 *আপনি পাবেন (পাওনা):* ${formatTaka(summary.totalLentRemaining)}`;
+    return `👤 *${pName}*\n🟢 আপনি পাবেন (পাওনা): *${formatTaka(summary.totalLentRemaining)}*`;
   } else if (summary.status === 'payable') {
-    statusText = `🔴 *আপনি দেবেন (দেনা):* ${formatTaka(summary.totalBorrowedRemaining)}`;
-  } else {
-    statusText = `✨ *হিসাব একদম শূন্য (কোনো দেনা-পাওনা নেই)*`;
+    return `👤 *${pName}*\n🔴 আপনি দেবেন (দেনা): *${formatTaka(summary.totalBorrowedRemaining)}*`;
   }
-
-  return (
-    `👤 *${pName}-এর সাথে হিসাবের খতিয়ান*\n\n` +
-    `${statusText}\n\n` +
-    `📋 *সর্বমোট লেনদেন:*\n` +
-    `• মোট ধার দিয়েছি: ${formatTaka(summary.totalLent)}\n` +
-    `• মোট ধার নিয়েছি: ${formatTaka(summary.totalBorrowed)}\n` +
-    `• মোট লেনদেন সংখ্যা: ${enToBnDigits(summary.itemsCount)} টি\n\n` +
-    `💡 _টাকা ফেরত পেলে লিখুন: "${pName} [টাকার পরিমাণ] ফেরত দিলো"_`
-  );
+  return `👤 *${pName}*\n✨ হিসাব শূন্য (কোনো দেনা-পাওনা নেই)`;
 };
 
 /**

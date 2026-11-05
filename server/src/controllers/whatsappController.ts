@@ -44,6 +44,9 @@ import {
 } from '../services/expenseService';
 import {
   parseDebtInput,
+  parseDebtWithAI,
+  looksDebtRelated,
+  cleanPersonName as cleanDebtPersonName,
   parseSingleDebtLine,
   recordDebt,
   deleteDebts,
@@ -56,6 +59,7 @@ import {
   buildDebtDeletedMessage,
   buildDebtSummaryMessage,
   buildPersonDebtMessage,
+  ParsedDebt,
   ParsedDebtItem
 } from '../services/debtService';
 import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes, analyzeDocumentWithAI, isConsumableItem, extractNewDocumentTitle } from '../services/documentService';
@@ -169,7 +173,7 @@ export const ensureLegacyDebtNotesMigrated = async (userId: any): Promise<number
 };
 
 /**
- * Clean up accidental expenses created from debt sentences
+ * Clean up accidental expenses created from debt sentences and sanitize dirty Debt personNames
  */
 export const cleanupAccidentalDebtExpenses = async (userId: any): Promise<number> => {
   try {
@@ -180,6 +184,19 @@ export const cleanupAccidentalDebtExpenses = async (userId: any): Promise<number
         { title: /(?:asad\s*ar\s*kache|manik\s*vai|pias\s*ar\s*kache)/i }
       ]
     });
+
+    const dirtyDebts = await Debt.find({
+      userId,
+      personName: /(?:kache|কাছে|\bami\b|আমি|\bar\s+kache|\ber\s+kache)/i
+    });
+    for (const d of dirtyDebts) {
+      const cleaned = cleanDebtPersonName(d.personName);
+      if (cleaned && cleaned !== d.personName) {
+        d.personName = cleaned;
+        await d.save();
+      }
+    }
+
     return res.deletedCount || 0;
   } catch (err) {
     console.error('Error cleaning accidental debt expenses:', err);
@@ -3778,10 +3795,15 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // --- STEP 2.9: Udhar / Debt Tracker Fast-Path (0 Cost, Instant Response) ---
+        // --- STEP 2.9: Udhar / Debt Tracker (AI-Powered + Fast Regex Fallback) ---
         const isReminderAction = /মনে\s*করিয়ে|ডাকবে|তুলে\s*দিও|wake\s*me|অ্যালার্ম|alarm/i.test(cleanText);
-        if (!isReminderAction) {
-          const parsedDebt = parseDebtInput(cleanText);
+        if (!isReminderAction && looksDebtRelated(cleanText)) {
+          let parsedDebt: ParsedDebt | null = await parseDebtWithAI(cleanText);
+          if (parsedDebt && parsedDebt.notes === '__NOT_DEBT__') {
+            parsedDebt = null;
+          } else if (!parsedDebt) {
+            parsedDebt = parseDebtInput(cleanText);
+          }
           if (parsedDebt) {
             await cleanupAccidentalDebtExpenses(user._id);
             if (parsedDebt.isQuery) {
