@@ -214,8 +214,14 @@ export async function parseMedicinePrescriptionText(text: string): Promise<{
   const raw = text.trim();
   const lower = raw.toLowerCase();
 
-  // If user has delete/cancel intent, NEVER parse as new prescription
+  // If user has delete/cancel intent or is asking a question/inquiry, NEVER parse as new prescription
   if (/(?:delete|remove|del|ডিলিট|মুছে|মুছ|বাতিল|cancel|ক্যান্সেল|ফেলে|বাদ)\b/i.test(lower)) {
+    return null;
+  }
+  if (
+    raw.endsWith('?') ||
+    /\b(?:ki\s*ki|কি\s*কি|কী\s*কী|kon\s*kon|কোন\s*কোন|ki\s+osud|ki\s+osudh|কি\s+ওষুধ|কী\s+ওষুধ|kono\s*list|কোনো\s*লিস্ট|list\s*ache|list\s*axhe|list\s*ase|লিস্ট\s*আছে|তালিকা\s*আছে|ache\s*kina|axhe\s*kina|ase\s*kina|আছে\s*কিনা|jante\s*caichi|jante\s*chai|জানতে\s*চাই|জানতে\s*চাচ্ছি|koy\s*din|koi\s*din|koto\s*din|কয়দিন|কতদিন|বাকি\s*আছে|baki\s*ache|baki\s*ase|কখন\s*খাব|kokhon\s*khabo)\b/i.test(lower)
+  ) {
     return null;
   }
 
@@ -575,8 +581,13 @@ Return JSON ONLY with this exact schema:
     cleanName = cleanName.replace(/([a-zA-Z\u0980-\u09FF]+)\((\d+)\)/g, '$1 ($2)');
     if (cleanName.length > 0) cleanName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
 
-    // Reject non-medicine junk names
-    if (!cleanName || cleanName.length < 2 || /^(?:reminder|reminder\s*diow|diow|রিমাইন্ডার|দিও|osudh|medicine|ওষুধ|ঔষধ)$/i.test(cleanName.trim())) {
+    // Reject non-medicine junk names or question words
+    if (
+      !cleanName ||
+      cleanName.length < 2 ||
+      /^(?:reminder|reminder\s*diow|diow|রিমাইন্ডার|দিও|osudh|osud|medicine|ওষুধ|ঔষধ|ki|ki\s*ki|কি|কি\s*কি|কী|কী\s*কী|list|লিস্ট)$/i.test(cleanName.trim()) ||
+      /\b(?:jante|caichi|chaichi|kono\s*list|ache\s*kina|axhe\s*kina|khite\s*hobe|khete\s*hobe|জানতে|চাইছি|লিস্ট\s*আছে)\b/i.test(cleanName)
+    ) {
       continue;
     }
 
@@ -1024,9 +1035,9 @@ export async function handleMedicineInquiry(userId: any, queryText: string, user
     return null;
   }
 
-  // Check if intent is inquiring about duration / remaining days / medicine status
-  const hasDurationIntent = /(?:কয়দিন|কদ্দিন|কতদিন|কত\s*দিন|কয়\s*দিন|koi\s*din|koto\s*din|koy\s*din|koddin|how\s*many\s*days|শেষ\s*হবে|বাকি|baki|চলবে|খাব|খাবো|khabo|খেতে\s*হবে|khete\s*hobe|khete\s*hbe|খাওয়া\s*লাগবে|খাবো\s*আর|খাব\s*আর|khabo\s*ar|রিমাইন্ডার\s*কি|কখন\s*খাব|কখন\s*খাবো)/i.test(clean);
-  const hasMedicineIntent = /(?:ওষুধ|ঔষধ|মেডিসিন|medicine|med|ট্যাবলেট|tablet|কোর্স|course)/i.test(clean);
+  // Check if intent is inquiring about duration / remaining days / medicine list / routine status
+  const hasDurationIntent = /(?:কয়দিন|কদ্দিন|কতদিন|কত\s*দিন|কয়\s*দিন|koi\s*din|koto\s*din|koy\s*din|koddin|how\s*many\s*days|শেষ\s*হবে|বাকি|baki|চলবে|খাব|খাবো|khabo|খেতে\s*হবে|khete\s*hobe|khite\s*hobe|khete\s*hbe|খাওয়া\s*লাগবে|খাবো\s*আর|খাব\s*আর|khabo\s*ar|রিমাইন্ডার\s*কি|কখন\s*খাব|কখন\s*খাবো|ki\s*ki|কি\s*কি|কী\s*কী|kon\s*kon|কোন\s*কোন|ki\s+osud|ki\s+osudh|কি\s+ওষুধ|কী\s+ওষুধ|লিস্ট|তালিকা|list|ache\s*kina|axhe\s*kina|ase\s*kina|আছে\s*কিনা|jante|জানতে|দেখাও|dekhao|বলো|bolo)/i.test(clean) || clean.endsWith('?');
+  const hasMedicineIntent = /(?:ওষুধ|ঔষধ|মেডিসিন|medicine|med|osudh|osud|ousodh|ousud|oshudh|oshud|ট্যাবলেট|tablet|ক্যাপসুল|capsule|সিরাপ|syrup|কোর্স|course)/i.test(clean);
   const hasDirectRemainingIntent = /(?:khabo\s*r\s*koto\s*din|r\s*koto\s*din\s*khabo|r\s*koy\s*din\s*khabo|r\s*koi\s*din\s*khabo|khete\s*hobe\s*r\s*(?:koto|koi|koy)\s*din|r\s*(?:koto|koi|koy)\s*din\s*khete\s*hobe|আর\s*কত\s*দিন\s*খাব|আর\s*কয়\s*দিন\s*খাব|কত\s*দিন\s*খেতে\s*হবে|কয়\s*দিন\s*খেতে\s*হবে|আর\s*কত\s*দিন\s*খেতে\s*হবে|আর\s*কয়\s*দিন\s*খেতে\s*হবে|r\s*(?:koto|koi|koy)\s*din\s*baki|আর\s*কত\s*দিন\s*বাকি|আর\s*কয়\s*দিন\s*বাকি)/i.test(clean);
 
   const aggregated = await getAggregatedMedicines(userId);
@@ -1039,10 +1050,13 @@ export async function handleMedicineInquiry(userId: any, queryText: string, user
   }
 
   // Must have an inquiry or status intent
-  const isAskingForStatus = hasDurationIntent || hasMedicineIntent || hasDirectRemainingIntent || clean.includes('status') || clean.includes('reminder');
+  const isAskingForStatus = hasDurationIntent || hasDirectRemainingIntent || clean.includes('status') || /^(?:আমার\s*)?(?:ওষুধ|ঔষধ|মেডিসিন|osud|osudh|medicine)(?:ের)?\s*(?:রিমাইন্ডার|তালিকা|লিস্ট|list|reminder)?$/i.test(clean);
   if (!isAskingForStatus) {
     return null;
   }
+
+  // Clear any accidental pending medicine prompt if user is asking an inquiry
+  userPendingMedicineState.delete(userId.toString());
 
   const isEng = isPureEnglishText(queryText);
   const salutation = userHonorific ? ` ${userHonorific}` : '';
@@ -1052,8 +1066,43 @@ export async function handleMedicineInquiry(userId: any, queryText: string, user
 
   if (aggregated.length === 0) {
     return isEng
-      ? `💊 You currently don't have any medicine reminders saved${salutation}. You can send me your prescription (e.g. "Napa morning noon night 7 days") and I'll schedule them for you!`
-      : `💊 আপনার কোনো ওষুধের রিমাইন্ডার বর্তমানে সেভ করা নেই${salutation}।\n\nআপনি প্রেসক্রিপশন বা ওষুধের নাম ও নিয়ম লিখে পাঠালে (যেমন: *"নাপা সকাল দুপুর রাত ৭ দিন"*) আমি স্বয়ংক্রিয়ভাবে রিমাইন্ডার সেট করে দেবো! 🌸`;
+      ? `💊 You currently don't have any medicine reminders saved${salutation}.`
+      : `💊 আপনার কোনো ওষুধের রিমাইন্ডার বর্তমানে সেভ করা নেই${salutation}।`;
+  }
+
+  // Check if user is asking about a specific time slot (e.g. "sokal a ki ki osud khete hobe")
+  const isAskingMorning = /\b(?:সকাল|সকালে|সকালের|sokal|shokal|sokale|shokale|morning)\b/i.test(clean);
+  const isAskingNoon = /\b(?:দুপুর|দুপুরে|দুপুরের|dupur|dupure|noon)\b/i.test(clean);
+  const isAskingNight = /\b(?:রাত|রাতে|রাতের|rat|raat|rate|raate|night)\b/i.test(clean);
+  const targetSlot = isAskingMorning && !isAskingNoon && !isAskingNight ? 'সকাল'
+                   : isAskingNoon && !isAskingMorning && !isAskingNight ? 'দুপুর'
+                   : isAskingNight && !isAskingMorning && !isAskingNoon ? 'রাত'
+                   : null;
+
+  if (targetSlot && !matchedMedName) {
+    const now = new Date();
+    const slotMeds = aggregated.filter(m => {
+      let end = m.endDate ? new Date(m.endDate) : null;
+      if (!end && m.startDate) {
+        end = new Date(m.startDate);
+        end.setDate(end.getDate() + (m.durationDays || 7) - 1);
+      }
+      const diffDays = end ? Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 1;
+      const isEnded = (end && diffDays <= 0) || m.status === 'Completed';
+      return !isEnded && m.routines.some(r => r.slot === targetSlot);
+    });
+
+    if (slotMeds.length === 0) {
+      return `💊 বর্তমানে *${targetSlot}*-বেলা খাওয়ার জন্য কোনো সক্রিয় ওষুধের রিমাইন্ডার নেই${salutation}।`;
+    }
+
+    const slotLines = slotMeds.map((m, idx) => {
+      const r = m.routines.find(rt => rt.slot === targetSlot) || m.routines[0];
+      const mealStr = r?.mealTiming === 'before' ? 'খাবারের আগে' : 'খাবারের পরে';
+      return `${toBn(idx + 1)}. 💊 *${m.name}* (${mealStr})`;
+    }).join('\n');
+
+    return `${slotIcons[targetSlot] || '💊'} *${targetSlot}-বেলার ওষুধের তালিকা${salutation}:*\n\n${slotLines}`;
   }
 
   // Determine target medicine: either explicitly matched (e.g. "pana", "napa") OR if user only has 1 medicine registered
