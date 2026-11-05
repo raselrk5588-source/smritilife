@@ -272,8 +272,8 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     }
   }
 
-  // 3. Yesterday: গতকাল, গত কাল, কালকের, gotokal, gotokalker, gotokaler, gotokaal, goto kal, kalker, yesterday
-  const yesterdayRegex = /(?:গত\s*কাল(?:কের?|ের)?|গতকাল(?:কের?|ের)?|কালকের?|goto\s*ka?l(?:ker?|er)?|gotoka?l(?:ker?|er)?|kalke?r|yesterday(?:'s)?)/i;
+  // 3. Yesterday: গতকাল, গত কাল, কালকের, gotokal, gotokalker, gotokaler, kotokalker, koto kalker, kalker, yesterday
+  const yesterdayRegex = /(?:গত\s*কাল(?:কের?|ের)?|গতকাল(?:কের?|ের)?|কালকের?|(?:goto|koto)\s*ka?l(?:ker?|er)?|(?:gotoka?l|kotoka?l)(?:ker?|er)?|kalke?r|yesterday(?:'s)?)/i;
   if (yesterdayRegex.test(clean)) {
     const yDate = new Date(referenceDate);
     yDate.setDate(yDate.getDate() - 1);
@@ -429,16 +429,131 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
   return null;
 };
 
+const BANGLISH_PHRASE_TO_BANGLA: Array<[RegExp, string]> = [
+  [/\b(?:riksha|rickshaw|riksa|ricksha)\s*(?:vara|bhara|bara|fare)\b/gi, 'রিকশা ভাড়া'],
+  [/\b(?:auto|oto)\s*(?:vara|bhara|bara|fare)\b/gi, 'অটো ভাড়া'],
+  [/\bcng\s*(?:vara|bhara|bara|fare)\b/gi, 'সিএনজি ভাড়া'],
+  [/\b(?:bus|bas)\s*(?:vara|bhara|bara|fare|ticket|tikit)\b/gi, 'বাস ভাড়া'],
+  [/\b(?:train|tren)\s*(?:vara|bhara|bara|fare|ticket|tikit)\b/gi, 'ট্রেন ভাড়া'],
+  [/\b(?:leguna|laguna)\s*(?:vara|bhara|bara|fare)\b/gi, 'লেগুনা ভাড়া'],
+  [/\b(?:basa|basha|bari|house)\s*(?:vara|bhara|bara|rent)\b/gi, 'বাসা ভাড়া'],
+  [/\b(?:room|rum)\s*(?:vara|bhara|bara|rent)\b/gi, 'রুম ভাড়া'],
+  [/\bmess\s*(?:vara|bhara|bara|rent)\b/gi, 'মেস ভাড়া'],
+  [/\b(?:current|bidyut|biddut|electric|electricity)\s*(?:bill|bil)\b/gi, 'বিদ্যুৎ বিল'],
+  [/\bgas\s*(?:bill|bil)\b/gi, 'গ্যাস বিল'],
+  [/\b(?:pani|water)\s*(?:bill|bil)\b/gi, 'পানি বিল'],
+  [/\b(?:wifi|internet|net)\s*(?:bill|bil)\b/gi, 'ওয়াইফাই বিল'],
+  [/\bdish\s*(?:bill|bil)\b/gi, 'ডিশ বিল'],
+  [/\b(?:mobile|phone|sim)?\s*(?:recharge|flexiload|topup)\b/gi, 'মোবাইল রিচার্জ'],
+  [/\b(?:kacha|kancha)\s*(?:bazar|bazaar)\b/gi, 'কাঁচা বাজার'],
+  [/\b(?:sokaler|shokaler)\s*(?:nasta|nashta|khabar)\b/gi, 'সকালের নাস্তা'],
+  [/\b(?:bikaler|bikal)\s*(?:nasta|nashta)\b/gi, 'বিকালের নাস্তা'],
+  [/\b(?:dupurer|dupur)\s*(?:khabar|khawar|lunch)\b/gi, 'দুপুরের খাবার'],
+  [/\b(?:rater|raater)\s*(?:khabar|khawar|dinner)\b/gi, 'রাতের খাবার'],
+  [/\b(?:gorur|goru)\s*(?:mangsho|mangso|goshto)\b/gi, 'গরুর মাংস'],
+  [/\b(?:khashir|khashi)\s*(?:mangsho|mangso|goshto)\b/gi, 'খাসির মাংস'],
+  [/\b(?:murgir|murgi)\s*(?:mangsho|mangso|goshto)\b/gi, 'মুরগির মাংস'],
+  [/\b(?:school|skul)\s*(?:fee|fees|beton)\b/gi, 'স্কুল ফি'],
+  [/\bcollege\s*(?:fee|fees|beton)\b/gi, 'কলেজ ফি'],
+  [/\b(?:tuition|tution)\s*(?:fee|fees|beton)?\b/gi, 'টিউশন ফি'],
+  [/\bcoaching\s*(?:fee|fees|beton)?\b/gi, 'কোচিং ফি'],
+  [/\b(?:chul\s*kata|hair\s*cut|haircut)\b/gi, 'চুল কাটা'],
+  [/\b(?:ice\s*cream|icecream)\b/gi, 'আইসক্রিম'],
+  [/\b(?:t-shirt|tshirt)\b/gi, 'টি-শার্ট']
+];
+
+const BANGLISH_WORD_TO_BANGLA: Record<string, string> = {
+  // Transport
+  riksha: 'রিকশা', rickshaw: 'রিকশা', riksa: 'রিকশা', ricksha: 'রিকশা',
+  vara: 'ভাড়া', bhara: 'ভাড়া', bara: 'ভাড়া', fare: 'ভাড়া',
+  auto: 'অটো', oto: 'অটো', cng: 'সিএনজি', bus: 'বাস', bas: 'বাস',
+  train: 'ট্রেন', metro: 'মেট্রোরেল', uber: 'উবার', pathao: 'পাঠাও',
+  leguna: 'লেগুনা', laguna: 'লেগুনা', bike: 'বাইক', petrol: 'পেট্রোল',
+  octane: 'অকটেন', okten: 'অকটেন', diesel: 'ডিজেল', ticket: 'টিকিট', tikit: 'টিকিট', toll: 'টোল',
+  // Health
+  medicine: 'ওষুধ', medecin: 'ওষুধ', medecine: 'ওষুধ', medisin: 'ওষুধ', medicne: 'ওষুধ',
+  osud: 'ওষুধ', oshud: 'ওষুধ', oushud: 'ওষুধ', osudh: 'ওষুধ', oshudh: 'ওষুধ',
+  daktar: 'ডাক্তার', doctor: 'ডাক্তার', dr: 'ডাক্তার', hospital: 'হাসপাতাল',
+  clinic: 'ক্লিনিক', pharmacy: 'ফার্মেসি', pharma: 'ফার্মেসি', test: 'টেস্ট',
+  saline: 'স্যালাইন', choshma: 'চশমা',
+  // Food & Grocery
+  bazar: 'বাজার', bazaar: 'বাজার', khabar: 'খাবার', khawar: 'খাবার', food: 'খাবার',
+  nasta: 'নাস্তা', nashta: 'নাস্তা', breakfast: 'নাস্তা',
+  lunch: 'লাঞ্চ', dinner: 'ডিনার',
+  cha: 'চা', tea: 'চা', coffee: 'কফি', kofi: 'কফি',
+  biriyani: 'বিরিয়ানি', biryani: 'বিরিয়ানি', kacchi: 'কাচ্চি', tehari: 'তেহারি', khichuri: 'খিচুড়ি',
+  bhat: 'ভাত', vat: 'ভাত', ruti: 'রুটি', porota: 'পরোটা', paratha: 'পরোটা',
+  mach: 'মাছ', fish: 'মাছ', mangsho: 'মাংস', mangso: 'মাংস', meat: 'মাংস',
+  murgi: 'মুরগি', chicken: 'চিকেন', beef: 'গরুর মাংস', mutton: 'খাসির মাংস',
+  dim: 'ডিম', egg: 'ডিম', dudh: 'দুধ', milk: 'দুধ',
+  sobji: 'সবজি', shobji: 'সবজি', fol: 'ফল', fruit: 'ফল', fruits: 'ফল',
+  chal: 'চাল', rice: 'চাল', dal: 'ডাল', tel: 'তেল', oil: 'তেল',
+  chini: 'চিনি', sugar: 'চিনি', lobon: 'লবণ', salt: 'লবণ',
+  peyaj: 'পেঁয়াজ', piyaj: 'পেঁয়াজ', alu: 'আলু', aloo: 'আলু',
+  roshun: 'রসুন', ada: 'আদা', mosla: 'মসলা', moshla: 'মসলা',
+  misti: 'মিষ্টি', mishti: 'মিষ্টি', fuchka: 'ফুচকা', chotpoti: 'চটপটি',
+  singara: 'সিঙ্গারা', shingara: 'সিঙ্গারা', samucha: 'সমুচা', samosa: 'সমুচা',
+  burger: 'বার্গার', pizza: 'পিজ্জা', biscuit: 'বিস্কুট', biskut: 'বিস্কুট',
+  cake: 'কেক', juice: 'জুস', pani: 'পানি', water: 'পানি',
+  hotel: 'হোটেল', restaurant: 'রেস্টুরেন্ট',
+  // Bills
+  bill: 'বিল', bil: 'বিল', wifi: 'ওয়াইফাই', internet: 'ইন্টারনেট', net: 'ইন্টারনেট',
+  current: 'বিদ্যুৎ বিল', bidyut: 'বিদ্যুৎ', biddut: 'বিদ্যুৎ', electricity: 'বিদ্যুৎ বিল',
+  gas: 'গ্যাস', rent: 'ভাড়া', recharge: 'রিচার্জ', mb: 'ডাটা প্যাক', dish: 'ডিশ বিল',
+  // Shopping
+  shopping: 'কেনাকাটা', kenakata: 'কেনাকাটা', jama: 'জামা', kapor: 'কাপড়', cloth: 'কাপড়',
+  shirt: 'শার্ট', pant: 'প্যান্ট', panjabi: 'পাঞ্জাবি', shari: 'শাড়ি', saree: 'শাড়ি',
+  dress: 'ড্রেস', juta: 'জুতা', juto: 'জুতা', shoes: 'জুতা', shoe: 'জুতা',
+  sandal: 'স্যান্ডেল', bag: 'ব্যাগ', ghori: 'ঘড়ি', watch: 'ঘড়ি',
+  cosmetics: 'কসমেটিকস', shaban: 'সাবান', soap: 'সাবান', shampoo: 'শ্যাম্পু',
+  paste: 'টুথপেস্ট', toothpaste: 'টুথপেস্ট', saloon: 'সেলুন', salon: 'সেলুন',
+  // Education & Entertainment
+  boi: 'বই', book: 'বই', khata: 'খাতা', kolom: 'কলম', pen: 'কলম',
+  tuition: 'টিউশন', tution: 'টিউশন', coaching: 'কোচিং', beton: 'বেতন', fee: 'ফি', fees: 'ফি',
+  gift: 'উপহার', upohar: 'উপহার', movie: 'সিনেমা', cinema: 'সিনেমা',
+  tour: 'ভ্রমণ', party: 'পার্টি', dan: 'দান', donation: 'দান'
+};
+
 /**
- * Clean unwanted prefixes and action verbs from expense title
+ * Convert Banglish / English expense item title into clean Bengali script
  */
-const cleanTitleText = (raw: string): string => {
-  const cleaned = raw
+export const toBanglaExpenseTitle = (raw: string): string => {
+  if (!raw) return '';
+  let text = raw
+    .trim()
     .replace(/^(?:আজকের?|আজকে?|আজ|aj|ajke|ajker|কালকের?|কালকে?|কাল|গতকালকের?|গতকালের?|গতকাল|পরশু|গত\s*পরশু|আমি|আমার|ami|amar)\s+/i, '')
     .replace(/^(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|expense|cost)\s*[:=-]?\s*/i, '')
-    .replace(/\s+(?:দিয়েছি|দিয়েছে|দিলাম|দিয়া|দিয়ে|কিনেছি|কিনেছে|কিনলাম|কিনসি|কেনা\s*হয়েছে|কেনা\s*হলো|কেনা|করেছি|করলাম|হয়েছে|হইছে|হলো|হল|গেল|গেলো|বাবদ|খরচ\s*হয়েছে|খরচ\s*হলো|খরচ|dia|dilam|diyechi|diye|kinechi|kineche|kinesi|kinlam|kena\s*hoyeche|kena|koresi|korlam|hoyeche|hoise|holo|gelo|babod|khoroch\s*hoyeche|khoros\s*hoyeche|khoroch|khoros|cost)\s*$/i, '')
+    .replace(/\s+(?:দিয়েছি|দিয়েছে|দিলাম|দিয়া|দিয়ে|কিনেছি|কিনেছে|কিনলাম|কিনসি|কেনা\s*হয়েছে|কেনা\s*হলো|কেনা|করেছি|করলাম|হয়েছে|হইছে|হলো|হল|গেল|গেলো|বাবদ|খরচ\s*হয়েছে|খরচ\s*হলো|খরচ|খরচা|dia|dilam|diyechi|diye|kinechi|kineche|kinesi|kinlam|kena\s*hoyeche|kena|koresi|korlam|hoyeche|hoise|holo|gelo|babod|khoroch\s*hoyeche|khoros\s*hoyeche|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses)\s*$/i, '')
     .trim();
-  return cleaned || raw.trim();
+
+  if (!text) text = raw.trim();
+
+  // Apply multi-word phrase replacements first
+  for (const [pattern, replacement] of BANGLISH_PHRASE_TO_BANGLA) {
+    text = text.replace(pattern, replacement);
+  }
+
+  // Apply word-by-word replacements for any remaining Latin words
+  text = text
+    .split(/\s+/)
+    .map(token => {
+      const cleanToken = token.toLowerCase().replace(/[^a-z]/g, '');
+      if (cleanToken && BANGLISH_WORD_TO_BANGLA[cleanToken]) {
+        return BANGLISH_WORD_TO_BANGLA[cleanToken];
+      }
+      return token;
+    })
+    .join(' ')
+    .trim();
+
+  return text;
+};
+
+/**
+ * Clean unwanted prefixes and action verbs from expense title and convert Banglish to Bangla
+ */
+const cleanTitleText = (raw: string): string => {
+  return toBanglaExpenseTitle(raw);
 };
 
 /**
@@ -586,7 +701,7 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
 };
 
 /**
- * Record a new Expense
+ * Record a new Expense (normalizes Banglish titles into clean Bengali while keeping raw Banglish in notes for search)
  */
 export const recordExpense = async (
   userId: string | mongoose.Types.ObjectId,
@@ -596,16 +711,18 @@ export const recordExpense = async (
   date: Date = new Date(),
   notes?: string
 ) => {
-  const cat = detectExpenseCategory(title);
+  const normalizedTitle = toBanglaExpenseTitle(title) || title;
+  const cat = detectExpenseCategory(`${title} ${normalizedTitle}`);
+  const finalNotes = notes || (normalizedTitle !== title ? title : undefined);
   const expense = await Expense.create({
     userId,
-    title,
+    title: normalizedTitle,
     amount,
     category: cat.id,
     categoryBn: cat.nameBn,
     paymentMethod,
     date,
-    notes
+    notes: finalNotes
   });
   return expense;
 };
@@ -784,8 +901,9 @@ export const buildExpenseLoggedMessage = (
   dateLabelBn?: string
 ): string => {
   const isBackdated = dateLabelBn && !dateLabelBn.includes('আজ');
+  const displayTitle = toBanglaExpenseTitle(title) || title;
   return `✅ *খরচ যুক্ত হয়েছে!*\n` +
-         `${category.icon} *খাত:* ${title} (${category.nameBn})\n` +
+         `${category.icon} *খাত:* ${displayTitle} (${category.nameBn})\n` +
          `💰 *পরিমাণ:* ${formatTaka(amount)}\n` +
          (isBackdated ? `📅 *তারিখ:* ${dateLabelBn}\n` : '') +
          `\n📊 *${dateLabelBn || 'আজকের'} মোট খরচ:* ${formatTaka(dayTotal)}\n` +
@@ -812,8 +930,9 @@ export const buildDailyExpenseQueryMessage = (
 
   const itemsList = expenses
     .map((e, idx) => {
-      const cat = detectExpenseCategory(e.title);
-      return `${enToBnDigits(idx + 1)}. ${cat.icon} ${e.title}: *${formatTaka(e.amount)}*`;
+      const displayTitle = toBanglaExpenseTitle(e.title) || e.title;
+      const cat = detectExpenseCategory(`${e.title} ${displayTitle}`);
+      return `${enToBnDigits(idx + 1)}. ${cat.icon} ${displayTitle}: *${formatTaka(e.amount)}*`;
     })
     .join('\n');
 
@@ -880,11 +999,12 @@ export const buildRangeExpenseQueryMessage = (
 
   const itemsList = expenses
     .map((e, idx) => {
-      const cat = detectExpenseCategory(e.title);
+      const displayTitle = toBanglaExpenseTitle(e.title) || e.title;
+      const cat = detectExpenseCategory(`${e.title} ${displayTitle}`);
       const dStr = new Date(e.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
       const [, mNum, dNum] = dStr.split('-').map(Number);
       const shortDate = `${enToBnDigits(dNum)} ${BENGALI_MONTHS[mNum] || ''}`.trim();
-      return `${enToBnDigits(idx + 1)}. ${cat.icon} ${e.title}: *${formatTaka(e.amount)}* _(${shortDate})_`;
+      return `${enToBnDigits(idx + 1)}. ${cat.icon} ${displayTitle}: *${formatTaka(e.amount)}* _(${shortDate})_`;
     })
     .join('\n');
 
@@ -976,20 +1096,31 @@ export const deleteExpenseByTitle = async (
   const startOfDay = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
   const endOfDay = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
 
-  const escaped = titleQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedRaw = titleQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const banglaQuery = toBanglaExpenseTitle(titleQuery);
+  const escapedBangla = banglaQuery ? banglaQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : escapedRaw;
+
+  const orConditions: any[] = [
+    { title: { $regex: new RegExp(escapedRaw, 'i') } },
+    { notes: { $regex: new RegExp(escapedRaw, 'i') } }
+  ];
+  if (escapedBangla && escapedBangla !== escapedRaw) {
+    orConditions.push({ title: { $regex: new RegExp(escapedBangla, 'i') } });
+    orConditions.push({ categoryBn: { $regex: new RegExp(escapedBangla, 'i') } });
+  }
 
   // First search in target date
   let targetExpense = await Expense.findOne({
     userId,
     date: { $gte: startOfDay, $lte: endOfDay },
-    title: { $regex: new RegExp(escaped, 'i') }
+    $or: orConditions
   }).sort({ date: -1 });
 
   // If not found in target date, search recent expenses across any date
   if (!targetExpense) {
     targetExpense = await Expense.findOne({
       userId,
-      title: { $regex: new RegExp(escaped, 'i') }
+      $or: orConditions
     }).sort({ date: -1 });
   }
 
@@ -1062,7 +1193,8 @@ export const buildExpenseDeletedMessage = (
   dateLabelBn: string = 'আজকের'
 ): string => {
   const label = dateLabelBn.includes('আজ') ? 'আজকের' : dateLabelBn;
-  return `🗑️ আপনার খরচের তালিকা থেকে *"${deletedTitle}" (${formatTaka(deletedAmount)})* সফলভাবে মুছে ফেলা হয়েছে!\n\n` +
+  const displayTitle = toBanglaExpenseTitle(deletedTitle) || deletedTitle;
+  return `🗑️ আপনার খরচের তালিকা থেকে *"${displayTitle}" (${formatTaka(deletedAmount)})* সফলভাবে মুছে ফেলা হয়েছে!\n\n` +
          `📊 *${label} নতুন মোট খরচ:* ${formatTaka(dayTotal)}\n` +
          `📅 *চলতি মাসের মোট:* ${formatTaka(monthTotal)}`;
 };
@@ -1076,16 +1208,18 @@ export const buildExpenseDeleteChoiceMessage = (
 ): string => {
   const label = dateLabelBn.includes('আজ') ? 'আজকের' : dateLabelBn;
   const items = expenses.map((e, idx) => {
-    const cat = detectExpenseCategory(e.title);
-    return `${enToBnDigits(idx + 1)}. ${cat.icon} ${e.title}: *${formatTaka(e.amount)}*`;
+    const displayTitle = toBanglaExpenseTitle(e.title) || e.title;
+    const cat = detectExpenseCategory(`${e.title} ${displayTitle}`);
+    return `${enToBnDigits(idx + 1)}. ${cat.icon} ${displayTitle}: *${formatTaka(e.amount)}*`;
   }).join('\n');
 
+  const firstTitle = toBanglaExpenseTitle(expenses[0]?.title || 'লাঞ্চ') || 'লাঞ্চ';
   return `🗑️ *${label} কোন খরচটি ডিলিট করতে চান?*\n\n` +
          `${items}\n\n` +
          `💡 অনুগ্রহ করে লিখে জানান:\n` +
          `• "১ নম্বরটা ডিলিট করো"\n` +
          `• "শেষেরটা ডিলিট করো"\n` +
-         `• অথবা খরচের নাম লিখুন (যেমন: "${expenses[0]?.title || 'লাঞ্চ'} ডিলিট করো")`;
+         `• অথবা খরচের নাম লিখুন (যেমন: "${firstTitle} ডিলিট করো")`;
 };
 
 

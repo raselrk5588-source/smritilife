@@ -49,11 +49,44 @@ export interface OverallDebtSummary {
   topPayables: Array<{ personName: string; amount: number }>;
 }
 
+const BANGLISH_NAME_MAP: Record<string, string> = {
+  asad: 'আসাদ', pias: 'পিয়াস', piyas: 'পিয়াস', manik: 'মানিক',
+  vai: 'ভাই', bhai: 'ভাই', apu: 'আপু', apa: 'আপা',
+  rahim: 'রহিম', rohim: 'রহিম', karim: 'করিম', korim: 'করিম',
+  roni: 'রনি', rony: 'রনি', rasel: 'রাসেল', russel: 'রাসেল',
+  sumon: 'সুমন', shumon: 'সুমন', sakib: 'সাকিব', shakib: 'সাকিব',
+  rakib: 'রাকিব', hasan: 'হাসান', hossain: 'হোসেন', hosen: 'হোসেন',
+  mamun: 'মামুন', sohel: 'সোহেল', shohel: 'সোহেল', rubel: 'রুবেল',
+  jamal: 'জামাল', kamal: 'কামাল', arif: 'আরিফ', sharif: 'শরীফ',
+  tarik: 'তারেক', tarek: 'তারেক', imran: 'ইমরান', faruk: 'ফারুক',
+  masud: 'মাসুদ', jahid: 'জাহিদ', zahid: 'জাহিদ', nahid: 'নাহিদ',
+  fahim: 'ফাহিম', naim: 'নাঈম', nayeem: 'নাঈম', siam: 'সিয়াম',
+  rifat: 'রিফাত', rafi: 'রাফি', tanim: 'তানিম', tanvir: 'তানভীর',
+  mehedi: 'মেহেদী', mahadi: 'মেহেদী', shanto: 'শান্ত', santo: 'শান্ত',
+  joy: 'জয়', ritu: 'রিতু', mitu: 'মিতু', suma: 'সুমা', shuma: 'সুমা',
+  rina: 'রিনা', mina: 'মিনা', salma: 'সালমা', nasrin: 'নাসরিন',
+  shirin: 'শিরিন', shirina: 'শিরিন', uncle: 'আঙ্কেল', mama: 'মামা',
+  chacha: 'চাচা', kaka: 'কাকা', dokan: 'দোকান', mudir: 'মুদির'
+};
+
+export const toBanglaPersonName = (raw: string): string => {
+  if (!raw) return '';
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map(w => {
+      const key = w.toLowerCase().replace(/[^a-z]/g, '');
+      return (key && BANGLISH_NAME_MAP[key]) ? BANGLISH_NAME_MAP[key] : w;
+    })
+    .join(' ')
+    .trim();
+};
+
 /**
- * Clean person name prefixes and suffixes
+ * Clean person name prefixes and suffixes and convert common Banglish names to Bangla
  */
 export const cleanPersonName = (raw: string): string => {
-  return raw
+  const cleaned = raw
     .trim()
     .replace(/^(?:mr|md|মুহা|জনাব)\s+/i, '')
     // Strip trailing helper phrases like "ar kache ami", "এর কাছে আমি", "ami"
@@ -63,6 +96,7 @@ export const cleanPersonName = (raw: string): string => {
     // Bengali possessive suffix only (never strip Latin letters from names like Omar/Peter)
     .replace(/(?:\u09DF\u09C7\u09B0|\u09C7\u09B0)$/i, '')
     .trim();
+  return toBanglaPersonName(cleaned) || cleaned;
 };
 
 /**
@@ -104,7 +138,7 @@ Return ONLY raw JSON, no markdown:
 Rules:
 - "lent" = user will GET money from the person (e.g. "asad ar kache pabo 3500", "asad ar kache ami pabo 3500 taka", "রনিকে ৫০০ ধার দিলাম", "karim 200 baki nilo").
 - "borrowed" = user OWES money to the person (e.g. "karim pabe 500", "রহিমের কাছ থেকে ১০০০ ধার নিলাম", "dokane baki 300").
-- personName = ONLY the person's name; keep honorifics like vai/bhai/apa if written (e.g. "Manik vai"). NEVER include words like ar, er, kache, ami, pabo, taka, এর, কাছে, আমি, পাবো. Bangla possessive "আসাদের" => "আসাদ".
+- personName = ONLY the person's name written in clean Bangla script (e.g. "asad" => "আসাদ", "Manik vai" => "মানিক ভাই", "Pias" => "পিয়াস"); keep honorifics like ভাই/আপু if written. NEVER include words like ar, er, kache, ami, pabo, taka, এর, কাছে, আমি, পাবো. Bangla possessive "আসাদের" => "আসাদ". If the person matches an existing ledger name, match that person.
 - amount: convert Bangla digits / words to a number.
 - action "settle": someone paid back ("Pias taka diye diche", "পিয়াস টাকা দিয়ে দিয়েছে", "asad 1000 ferot dilo", "pias er taka peye gechi" => settlementType: "received") or user paid back ("karim ke taka diye dilam", "karim ke 500 sodh korlam" => settlementType: "paid"). Put person+amount in items. If NO specific amount is mentioned (meaning full settlement of all remaining debt for that person), set amount to 0 in items (e.g. {"personName":"Pias","amount":0,"type":"lent"}).
 - action "query": asking balance/list ("pawna taka daw", "mot koto taka pabo?", "koto taka pabo", "asad er hisab"). Set personName if a specific person is asked.
@@ -669,29 +703,45 @@ export const settleDebtByPerson = async (
   debtsUpdated: IDebt[];
 }> => {
   let cleanName = cleanPersonName(personName);
+  const rawStripped = personName
+    .trim()
+    .replace(/^(?:mr|md|মুহা|জনাব)\s+/i, '')
+    .replace(/\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:কাছে|kache|kase)\s*(?:আমি|ami)?\s*$/i, '')
+    .replace(/\s+(?:আমি|ami)$/i, '')
+    .replace(/\s+(?:-?কে|-?k|-?ke|-?er|এর|-?theke|থেকে|-?ar)$/i, '')
+    .trim();
+
   // received = someone gave us back money for what we lent ('lent')
   // paid = we paid back someone for what we borrowed ('borrowed')
   const targetType = settlementType === 'received' ? 'lent' : 'borrowed';
 
-  // Find active pending/partial debts for this person (regex match for slight spelling differences)
+  // Find active pending/partial debts for this person (match both Bangla and Banglish spellings)
   const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedRaw = rawStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const exactRegex = escapedRaw && escapedRaw !== escapedName
+    ? new RegExp(`^(?:${escapedName}|${escapedRaw})$`, 'i')
+    : new RegExp(`^${escapedName}$`, 'i');
+
   let activeDebts = await Debt.find({
     userId,
-    personName: { $regex: new RegExp(`^${escapedName}$`, 'i') },
+    personName: { $regex: exactRegex },
     type: targetType,
     status: { $in: ['pending', 'partial'] }
   }).sort({ createdAt: 1 });
 
-  // Fallback prefix/substring match (e.g. "Manik" -> "Manik vai")
+  // Fallback prefix/substring match (e.g. "Manik" -> "Manik vai" / "মানিক ভাই")
   if (activeDebts.length === 0 && cleanName.length >= 2) {
+    const partialRegex = escapedRaw && escapedRaw !== escapedName
+      ? new RegExp(`(?:${escapedName}|${escapedRaw})`, 'i')
+      : new RegExp(escapedName, 'i');
     activeDebts = await Debt.find({
       userId,
-      personName: { $regex: new RegExp(escapedName, 'i') },
+      personName: { $regex: partialRegex },
       type: targetType,
       status: { $in: ['pending', 'partial'] }
     }).sort({ createdAt: 1 });
     if (activeDebts.length > 0) {
-      cleanName = activeDebts[0].personName;
+      cleanName = cleanPersonName(activeDebts[0].personName);
     }
   }
 
@@ -777,8 +827,14 @@ export const deleteDebts = async (
   let filter: any = { userId };
   if (scope === 'person' && personName) {
     const cleanName = cleanPersonName(personName);
+    const rawStripped = personName.trim();
     const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.personName = { $regex: new RegExp(`^${escaped}$`, 'i') };
+    const escapedRaw = rawStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.personName = {
+      $regex: escapedRaw && escapedRaw !== escaped
+        ? new RegExp(`^(?:${escaped}|${escapedRaw})$`, 'i')
+        : new RegExp(`^${escaped}$`, 'i')
+    };
   } else if (scope === 'lent') {
     filter.type = 'lent';
   } else if (scope === 'borrowed') {
@@ -863,11 +919,16 @@ export const getPersonDebtSummary = async (
   personName: string
 ): Promise<DebtPersonSummary | null> => {
   const cleanName = cleanPersonName(personName);
+  const rawStripped = personName.trim();
   const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedRaw = rawStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matchRegex = escapedRaw && escapedRaw !== escapedName
+    ? new RegExp(`^(?:${escapedName}|${escapedRaw})$`, 'i')
+    : new RegExp(`^${escapedName}$`, 'i');
 
   const debts = await Debt.find({
     userId,
-    personName: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+    personName: { $regex: matchRegex }
   }).sort({ createdAt: -1 });
 
   if (debts.length === 0) return null;

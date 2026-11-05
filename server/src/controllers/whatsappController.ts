@@ -4157,6 +4157,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           // 2.9B: Standard Expense Query & Logging
           const parsedExpense = parseExpenseInput(cleanText);
           if (parsedExpense) {
+            await Note.deleteMany({ userId: user._id, title: /(?:খরচ|khoroc|khoros|expense|cost)/i }).catch(() => {});
             if (parsedExpense.isQuery) {
               if (parsedExpense.queryType === 'monthly') {
                 if (parsedExpense.monthYear) {
