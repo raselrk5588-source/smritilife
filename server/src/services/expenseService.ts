@@ -30,7 +30,10 @@ export const EXPENSE_CATEGORIES: CategoryInfo[] = [
       'বাজার', 'চাল', 'ডাল', 'তেল', 'মাছ', 'মাংস', 'মুরগি', 'গরু', 'সবজি', 'তরকারি', 'ডিম', 'দুধ', 'ফল',
       'নাস্তা', 'বিরিয়ানি', 'বার্গার', 'চা', 'কফি', 'লাঞ্চ', 'ডিনার', 'খাবার', 'রেস্টুরেন্ট', 'ফুড', 'মিষ্টি',
       'পিঠা', 'হোটেল', 'রুটি', 'পরোটা', 'ভাত', 'চিকেন', 'স্যান্ডউইচ', 'বিস্কুট', 'ফুচকা', 'চটপটি', 'lunch',
-      'dinner', 'breakfast', 'tea', 'coffee', 'food', 'bazar', 'bazaar', 'gorur mangsho', 'murgi'
+      'dinner', 'breakfast', 'tea', 'coffee', 'food', 'bazar', 'bazaar', 'gorur mangsho', 'murgi', 'khabar',
+      'khawar', 'nasta', 'nashta', 'biriyani', 'biryani', 'cha', 'sobji', 'mach', 'mangsho', 'dim', 'dudh',
+      'fol', 'ruti', 'paratha', 'porota', 'hotel', 'restaurant', 'fastfood', 'burger', 'pizza', 'fuchka',
+      'chotpoti', 'misti', 'mishti', 'chal', 'dal'
     ]
   },
   {
@@ -40,7 +43,8 @@ export const EXPENSE_CATEGORIES: CategoryInfo[] = [
     keywords: [
       'রিকশা', 'রিক্সা', 'বাস', 'ভাড়া', 'ভাড়া', 'ট্রেন', 'সিএনজি', 'উবার', 'পাঠাও', 'বাইক', 'পেট্রোল',
       'অকটেন', 'গ্যাস', 'ডিজেল', 'টিকিট', 'টোল', 'মেট্রো', 'মেট্রোরেল', 'metro', 'uber', 'pathao', 'cng',
-      'bus', 'rickshaw', 'train', 'ticket', 'fare', 'toll', 'fare'
+      'bus', 'rickshaw', 'riksha', 'riksa', 'ricksha', 'vara', 'bhara', 'bara', 'auto', 'oto', 'laguna',
+      'leguna', 'launch', 'boat', 'octane', 'petrol', 'diesel', 'train', 'ticket', 'fare', 'toll'
     ]
   },
   {
@@ -49,7 +53,9 @@ export const EXPENSE_CATEGORIES: CategoryInfo[] = [
     icon: '💊',
     keywords: [
       'ওষুধ', 'ঔষধ', 'ডাক্তার', 'টেস্ট', 'ক্লিনিক', 'হাসপাতাল', 'ফার্মেসি', 'ডেন্টাল', 'চশমা', 'স্যালাইন',
-      'ফি', 'প্রেসক্রিপশন', 'medicine', 'doctor', 'hospital', 'pharmacy', 'test', 'clinic'
+      'ফি', 'প্রেসক্রিপশন', 'medicine', 'medecin', 'medecine', 'medisin', 'medicne', 'osud', 'oshud',
+      'oushud', 'osudh', 'oshudh', 'daktar', 'doctor', 'hospital', 'pharmacy', 'pharma', 'test', 'clinic',
+      'saline', 'xray', 'x-ray'
     ]
   },
   {
@@ -59,7 +65,9 @@ export const EXPENSE_CATEGORIES: CategoryInfo[] = [
     keywords: [
       'বিল', 'বিদ্যুৎ', 'কারেন্ট', 'কারেন্ট বিল', 'বিদ্যুৎ বিল', 'গ্যাস বিল', 'পানি বিল', 'ওয়াইফাই', 'ইন্টারনেট',
       'নেট বিল', 'বাড়ি ভাড়া', 'বাসা ভাড়া', 'রুম ভাড়া', 'ডিশ বিল', 'মোবাইল রিচার্জ', 'রিচার্জ', 'টপআপ', 'bill',
-      'wifi', 'electricity', 'current bill', 'gas bill', 'water bill', 'rent', 'recharge', 'topup'
+      'bil', 'wifi', 'electricity', 'current', 'bidyut', 'biddut', 'current bill', 'gas bill', 'water bill',
+      'pani', 'rent', 'basa vara', 'basha vara', 'bari vara', 'room vara', 'mess vara', 'recharge', 'topup',
+      'internet', 'net', 'mb', 'dish'
     ]
   },
   {
@@ -68,7 +76,8 @@ export const EXPENSE_CATEGORIES: CategoryInfo[] = [
     icon: '🛍️',
     keywords: [
       'জামা', 'কাপড়', 'জুতা', 'জুতো', 'প্যান্ট', 'শার্ট', 'পাঞ্জাবি', 'ব্যাগ', 'কসমেটিকস', 'শপিং', 'ড্রেস',
-      'টি-শার্ট', 'ঘড়ি', 'shopping', 'cloth', 'shirt', 'pant', 'shoes', 'cosmetics', 'watch'
+      'টি-শার্ট', 'ঘড়ি', 'shopping', 'cloth', 'shirt', 'pant', 'shoes', 'cosmetics', 'watch', 'jama', 'kapor',
+      'juta', 'juto', 'panjabi', 'bag', 'dress', 'tshirt', 't-shirt', 'ghori', 'shari', 'saree'
     ]
   },
   {
@@ -77,7 +86,8 @@ export const EXPENSE_CATEGORIES: CategoryInfo[] = [
     icon: '📚',
     keywords: [
       'বই', 'খাতা', 'কলম', 'টিউশন', 'বেতন', 'কোচিং', 'কলেজ ফি', 'স্কুল ফি', 'ভার্সিটি ফি', 'পরীক্ষার ফি',
-      'book', 'tuition', 'school fee', 'college fee', 'exam fee'
+      'book', 'tuition', 'tution', 'school fee', 'college fee', 'exam fee', 'boi', 'khata', 'kolom', 'pen',
+      'coaching', 'beton'
     ]
   },
   {
@@ -420,14 +430,15 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
 };
 
 /**
- * Clean unwanted prefixes from title
+ * Clean unwanted prefixes and action verbs from expense title
  */
 const cleanTitleText = (raw: string): string => {
-  return raw
-    .replace(/^(?:আজ|আজকে|aj|ajke|কাল|গতকাল|গতকালের|পরশু|গত পরশু)\s+/i, '')
-    .replace(/^(?:খরচ|khoroc|khoros|expense)\s*[:=]?\s*/i, '')
-    .replace(/\s*(?:দিয়ে|দিলাম|দিয়া|dia|dilam|koresi|করলাম|হলো|holo|গেল|gelo)\s*$/i, '')
+  const cleaned = raw
+    .replace(/^(?:আজকের?|আজকে?|আজ|aj|ajke|ajker|কালকের?|কালকে?|কাল|গতকালকের?|গতকালের?|গতকাল|পরশু|গত\s*পরশু|আমি|আমার|ami|amar)\s+/i, '')
+    .replace(/^(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|expense|cost)\s*[:=-]?\s*/i, '')
+    .replace(/\s+(?:দিয়েছি|দিয়েছে|দিলাম|দিয়া|দিয়ে|কিনেছি|কিনেছে|কিনলাম|কিনসি|কেনা\s*হয়েছে|কেনা\s*হলো|কেনা|করেছি|করলাম|হয়েছে|হইছে|হলো|হল|গেল|গেলো|বাবদ|খরচ\s*হয়েছে|খরচ\s*হলো|খরচ|dia|dilam|diyechi|diye|kinechi|kineche|kinesi|kinlam|kena\s*hoyeche|kena|koresi|korlam|hoyeche|hoise|holo|gelo|babod|khoroch\s*hoyeche|khoros\s*hoyeche|khoroch|khoros|cost)\s*$/i, '')
     .trim();
+  return cleaned || raw.trim();
 };
 
 /**
@@ -502,14 +513,22 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
     };
   }
 
-  // 4. Backdated or Today Expense Logging: [Item] [Amount] e.g. "বাজার ৫০০ টাকা", "গতকাল বাজার ৫০০", "10 oct রিকশা ৬০"
-  const targetText = textWithoutDate || clean;
+  // 4. Backdated or Today Expense Logging: [Item] [Amount] e.g. "বাজার ৫০০ টাকা", "Medecin kineche 980 takar", "10 oct রিকশা ৬০"
+  const targetText = (textWithoutDate || clean).replace(/[.।!]+$/g, '').trim();
 
-  // Pattern 1: [Item/Category] [Amount] [টাকা/tk]? e.g. "বাজার ৫০০ টাকা", "রিকশা ৬০"
-  const p1 = targetText.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*[:=]?\s*([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকার|টাকায়|টাকা|tk|taka)?$/i);
+  // Do not treat phone numbers, NID, or time expressions as expense amounts
+  if (/(?:\+?88)?01[3-9]\d{8}/.test(targetText) || /(?:টায়|টায়|মিনিট|ঘণ্টা|ঘন্টা|সেকেন্ড|am|pm|মনে\s*করিয়ে|রিমাইন্ডার|reminder|অ্যালার্ম|alarm)/i.test(targetText)) {
+    return null;
+  }
+
+  // Pattern 1: [Item/Category + optional verb] [Amount] [টাকা/taka/takar/tk]? [optional trailing verb]
+  // e.g. "Medecin kineche 980 takar", "বাজার ৫০০ টাকা করেছি", "রিকশা ৬০", "ওষুধ কিনলাম ৯৮০ টাকার"
+  const p1 = targetText.match(
+    /^([a-zA-Z\u0980-\u09FF\s-]+?)\s*[:=-]?\s*(?:৳\s*)?([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকার|টাকায়|টাকায়|টাকা|takar|takay|takai|taka|tk|৳)?(?:\s*(?:দিয়েছি|দিয়েছে|দিলাম|দিয়া|দিয়ে|কিনেছি|কিনেছে|কিনলাম|কেনা\s*হয়েছে|করেছি|করলাম|হয়েছে|হইছে|হলো|গেল|খরচ\s*হয়েছে|খরচ|dia|dilam|diyechi|diye|kinechi|kineche|kinlam|koresi|korlam|hoyeche|hoise|holo|gelo|khoroch|khoros|cost))?$/i
+  );
   if (p1 && p1[1].trim().length >= 2) {
     const rawTitle = p1[1].trim();
-    if (!/কখন|সময়|time|বাকি|তারিখ|date|ঘণ্টা|মিনিট|দিন|alarm|অ্যালার্ম/i.test(rawTitle)) {
+    if (!/কখন|সময়|time|বাকি|তারিখ|date|ঘণ্টা|মিনিট|দিন|alarm|অ্যালার্ম|নম্বর|নাম্বার|number|phone|ফোন|পাসওয়ার্ড|password|পিন|pin|রক্ত|blood/i.test(rawTitle)) {
       const amount = parseFloat(bnToEnDigits(p1[2]));
       if (!isNaN(amount) && amount > 0 && amount <= 10000000) {
         return {
@@ -524,8 +543,11 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
     }
   }
 
-  // Pattern 2: [Amount] টাকা [Item] e.g. "৫০০ টাকার বাজার", "১২০ টাকা লাঞ্চ"
-  const p2 = targetText.match(/^([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকার|টাকায়|টাকা|tk|taka)\s*(?:দিয়ে|dia|ar)?\s*([a-zA-Z\u0980-\u09FF\s]+)$/i);
+  // Pattern 2: [Amount] [টাকা/taka/takar/tk] [Item] [optional trailing verb]
+  // e.g. "৫০০ টাকার বাজার", "৯৮০ টাকার ওষুধ কেনা হয়েছে", "980 takar medecin kineche", "১২০ টাকা লাঞ্চ"
+  const p2 = targetText.match(
+    /^(?:৳\s*)?([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকার|টাকায়|টাকায়|টাকা|takar|takay|takai|taka|tk|৳)\s*(?:দিয়ে|dia|diye|ar|er|এর)?\s*([a-zA-Z\u0980-\u09FF\s-]+)$/i
+  );
   if (p2 && p2[2].trim().length >= 2) {
     const amount = parseFloat(bnToEnDigits(p2[1]));
     const rawTitle = p2[2].trim();
@@ -541,8 +563,10 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
     }
   }
 
-  // Pattern 3: 'খরচ [Item] [Amount]' e.g. 'খরচ বাজার ৫০০'
-  const p3 = targetText.match(/^(?:খরচ|expense|khoroc|khoros)\s*[:=]?\s*([a-zA-Z\u0980-\u09FF\s]+?)\s*([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকার|টাকায়|টাকা|tk|taka)?$/i);
+  // Pattern 3: 'খরচ [Item] [Amount]' e.g. 'খরচ বাজার ৫০০', 'cost medecin 980'
+  const p3 = targetText.match(
+    /^(?:খরচ|খরচা|expense|cost|khoroch|khoroc|khoros)\s*[:=-]?\s*([a-zA-Z\u0980-\u09FF\s-]+?)\s*(?:৳\s*)?([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকার|টাকায়|টাকায়|টাকা|takar|takay|takai|taka|tk|৳)?$/i
+  );
   if (p3 && p3[1].trim().length >= 2) {
     const rawTitle = p3[1].trim();
     const amount = parseFloat(bnToEnDigits(p3[2]));

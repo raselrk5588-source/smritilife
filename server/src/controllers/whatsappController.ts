@@ -5709,6 +5709,39 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               }
             }
 
+            // Guard: If this is actually an Expense (e.g. "Medecin kineche 980 takar" or AI title has "খরচ"), save directly into Expense instead of Note!
+            const expenseFromNote =
+              parseExpenseInput(cleanText) ||
+              parseExpenseInput(content) ||
+              (/(?:খরচ|খরচা|ব্যয়|ব্যায়|ভাড়া|বাজার|কেনাকাটা|khoroch|khoroc|khoros|expense|cost)/i.test(title)
+                ? parseExpenseInput(`${title.replace(/(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|expense|cost)/gi, '').trim()} ${content}`)
+                : null);
+
+            if (expenseFromNote && !expenseFromNote.isQuery && expenseFromNote.title && expenseFromNote.amount) {
+              const expDate = expenseFromNote.expenseDate || new Date();
+              await recordExpense(user._id, expenseFromNote.title, expenseFromNote.amount, expenseFromNote.paymentMethod, expDate);
+              // Clean up any accidental note with "খরচ" in title
+              await Note.deleteMany({ userId: user._id, title: /(?:খরচ|khoroc|khoros|expense|cost)/i });
+              const dSummary = await getExpenseSummaryForDate(user._id, expDate, expenseFromNote.dateLabelBn || 'আজকের');
+              userExpenseContext.set(user._id.toString(), {
+                targetDate: expDate,
+                dateLabelBn: expenseFromNote.dateLabelBn || 'আজকের',
+                expenses: dSummary.dateExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                expiresAt: Date.now() + 15 * 60 * 1000
+              });
+              const cat = detectExpenseCategory(expenseFromNote.title);
+              const expReply = buildExpenseLoggedMessage(
+                expenseFromNote.title,
+                expenseFromNote.amount,
+                cat,
+                dSummary.dateTotal,
+                dSummary.monthTotal,
+                expenseFromNote.dateLabelBn
+              );
+              await sendMetaWhatsAppMessage(fromNumber, expReply);
+              break;
+            }
+
             // Check if existing note exists for this user with same or similar title
             const cleanTitleRegex = new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
             let note = await Note.findOne({ userId: user._id, title: cleanTitleRegex });
