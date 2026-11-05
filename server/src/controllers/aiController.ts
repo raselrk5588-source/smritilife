@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { matchRelativeDuration, parseBengaliTime, parseRelativeDate, transcribeAudioMessage } from '../services/aiWhatsAppService';
 import { handleMedicineInquiry } from './whatsappController';
 import { parseExpenseInput, recordExpense, detectExpenseCategory } from '../services/expenseService';
 import Reminder from '../models/Reminder';
 import Note from '../models/Note';
 import UserDocument from '../models/UserDocument';
+import SystemSettings from '../models/SystemSettings';
 
 export const parseCommand = async (req: Request, res: Response) => {
   const extractSubject = (text: string): string => {
@@ -287,16 +289,188 @@ export const transcribeVoice = async (req: Request, res: Response) => {
 
 export const generateWish = async (req: Request, res: Response) => {
   try {
-    const { person, occasion, tone, language } = req.body;
-    
-    // Mock AI generation
-    const generatedWish = `Happy ${occasion}, ${person}! Wishing you a day filled with happiness and a year filled with joy.`;
-    
+    const { person, occasion, tone, language, extraPrompt } = req.body;
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      try {
+        const settings = await SystemSettings.findOne();
+        apiKey = settings?.geminiApiKey;
+      } catch (dbErr) {}
+    }
+
+    if (apiKey) {
+      try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-2.5-flash',
+          generationConfig: { temperature: 0.3, maxOutputTokens: 500 }
+        });
+
+        const prompt = `Write a heartfelt, personalized ${language === 'en' ? 'English' : 'Bengali'} greeting/wish message.
+Recipient: "${person || 'Loved one'}"
+Occasion: "${occasion || 'Birthday'}"
+Tone/Style: "${tone || 'Warm & Loving'}"
+${extraPrompt ? `Special Note/Context: "${extraPrompt}"` : ''}
+
+Rules:
+1. Return ONLY the message lines (2-3 sentences), separated by newlines.
+2. Do NOT add markdown tags, JSON, or introductory conversational text.`;
+
+        const result = await model.generateContent(prompt);
+        const wishText = result.response.text().trim();
+        if (wishText) {
+          return res.json({ success: true, wish: wishText });
+        }
+      } catch (aiErr) {
+        console.warn('Gemini generateWish error, using template fallback:', aiErr);
+      }
+    }
+
+    // High quality fallback
+    const fallbackMap: Record<string, string> = {
+      birthday: `শুভ জন্মদিন ${person || 'প্রিয়জন'}! আপনার জীবনের প্রতিটি দিন ভরে উঠুক অনাবিল আনন্দ আর সাফল্যে। অনেক অনেক শুভকামনা!`,
+      anniversary: `শুভ বিবাহবার্ষিকী ${person || 'প্রিয়জন'}! আপনাদের ভালোবাসার বন্ধন অটুট থাকুক চিরদিন।`,
+      eid: `ঈদ মোবারক ${person || 'প্রিয়জন'}! এই ঈদের আনন্দ ছড়িয়ে পড়ুক আপনার পুরো পরিবারে।`,
+      newyear: `শুভ নববর্ষ ${person || 'প্রিয়জন'}! নতুন বছর আপনার জীবনে বয়ে নিয়ে আসুক অফুরন্ত খুশি ও সাফল্য।`,
+      general: `আপনার জন্য রইল আন্তরিক শুভেচ্ছা ও অফুরন্ত ভালোবাসা!`
+    };
+
+    const wish = fallbackMap[occasion?.toLowerCase()] || `শুভকামনা রইল ${person || 'প্রিয়জন'}! আপনার জীবনের সকল চাওয়া পূর্ণ হোক।`;
+    res.json({ success: true, wish });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const parseVoiceWish = async (req: Request, res: Response) => {
+  try {
+    const { command } = req.body;
+    if (!command || !command.trim()) {
+      return res.status(400).json({ success: false, message: 'Command is required' });
+    }
+
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      try {
+        const settings = await SystemSettings.findOne();
+        apiKey = settings?.geminiApiKey;
+      } catch (dbErr) {}
+    }
+
+    const computedTime = parseBengaliTime(command);
+    const computedDateObj = parseRelativeDate(command, computedTime);
+    const computedDateStr = computedDateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+
+    // Extract any phone number in command (e.g. 017XXXXXXXX, 018..., etc.)
+    const phoneMatch = command.replace(/[\s\-]/g, '').match(/(?:\+?88)?01[3-9]\d{8}/);
+    const extractedPhone = phoneMatch ? (phoneMatch[0].startsWith('+88') ? phoneMatch[0].slice(3) : phoneMatch[0].startsWith('88') ? phoneMatch[0].slice(2) : phoneMatch[0]) : '';
+
+    let geminiData: any = null;
+    if (apiKey) {
+      try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-2.5-flash',
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 600
+          }
+        });
+
+        const prompt = `Analyze this Bengali/English wish instruction from a user: "${command}"
+Task:
+1. Identify the occasion: "birthday" | "anniversary" | "eid" | "newyear" | "valentine" | "mothersday" | "fathersday" | "congratulations" | "love" | "general"
+2. Identify the recipient name/relation (e.g. "স্ত্রী", "বন্ধু", "মা", "রাহুল", "সহধর্মিণী")
+3. Compose a beautiful, heartfelt Bengali wish message (2-3 sentences) suitable for this person and occasion.
+4. Set a suitable Bengali title (e.g. "শুভ জন্মদিন", "শুভ বিবাহবার্ষিকী", "ঈদ মোবারক").
+
+Return ONLY a raw JSON object with this exact shape:
+{
+  "occasion": "birthday",
+  "recipient": "স্ত্রী",
+  "title": "শুভ জন্মদিন",
+  "body": [
+    "প্রিয় স্ত্রী,",
+    "শুভ জন্মদিন! তোমার জীবনের প্রতিটি দিন যেন সুখ, শান্তি ও অনাবিল ভালোবাসায় ভরে থাকে।",
+    "সারাজীবন এভাবে আমার পাশে থাকার জন্য তোমাকে অনেক ধন্যবাদ।"
+  ]
+}`;
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Gemini timeout for parseVoiceWish')), 10000)
+        );
+
+        const result: any = await Promise.race([
+          model.generateContent(prompt),
+          timeoutPromise
+        ]);
+
+        const rawText = result.response.text().trim();
+        const cleanJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          geminiData = JSON.parse(jsonMatch[0]);
+        }
+      } catch (gemErr) {
+        console.warn('Gemini parseVoiceWish fallback:', gemErr);
+      }
+    }
+
+    // Fallback if Gemini failed or no API key
+    if (!geminiData) {
+      let occasion = 'birthday';
+      let title = 'শুভ জন্মদিন';
+      if (/বিবাহ|বার্ষিকী|anniversary/i.test(command)) {
+        occasion = 'anniversary';
+        title = 'শুভ বিবাহবার্ষিকী';
+      } else if (/ঈদ|eid/i.test(command)) {
+        occasion = 'eid';
+        title = 'ঈদ মোবারক';
+      } else if (/নববর্ষ|new\s*year/i.test(command)) {
+        occasion = 'newyear';
+        title = 'শুভ নববর্ষ';
+      } else if (/ভালোবাসা|valentine/i.test(command)) {
+        occasion = 'valentine';
+        title = 'শুভ ভালোবাসা দিবস';
+      } else if (/মা\s*দিবস|আম্মু|মা/i.test(command)) {
+        occasion = 'mothersday';
+        title = 'শুভ মা দিবস';
+      } else if (/বাবা\s*দিবস|আব্বু|বাবা/i.test(command)) {
+        occasion = 'fathersday';
+        title = 'শুভ বাবা দিবস';
+      }
+
+      let recipient = 'প্রিয়জন';
+      if (/স্ত্রী|বউ|সহধর্মিণী|wife/i.test(command)) recipient = 'স্ত্রী';
+      else if (/মা|আম্মু|আম্মা|mom|mother/i.test(command)) recipient = 'মা';
+      else if (/বাবা|আব্বু|আব্বা|dad|father/i.test(command)) recipient = 'বাবা';
+      else if (/বন্ধু|দোস্ত|ফ্রেন্ড|friend/i.test(command)) recipient = 'বন্ধু';
+      else if (/ভাই|ভাইয়া|bhai/i.test(command)) recipient = 'ভাই';
+      else if (/বোন|অপু|apu|sister/i.test(command)) recipient = 'বোন';
+
+      geminiData = {
+        occasion,
+        recipient,
+        title,
+        body: [
+          `প্রিয় ${recipient},`,
+          `${title}! তোমার হাসিমুখ যেন চিরকাল এমন উজ্জ্বল থাকে। জীবনের প্রতিটি পদক্ষেপে তোমার জন্য রইল অফুরন্ত শুভকামনা।`,
+          `সবসময় ভালো থেকো এবং সুস্থ থেকো।`
+        ]
+      };
+    }
+
     res.json({
       success: true,
-      wish: generatedWish
+      data: {
+        ...geminiData,
+        recipientPhone: extractedPhone,
+        date: computedDateStr,
+        time: computedTime
+      }
     });
   } catch (error: any) {
+    console.error('parseVoiceWish error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ChevronLeft, Sparkles, Image as ImageIcon, Mic, Copy, Download, Share2, Wand2, Calendar, Phone, Clock, Trash2, CheckCircle2, Gift, Eye, RefreshCw, Lock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronLeft, Sparkles, Image as ImageIcon, Mic, MicOff, Send, Copy, Download, Share2, Wand2, Calendar, Phone, Clock, Trash2, CheckCircle2, Gift, Eye, RefreshCw, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { generateWishTemplates } from '../utils/wishGenerator';
@@ -55,6 +55,12 @@ export default function Wishes() {
   const [successPopup, setSuccessPopup] = useState<{show: boolean, type: 'send' | 'schedule'}>({show: false, type: 'send'});
   const [isRecording, setIsRecording] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [manualVoiceCommand, setManualVoiceCommand] = useState('');
+
+  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const latestTranscriptRef = useRef<string>('');
   
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
@@ -406,117 +412,274 @@ export default function Wishes() {
     }
   };
 
-  const handleVoiceRecord = () => {
-    setIsRecording(true);
-    setVoiceTranscript('');
-    
-    // Simulate recording for 2.5 seconds
-    setTimeout(() => {
-      setIsRecording(false);
-      setVoiceTranscript('"আমার স্ত্রীর জন্য সুন্দর একটি জন্মদিনের শুভেচ্ছা তৈরি করো এবং আগামীকাল সকাল ১০টায় ০১৭xxxxxx নম্বরে শিডিউল করে দাও।"');
-      setIsGenerating(true);
-      
-      // Simulate AI processing
-      setTimeout(() => {
+  const processVoiceWish = async (commandText: string) => {
+    if (!commandText || !commandText.trim()) return;
+    setIsGenerating(true);
+    toast.loading(t('AI দিয়ে সুন্দর উইশ তৈরি হচ্ছে...', 'AI is creating wish...'), { id: 'voice-wish' });
+
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/ai/parse-voice-wish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: commandText })
+      });
+
+      const data = await res.json();
+      if (data.success && data.data) {
+        const d = data.data;
+        const bodyLines = Array.isArray(d.body) ? d.body : [d.wishMessage || d.message || commandText];
+
         setGeneratedWish({
-          title: 'শুভ\nজন্মদিন',
-          body: [
-            'প্রিয় স্ত্রী,',
-            'শুভ জন্মদিন! তুমি আমার জীবনের সবচেয়ে সুন্দর উপহার। তোমার হাসিমুখ আমাকে সবসময় ভালো থাকার অনুপ্রেরণা দেয়।',
-            'পৃথিবীর সব সুখ যেন তোমার হয়। অনেক অনেক ভালোবাসা।'
-          ]
+          title: d.title || 'শুভ\nজন্মদিন',
+          body: bodyLines
         });
-        
-        // AI smart auto-schedule
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const yyyy = tomorrow.getFullYear();
-        const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-        const dd = String(tomorrow.getDate()).padStart(2, '0');
-        
-        setScheduleDate(`${yyyy}-${mm}-${dd}`);
-        setScheduleTime('10:00');
-        setScheduleContact('017xxxxxx');
-        setScheduleMethod('sms');
+
+        if (d.recipient) setRecipient(d.recipient);
+        if (d.occasion) setSelectedOccasion(d.occasion);
+        if (d.date) setScheduleDate(d.date);
+        if (d.time) setScheduleTime(d.time);
+        if (d.recipientPhone) {
+          setScheduleContact(d.recipientPhone);
+          setScheduleMethod('whatsapp');
+        }
         setShowScheduleForm(true);
-        
-        setIsGenerating(false);
-      }, 2000);
-    }, 2500);
+
+        toast.success(t('AI উইশ ও শিডিউল সফলভাবে তৈরি হয়েছে!', 'AI Wish & Schedule Ready!'), { id: 'voice-wish' });
+      } else {
+        toast.error(t('উইশ তৈরি করতে সমস্যা হয়েছে, আবার চেষ্টা করুন', 'Failed to generate wish, try again'), { id: 'voice-wish' });
+      }
+    } catch (err: any) {
+      console.error('processVoiceWish error:', err);
+      toast.error(t('নেটওয়ার্ক সমস্যা, আবার চেষ্টা করুন', 'Network error, please try again'), { id: 'voice-wish' });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const handleGenerate = () => {
+  const startMediaRecorderForWish = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size < 500) {
+          setIsRecording(false);
+          toast(t('কোনো শব্দ রেকর্ড হয়নি', 'No audio recorded'), { icon: '🔇' });
+          return;
+        }
+
+        setIsRecording(false);
+        setIsGenerating(true);
+        setVoiceTranscript(t('এআই অডিও ট্রান্সক্রাইব করছে...', 'AI is transcribing audio...'));
+
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64Audio = (reader.result as string).split(',')[1];
+            const transRes = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/ai/transcribe-voice`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audioBase64: base64Audio, mimeType })
+            });
+            const transData = await transRes.json();
+            if (transData.success && transData.text) {
+              setVoiceTranscript(transData.text);
+              await processVoiceWish(transData.text);
+            } else {
+              setIsGenerating(false);
+              toast.error(t('ভয়েস পরিষ্কারভাবে বোঝা যায়নি', 'Could not understand voice'));
+            }
+          };
+        } catch (err) {
+          setIsGenerating(false);
+          toast.error(t('ভয়েস প্রসেস করতে ব্যর্থ হয়েছে', 'Failed to process voice'));
+        }
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      toast(t('রেকর্ডিং শুরু হয়েছে... বলা শেষ হলে আবার চাপ দিন', 'Recording started... tap again when done'), { icon: '🎙️' });
+    } catch (micErr) {
+      setIsRecording(false);
+      toast.error(t('মাইক্রোফোন পারমিশন প্রয়োজন', 'Microphone permission needed'));
+    }
+  };
+
+  const handleVoiceRecord = () => {
+    if (isRecording) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      } else if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      return;
+    }
+
+    setVoiceTranscript('');
+    latestTranscriptRef.current = '';
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      startMediaRecorderForWish();
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'bn-BD';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        setVoiceTranscript('');
+        latestTranscriptRef.current = '';
+      };
+
+      recognition.onresult = (event: any) => {
+        let full = '';
+        for (let i = 0; i < event.results.length; ++i) {
+          full += event.results[i][0].transcript;
+        }
+        latestTranscriptRef.current = full;
+        setVoiceTranscript(full);
+      };
+
+      recognition.onend = async () => {
+        setIsRecording(false);
+        const textToProcess = (latestTranscriptRef.current || '').trim();
+        if (!textToProcess) {
+          toast(t('কোনো কথা শোনা যায়নি', 'No speech detected'), { icon: '🔇' });
+          return;
+        }
+        await processVoiceWish(textToProcess);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('SpeechRecognition error in Wishes:', event.error);
+        setIsRecording(false);
+        if (event.error === 'not-allowed') {
+          toast.error(t('মাইক্রোফোন পারমিশন প্রয়োজন', 'Microphone permission needed'));
+        } else if (event.error === 'network') {
+          startMediaRecorderForWish();
+        } else if (event.error !== 'no-speech') {
+          toast.error(t('ভয়েস শনাক্তে সমস্যা হয়েছে', 'Speech recognition error'));
+        }
+      };
+
+      recognition.start();
+    } catch (e) {
+      console.warn('SpeechRecognition start failed, trying fallback:', e);
+      startMediaRecorderForWish();
+    }
+  };
+
+  const handleGenerate = async () => {
     if (!extraPrompt && (!selectedOccasion || !recipient)) {
       alert(t('দয়া করে ইভেন্ট এবং নাম নির্বাচন করুন, অথবা নিজের ইচ্ছা মতো একটি মেসেজ লিখুন।', 'Please select an event and name, or write a custom message.'));
       return;
     }
     
     setIsGenerating(true);
+    const occasionObj = occasions.find(o => o.id === selectedOccasion);
+    const styleObj = styles.find(s => s.id === selectedStyle);
     
-    // Simulate AI Generation
-    setTimeout(() => {
-      const occasionObj = occasions.find(o => o.id === selectedOccasion);
-      const styleObj = styles.find(s => s.id === selectedStyle);
-      
-      const fmtRecipient = formatName(recipient);
-      const fmtSender = formatName(senderName);
-      
-      let occasionLabel = occasionObj?.label || 'দিন';
-      if (selectedOccasion === 'other' && customOccasion) {
-        occasionLabel = customOccasion;
+    const fmtRecipient = formatName(recipient);
+    const fmtSender = formatName(senderName);
+    
+    let occasionLabel = occasionObj?.label || 'দিন';
+    if (selectedOccasion === 'other' && customOccasion) {
+      occasionLabel = customOccasion;
+    }
+
+    let title = `শুভ\n${occasionLabel}`;
+    if (selectedOccasion === 'eid') title = `ঈদ\nমোবারক`;
+    if (selectedOccasion === 'newyear') title = `শুভ\nনববর্ষ`;
+    if (selectedOccasion === 'valentine') title = `শুভ\nভালোবাসা\nদিবস`;
+    if (selectedOccasion === 'mothersday') title = `শুভ\nমা দিবস`;
+    if (selectedOccasion === 'fathersday') title = `শুভ\nবাবা দিবস`;
+
+    // Try real AI generation from backend Gemini
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/ai/generate-wish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          person: fmtRecipient || recipient,
+          occasion: selectedOccasion || customOccasion || 'Special Day',
+          tone: styleObj?.label || 'Warm',
+          extraPrompt
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.wish) {
+        let bodyLines = data.wish.split('\n').filter((l: string) => l.trim() !== '');
+        if (fmtSender && !data.wish.includes(fmtSender)) {
+          bodyLines.push(`ইতি, ${fmtSender}`);
+        }
+        setGeneratedWish({ title, body: bodyLines });
+        setIsGenerating(false);
+        return;
       }
+    } catch (e) {
+      console.warn('Backend wish generation failed, falling back to templates:', e);
+    }
 
-      let title = `শুভ\n${occasionLabel}`;
-      if (selectedOccasion === 'eid') title = `ঈদ\nমোবারক`;
-      if (selectedOccasion === 'newyear') title = `শুভ\nনববর্ষ`;
-      if (selectedOccasion === 'valentine') title = `শুভ\nভালোবাসা\nদিবস`;
-      if (selectedOccasion === 'mothersday') title = `শুভ\nমা দিবস`;
-      if (selectedOccasion === 'fathersday') title = `শুভ\nবাবা দিবস`;
+    // Template Fallback
+    let body: string[] = [];
 
-      let body: string[] = [];
+    if (!selectedOccasion && !recipient && extraPrompt) {
+      title = `আপনার\nমেসেজ`;
+      body = extraPrompt.split('\n').filter(line => line.trim() !== '');
+    } else {
+      let dbCategory = 'General';
+      if (selectedOccasion === 'birthday') dbCategory = 'Birthday';
+      if (selectedOccasion === 'anniversary') dbCategory = 'Anniversary';
+      if (selectedOccasion === 'eid') dbCategory = 'Eid';
+      if (selectedOccasion === 'newyear') dbCategory = 'New Year';
+      if (selectedOccasion === 'valentine') dbCategory = 'Valentine';
+      if (selectedOccasion === 'mothersday') dbCategory = 'Mothers Day';
+      if (selectedOccasion === 'fathersday') dbCategory = 'Fathers Day';
 
-      if (!selectedOccasion && !recipient && extraPrompt) {
-        title = `আপনার\nমেসেজ`;
-        body = extraPrompt.split('\n').filter(line => line.trim() !== '');
+      const matchingTemplates = dbTemplates.filter(t => t.category === dbCategory);
+      
+      if (matchingTemplates.length > 0) {
+        const randomDbTemp = matchingTemplates[Math.floor(Math.random() * matchingTemplates.length)];
+        let text = randomDbTemp.content;
+        text = text.replace(/\[Name\]/g, fmtRecipient || 'প্রিয়');
+        text = text.replace(/\[Sender\]/g, fmtSender || 'আমি');
+        body = text.split('\n').filter((l: string) => l.trim() !== '');
       } else {
-        // Map occasion to DB category
-        let dbCategory = 'General';
-        if (selectedOccasion === 'birthday') dbCategory = 'Birthday';
-        if (selectedOccasion === 'anniversary') dbCategory = 'Anniversary';
-        if (selectedOccasion === 'eid') dbCategory = 'Eid';
-        if (selectedOccasion === 'newyear') dbCategory = 'New Year';
-        if (selectedOccasion === 'valentine') dbCategory = 'Valentine';
-        if (selectedOccasion === 'mothersday') dbCategory = 'Mothers Day';
-        if (selectedOccasion === 'fathersday') dbCategory = 'Fathers Day';
-
-        const matchingTemplates = dbTemplates.filter(t => t.category === dbCategory);
-        
-        if (matchingTemplates.length > 0) {
-          // Use a random DB template
-          const randomDbTemp = matchingTemplates[Math.floor(Math.random() * matchingTemplates.length)];
-          let text = randomDbTemp.content;
-          // Basic placeholder replacement if any
-          text = text.replace(/\[Name\]/g, fmtRecipient || 'প্রিয়');
-          text = text.replace(/\[Sender\]/g, fmtSender || 'আমি');
-          body = text.split('\n').filter((l: string) => l.trim() !== '');
-        } else {
-          // Fallback to hardcoded AI offline templates
-          const templates = generateWishTemplates(selectedOccasion, selectedStyle, customOccasion, fmtRecipient);
-          body = [...templates[Math.floor(Math.random() * templates.length)]];
-        }
-        
-        if (extraPrompt) {
-          body.push(`(বিশেষ নোট: ${extraPrompt})`);
-        }
+        const templates = generateWishTemplates(selectedOccasion, selectedStyle, customOccasion, fmtRecipient);
+        body = [...templates[Math.floor(Math.random() * templates.length)]];
       }
-
-      if (fmtSender) {
-        body.push(`ইতি, ${fmtSender}`);
+      
+      if (extraPrompt) {
+        body.push(`(বিশেষ নোট: ${extraPrompt})`);
       }
+    }
 
-      setGeneratedWish({ title, body });
-      setIsGenerating(false);
-    }, 2000);
+    if (fmtSender) {
+      body.push(`ইতি, ${fmtSender}`);
+    }
+
+    setGeneratedWish({ title, body });
+    setIsGenerating(false);
   };
   
   const occasions = [
@@ -767,28 +930,83 @@ export default function Wishes() {
         )}
 
         {activeTab === 'voice' && (
-          <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center animate-in fade-in slide-in-from-bottom-4 duration-300 mb-6 relative overflow-hidden">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center animate-in fade-in slide-in-from-bottom-4 duration-300 mb-6 relative overflow-hidden">
             <h2 className="text-xl font-bold text-slate-800 mb-2">{t('স্মার্ট ভয়েস অ্যাসিস্ট্যান্ট', 'Smart Voice Assistant')}</h2>
-            <p className="text-slate-500 text-sm max-w-sm mx-auto mb-8">
-              {t('একসাথে মেসেজ তৈরি এবং শিডিউল করার কথা বলতে পারেন। যেমন: "স্ত্রীর জন্মদিনের উইশ লিখে কাল ১০টায় পাঠাও।"', 'You can generate and schedule messages by voice. e.g. "Write a birthday wish for wife and schedule it for tomorrow 10am."')}
+            <p className="text-slate-500 text-xs sm:text-sm max-w-sm mx-auto mb-6">
+              {t('একসাথে মেসেজ তৈরি এবং শিডিউল করার কথা বলতে পারেন। যেমন: "স্ত্রীর জন্মদিনের উইশ লিখে কাল ১০টায় পাঠাও 017xxxxxxxx নম্বরে।"', 'You can generate and schedule messages by voice. e.g. "Write a birthday wish for wife and schedule it for tomorrow 10am."')}
             </p>
             
-            <button 
-              onClick={handleVoiceRecord}
-              className={`w-24 h-24 rounded-full flex items-center justify-center transition-all z-10 relative ${isRecording ? 'bg-red-50 text-red-500 animate-pulse border-4 border-red-200' : 'bg-purple-50 text-purple-600 hover:bg-purple-100 shadow-md border border-purple-100'}`}
-            >
-              <Mic className={`w-10 h-10 ${isRecording ? 'animate-bounce' : ''}`} />
-            </button>
-            <p className={`mt-4 text-sm font-bold z-10 relative ${isRecording ? 'text-red-500' : 'text-slate-400'}`}>
-              {isRecording ? t('শুনছি...', 'Listening...') : t('ট্যাপ করে কথা বলুন', 'Tap to speak')}
+            <div className="relative mb-3">
+              {isRecording && (
+                <>
+                  <div className="absolute inset-0 bg-red-400 rounded-full animate-ping opacity-25"></div>
+                  <div className="absolute inset-[-12px] bg-red-200 rounded-full opacity-35 animate-pulse"></div>
+                </>
+              )}
+              <button 
+                onClick={handleVoiceRecord}
+                disabled={isGenerating}
+                className={`w-24 h-24 rounded-full flex items-center justify-center transition-all z-10 relative cursor-pointer shadow-lg active:scale-95 ${
+                  isRecording 
+                    ? 'bg-gradient-to-tr from-red-500 to-rose-600 text-white shadow-red-500/30 animate-pulse' 
+                    : 'bg-gradient-to-tr from-purple-500 to-indigo-600 text-white shadow-purple-500/30 hover:scale-105'
+                }`}
+              >
+                {isRecording ? <MicOff className="w-10 h-10" /> : <Mic className="w-10 h-10" />}
+              </button>
+            </div>
+
+            <p className={`mt-2 text-xs sm:text-sm font-bold z-10 relative ${isRecording ? 'text-red-600 animate-pulse' : 'text-slate-500'}`}>
+              {isRecording ? t('শুনছি... (থামাতে চাপুন)', 'Listening... (tap to stop)') : t('ট্যাপ করে কথা বলুন', 'Tap to speak')}
             </p>
 
-            {voiceTranscript && (
-              <div className="mt-6 p-4 bg-slate-50 border border-slate-100 rounded-xl w-full text-left animate-in fade-in slide-in-from-bottom-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">আপনার কথা:</span>
-                <p className="text-slate-700 font-medium italic text-sm">{voiceTranscript}</p>
+            {/* Simulated sound waves when recording */}
+            {isRecording && (
+              <div className="flex items-center space-x-1 h-6 my-3 animate-in fade-in">
+                <div className="w-1 h-2 bg-red-300 rounded-full animate-pulse"></div>
+                <div className="w-1 h-4 bg-red-400 rounded-full animate-bounce"></div>
+                <div className="w-1 h-6 bg-red-500 rounded-full animate-pulse"></div>
+                <div className="w-1 h-5 bg-red-600 rounded-full animate-bounce"></div>
+                <div className="w-1 h-4 bg-red-500 rounded-full animate-pulse"></div>
+                <div className="w-1 h-2 bg-red-300 rounded-full animate-bounce"></div>
               </div>
             )}
+
+            {voiceTranscript && (
+              <div className="mt-4 p-3.5 bg-purple-50/50 border border-purple-100 rounded-2xl w-full max-w-md text-left animate-in fade-in slide-in-from-bottom-2">
+                <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider mb-1 block">আপনার কথা:</span>
+                <p className="text-slate-700 font-medium italic text-xs leading-relaxed">{voiceTranscript}</p>
+              </div>
+            )}
+
+            {/* Direct text typing fallback */}
+            <form 
+              onSubmit={(e) => { 
+                e.preventDefault(); 
+                if (manualVoiceCommand.trim()) {
+                  setVoiceTranscript(manualVoiceCommand);
+                  processVoiceWish(manualVoiceCommand); 
+                  setManualVoiceCommand(''); 
+                }
+              }} 
+              className="mt-6 flex items-center gap-2 w-full max-w-md mx-auto"
+            >
+              <input
+                type="text"
+                value={manualVoiceCommand}
+                onChange={(e) => setManualVoiceCommand(e.target.value)}
+                placeholder={t('অথবা টাইপ করে জানান (যেমন: বন্ধুর জন্মদিনের উইশ কাল ৫টায় পাঠাও)...', 'Or type your wish instruction here...')}
+                className="flex-1 px-4 py-2.5 rounded-full text-xs text-slate-700 bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400/30"
+              />
+              <button
+                type="submit"
+                disabled={!manualVoiceCommand.trim() || isGenerating}
+                className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-xs font-bold hover:opacity-90 disabled:opacity-40 transition cursor-pointer shrink-0 flex items-center gap-1"
+              >
+                <Send className="w-3 h-3" />
+                <span>{t('পাঠান', 'Send')}</span>
+              </button>
+            </form>
           </div>
         )}
 
