@@ -1160,3 +1160,89 @@ Return JSON ONLY with this exact schema:
   return fallbackResult;
 }
 
+/**
+ * Extract an updated/renamed title for a document based on user's update instruction
+ */
+export async function extractNewDocumentTitle(
+  currentTitle: string,
+  userMessage: string
+): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) {
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const prompt = `You are an AI assistant helping a user rename or modify a saved document/prescription title in Smriti Life.
+Existing Document Title: "${currentTitle}"
+User's instruction message: "${userMessage}"
+
+TASK:
+Identify the intended NEW, clean, professional title for this document.
+- If the user pointed out a typo (e.g., "Unayed hoye geche ayta update kore unayes koro" or "modify korte bolechi file name Unayed doctor prescription thek unayes doctors prescription hobe"), correct the spelling appropriately (e.g. "Unayes Doctor Prescription" or "Unayes Doctors Prescription").
+- Strip conversational words like "modify korte bolechi", "file name vul hoyeche", "update kore", "koro", "hobe", "dao", "করো", "হবে", "দাও", "রিনেম করো", etc.
+- Keep the title clean, title-cased, and concise (2-6 words).
+- If the user specified an entirely new name, return that exact name.
+
+Respond ONLY with a JSON object:
+{"newTitle": "..."}
+No markdown formatting, no other text.`;
+
+      const candidateModels = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+      for (const modelName of candidateModels) {
+        try {
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 256,
+              responseMimeType: 'application/json'
+            }
+          });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout ${modelName}`)), 6000)
+          );
+          const result: any = await Promise.race([
+            model.generateContent([prompt]),
+            timeoutPromise
+          ]);
+          const responseText = result.response.text();
+          const parsed = JSON.parse(responseText.trim());
+          if (parsed && parsed.newTitle && typeof parsed.newTitle === 'string' && parsed.newTitle.trim().length > 0) {
+            return parsed.newTitle.trim();
+          }
+        } catch (e) {
+          // try next model
+        }
+      }
+    } catch (err) {
+      console.warn('[extractNewDocumentTitle] Gemini error:', err);
+    }
+  }
+
+  // Fallback heuristic parsing:
+  // 1. "theke/thek ... hobe"
+  const thekeMatch = userMessage.match(/(?:theke|thek|থেকে)\s+([^\n.,!]+?)\s+(?:hobe|হবে|koro|করো|dao|দাও)/i);
+  if (thekeMatch && thekeMatch[1].trim()) {
+    const raw = thekeMatch[1].trim().replace(/^["']|["']$/g, '');
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  // 2. "update kore/change kore ... koro"
+  const updateMatch = userMessage.match(/(?:update|change|modify|rename|পরিবর্তন)\s*(?:kore|করে)?\s+["']?([^"'\n.,!]+?)["']?\s+(?:koro|করো|dao|দাও)/i);
+  if (updateMatch && updateMatch[1].trim()) {
+    const rawNew = updateMatch[1].trim().replace(/^["']|["']$/g, '');
+    if (rawNew.split(/\s+/).length === 1 && currentTitle.split(/\s+/).length > 1) {
+      const firstWord = currentTitle.split(/\s+/)[0];
+      return currentTitle.replace(new RegExp(firstWord, 'i'), rawNew.charAt(0).toUpperCase() + rawNew.slice(1));
+    }
+    return rawNew.charAt(0).toUpperCase() + rawNew.slice(1);
+  }
+
+  // 3. Quoted text
+  const quoteMatch = userMessage.match(/["'“]([^"'”]+)["'”]/);
+  if (quoteMatch && quoteMatch[1].trim()) {
+    return quoteMatch[1].trim();
+  }
+
+  return currentTitle;
+}
+

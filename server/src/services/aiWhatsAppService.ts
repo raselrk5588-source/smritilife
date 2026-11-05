@@ -1912,7 +1912,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       const isDocDelete = /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|ডকুমেন্ট|ভল্ট|সার্টিফিকেট|রিপোর্ট|এনআইডি|nid|বিল|রশিদ|ছবি|ফাইল|document|prescription|report|file)/i.test(text);
       if (isDocDelete) {
         const cleanDocQuery = text
-          .replace(/(?:আমার|amr|amar|ডকুমেন্ট|document|প্রেসক্রিপশন|prescription|রিপোর্ট|report|ফাইল|file|ভল্ট|vault|সার্টিফিকেট|certificate|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে|এর|র|টা|টি)/gi, '')
+          .replace(/(?:আমার|amr|amar|ডকুমেন্ট|document|প্রেসক্রিপশন|prescription|রিপোর্ট|report|ফাইল|file|ভল্ট|vault|সার্টিফিকেট|certificate|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|del|remove|করে|দাও|করো|দিন|ফেলে|এর|র|টা|টি|kor|koro|kore|dao|daw|dis)/gi, '')
           .trim();
         return {
           action: 'delete_document',

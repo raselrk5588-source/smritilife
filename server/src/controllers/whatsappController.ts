@@ -40,7 +40,7 @@ import {
   bnToEnDigits
 } from '../services/expenseService';
 import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
-import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes, analyzeDocumentWithAI, isConsumableItem } from '../services/documentService';
+import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes, analyzeDocumentWithAI, isConsumableItem, extractNewDocumentTitle } from '../services/documentService';
 
 export interface ReminderActionState {
   reminderId: string;
@@ -1945,7 +1945,133 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // --- STEP 0D: Handle Document Retrieval & Item Lifespan Tracking ("আমার প্রেসক্রিপশন দাও", "Tishu box ta kobe save kora hoyechilo", "সিলিন্ডার কয়দিন চলছে") ---
+        // --- STEP 0D: Handle Document Retrieval, Deletion & Modification ---
+        const userDocsCount = await UserDocument.countDocuments({ userId: user._id });
+
+        const isDeleteIntent = /(?:delete|remove|del|ডিলিট|মুছে|মুছ|বাতিল|cancel|ক্যান্সেল|ফেলে|বাদ)\b/i.test(cleanText);
+
+        const isDocTarget = /(?:file|doc|document|prescription|report|vault|ফাইল|ডকুমেন্ট|প্রেসক্রিপশন|প্রেস্ক্রিপশন|রিপোর্ট|ভল্ট|কাগজ|রশিদ|ছবি)/i.test(cleanText);
+
+        const isDocUpdateIntent =
+          /(?:update|modify|rename|change|edit|আপডেট|মডিফাই|রিনেম|পরিবর্তন|এডিট|সংশোধন|নামকরণ|বদলাও|ভুল\s*(?:হয়েছে|হইছে|হয়ে\s*গেছে)|vul\s*hoye(?:che|se)|name\s*vul)\b/i.test(cleanText) &&
+          /(?:file|doc|document|prescription|report|নাম|name|ফাইল|ডকুমেন্ট|প্রেসক্রিপশন|রিপোর্ট|টাইটেল|title)/i.test(cleanText);
+
+        // STEP 0D-1: Document Deletion Handler ("delete kor unayes doctor prescription", "প্রেসক্রিপশন ডিলিট করো", "ফাইল ডিলিট করো")
+        if (userDocsCount > 0 && isDeleteIntent && isDocTarget) {
+          console.log(`[WhatsAppDoc] Document Delete intent detected: "${cleanText}"`);
+          let docToDelete: any = null;
+
+          // Check for index reference ("১ নম্বর", "1st", "last ta", etc.)
+          const indexMatch = cleanText.match(/(?:(\d+)\s*(?:number|no|নং|নম্বর|তম)|(?:প্রথম|১ম|first|protom)|(?:লাস্ট|শেষ|last|shesh))/i);
+          if (indexMatch) {
+            const allDocs = await UserDocument.find({ userId: user._id }).sort({ createdAt: -1 });
+            if (/(?:লাস্ট|শেষ|last|shesh)/i.test(indexMatch[0]) && allDocs.length > 0) {
+              docToDelete = allDocs[0];
+            } else if (/(?:প্রথম|১ম|first|protom)/i.test(indexMatch[0]) && allDocs.length > 0) {
+              docToDelete = allDocs[allDocs.length - 1];
+            } else if (indexMatch[1]) {
+              const idx = parseInt(indexMatch[1], 10);
+              if (idx >= 1 && idx <= allDocs.length) {
+                docToDelete = allDocs[idx - 1];
+              }
+            }
+          }
+
+          if (!docToDelete) {
+            const cleanDocSearch = cleanText
+              .replace(/(?:delete|remove|del|ডিলিট|মুছে|মুছ|বাতিল|cancel|ক্যান্সেল|ফেলে|বাদ|করে|কর|করো|দিন|দাও|দিস|dao|daw|koro|kor|kore|আমার|amr|amar|টা|টি|file|doc|document|prescription|report|vault|ফাইল|ডকুমেন্ট|প্রেসক্রিপশন|প্রেস্ক্রিপশন|রিপোর্ট|ভল্ট|কাগজ)/gi, ' ')
+              .trim();
+
+            if (cleanDocSearch) {
+              const matchedRes = await findMatchingDocumentWithVersion(user._id.toString(), cleanDocSearch);
+              if (matchedRes && matchedRes.doc) {
+                docToDelete = matchedRes.doc;
+              }
+            }
+          }
+
+          if (!docToDelete) {
+            const matchedRes = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
+            if (matchedRes && matchedRes.doc) {
+              docToDelete = matchedRes.doc;
+            }
+          }
+
+          // Fallback: If no specific doc matched by keyword, fallback to most recent uploaded document
+          if (!docToDelete) {
+            docToDelete = await UserDocument.findOne({ userId: user._id }).sort({ createdAt: -1 });
+          }
+
+          if (docToDelete) {
+            await UserDocument.findByIdAndDelete(docToDelete._id);
+            if (docToDelete.fileUrl) {
+              try {
+                const diskPath = path.join(__dirname, '../../uploads/documents', path.basename(docToDelete.fileUrl));
+                if (fs.existsSync(diskPath)) {
+                  await fs.promises.unlink(diskPath);
+                }
+              } catch (e) {
+                console.warn('Could not unlink doc file from disk:', e);
+              }
+            }
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🗑️ আপনার সংরক্ষিত "*${docToDelete.title}*" (${docToDelete.category}) সফলভাবে স্মৃতি ভল্ট থেকে ডিলিট করা হয়েছে!`
+            );
+            return;
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `⚠️ দুঃখিত, আপনার উল্লেখিত কোনো ফাইল বা ডকুমেন্ট স্মৃতি ভল্টে খুঁজে পাওয়া যায়নি।`
+            );
+            return;
+          }
+        }
+
+        // STEP 0D-2: Document Rename / Modify Handler ("Unayed hoye geche ayta update kore unayes koro", "modify korte bolechi file name ... thek unayes doctors prescription hobe")
+        if (userDocsCount > 0 && isDocUpdateIntent) {
+          console.log(`[WhatsAppDoc] Document Rename/Modify intent detected: "${cleanText}"`);
+          let targetDoc: any = null;
+
+          const matchedRes = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
+          if (matchedRes && matchedRes.doc) {
+            targetDoc = matchedRes.doc;
+          }
+
+          if (!targetDoc) {
+            targetDoc = await UserDocument.findOne({ userId: user._id }).sort({ createdAt: -1 });
+          }
+
+          if (targetDoc) {
+            const newTitle = await extractNewDocumentTitle(targetDoc.title, cleanText);
+            if (newTitle && newTitle.toLowerCase() !== targetDoc.title.toLowerCase()) {
+              const oldTitle = targetDoc.title;
+              await UserDocument.findByIdAndUpdate(targetDoc._id, {
+                title: newTitle,
+                updatedAt: new Date()
+              });
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `✏️ আপনার ফাইলের নাম সফলভাবে সংশোধন করা হয়েছে!\n\n📋 *পূর্বের নাম:* ${oldTitle}\n✨ *নতুন নাম:* ${newTitle}`
+              );
+              return;
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `ℹ️ ফাইলের নতুন নামটি বুঝতে পারিনি। দয়া করে এভাবে লিখুন:\n"ফাইল নাম পরিবর্তন করে [নতুন নাম] হবে"`
+              );
+              return;
+            }
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `⚠️ দুঃখিত, পরিবর্তন করার মতো কোনো সংরক্ষিত ফাইল পাওয়া যায়নি।`
+            );
+            return;
+          }
+        }
+
+        // STEP 0D-3: Document List Query
         const isDocListQuery = /^(?:\/docs|\/files|ফাইলগুলো|ডকুমেন্টগুলো|সব\s*ফাইল|লিস্ট\s*ফাইল)\b/i.test(cleanText) ||
           /(?:আমার|amr|amar)?\s*(?:কি\s*কি|কোন\s*কোন|সব|সকল|list)?\s*(?:ফাইল|ডকুমেন্ট|কাগজ|প্রেসক্রিপশন|রিপোর্ট|file|doc|document)\s*(?:আছে|দেখাও|দেখান|লিস্ট|list|সব\s*দেখাও)/i.test(cleanText);
 
@@ -1959,6 +2085,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        // STEP 0D-4: Document Retrieval & Item Lifespan Tracking ("আমার প্রেসক্রিপশন দাও", "Tishu box ta kobe save kora hoyechilo", "সিলিন্ডার কয়দিন চলছে")
         const isTrackingOrDateQuery =
           /(?:কবে|কবেকার|কত\s*দিন|কয়\s*দিন|কদ্দিন|তারিখ|তারিখে|দিন\s*হলো|দিন\s*গেছে|চলছে|চলতেছে|কিনেছি|কিনেছিলাম|এনেছি|এনেছিলাম|নিয়েছি|নিয়েছিলাম|সেভ\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|আপলোড\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|রাখলাম|রেখেছি|kobe|kobekar|koto\s*din|koy\s*din|koddin|tarikh|tarikhe|din\s*holo|din\s*geche|cholche|choltese|kinesi|kinesilam|enechi|enesilam|niesi|niesilam|save\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|upload\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|rekhechi|rakhlam|when\s*(?:was|did)|how\s*(?:many\s*days|long))\b/i.test(cleanText);
 
@@ -1966,9 +2093,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dau|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|lagbe|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText);
 
         const isShortQuery = cleanText.split(/\s+/).length <= 4;
-        const userDocsCount = await UserDocument.countDocuments({ userId: user._id });
 
-        if (userDocsCount > 0 && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
+        if (userDocsCount > 0 && !isDeleteIntent && !isDocUpdateIntent && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
           const docResult = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
           const isEng = isPureEnglishText(cleanText);
 
@@ -4556,6 +4682,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   { notes: searchRegex }
                 ]
               }).sort({ createdAt: -1 });
+
+              if (!docToDelete) {
+                const matchRes = await findMatchingDocumentWithVersion(user._id.toString(), targetQ);
+                if (matchRes && matchRes.doc) {
+                  docToDelete = matchRes.doc;
+                }
+              }
             }
 
             if (!docToDelete) {

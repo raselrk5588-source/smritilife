@@ -218,3 +218,34 @@ export const deleteDocument = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+/**
+ * Update document details (title, category, notes, tags)
+ */
+export const updateDocument = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const { title, category, notes, tags } = req.body;
+
+    const doc = await UserDocument.findOne({ _id: req.params.id, userId });
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    if (title && title.trim()) doc.title = title.trim();
+    if (category) doc.category = category;
+    if (notes !== undefined) doc.notes = notes;
+    if (tags && Array.isArray(tags)) doc.tags = tags;
+
+    await doc.save();
+
+    res.json({
+      success: true,
+      message: 'ডকুমেন্ট তথ্য সফলভাবে আপডেট করা হয়েছে',
+      document: doc
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
