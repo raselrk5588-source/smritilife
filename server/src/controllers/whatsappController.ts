@@ -15,6 +15,7 @@ import AITrainingRule from '../models/AITrainingRule';
 import UserDocument from '../models/UserDocument';
 import SystemSettings from '../models/SystemSettings';
 import Debt from '../models/Debt';
+import Expense from '../models/Expense';
 import { getMaintenanceStatus, updateMaintenanceCache } from '../services/maintenanceService';
 import { analyzeMessage, analyzeAudioMessage, transcribeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache, getLastUserTurn } from '../services/aiWhatsAppService';
 import { searchReminders, formatReminderMatchMessage, formatMultipleRemindersMessage } from '../services/memoryRetrievalService';
@@ -163,6 +164,25 @@ export const ensureLegacyDebtNotesMigrated = async (userId: any): Promise<number
     return migratedCount;
   } catch (err) {
     console.error('Error auto-migrating legacy debt notes:', err);
+    return 0;
+  }
+};
+
+/**
+ * Clean up accidental expenses created from debt sentences
+ */
+export const cleanupAccidentalDebtExpenses = async (userId: any): Promise<number> => {
+  try {
+    const res = await Expense.deleteMany({
+      userId,
+      $or: [
+        { title: /(?:kache\s*pabo|কাছে\s*পাবো|pabo\s*ami|\bpabo\b|পাবো|পাব)/i },
+        { title: /(?:asad\s*ar\s*kache|manik\s*vai|pias\s*ar\s*kache)/i }
+      ]
+    });
+    return res.deletedCount || 0;
+  } catch (err) {
+    console.error('Error cleaning accidental debt expenses:', err);
     return 0;
   }
 };
@@ -3758,11 +3778,116 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
-        // --- STEP 2.9: Daily Expense Tracker Fast-Path (0 Cost, Instant Response) ---
-        // Allow expense commands, queries and deletions (yesterday, day before yesterday, specific dates like '10 oct', months)
+        // --- STEP 2.9: Udhar / Debt Tracker Fast-Path (0 Cost, Instant Response) ---
         const isReminderAction = /মনে\s*করিয়ে|ডাকবে|তুলে\s*দিও|wake\s*me|অ্যালার্ম|alarm/i.test(cleanText);
         if (!isReminderAction) {
-          // 2.9A: Expense Deletion Handling (Explicit expense delete or Active expense context delete)
+          const parsedDebt = parseDebtInput(cleanText);
+          if (parsedDebt) {
+            await cleanupAccidentalDebtExpenses(user._id);
+            if (parsedDebt.isQuery) {
+              await ensureLegacyDebtNotesMigrated(user._id);
+              if (parsedDebt.queryType === 'person' && parsedDebt.personName) {
+                const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
+                if (personSummary) {
+                  const reply = buildPersonDebtMessage(personSummary);
+                  await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
+                } else {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `👤 *${parsedDebt.personName}*-এর সাথে কোনো আগের ধার-দেনা বা বাকি লেনদেন পাওয়া যায়নি।`
+                  );
+                }
+              } else {
+                // Overall summary
+                const overallSummary = await getDebtSummary(user._id);
+                const reply = buildDebtSummaryMessage(overallSummary);
+                await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
+              }
+              return;
+            } else if (parsedDebt.isDelete) {
+              const delResult = await deleteDebts(user._id, parsedDebt.deleteScope || 'all', parsedDebt.personName);
+              const reply = buildDebtDeletedMessage(delResult.deletedCount, delResult.scope as any, delResult.personName);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
+              return;
+            } else if (parsedDebt.multipleDebts && parsedDebt.multipleDebts.length > 0) {
+              for (const item of parsedDebt.multipleDebts) {
+                await recordDebt(
+                  user._id,
+                  item.personName,
+                  item.amount,
+                  item.type,
+                  { notes: item.notes }
+                );
+              }
+              const overallSummary = await getDebtSummary(user._id);
+              const reply = buildMultipleDebtsLoggedMessage(parsedDebt.multipleDebts, overallSummary);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
+              return;
+            } else if (parsedDebt.isSettlement && parsedDebt.personName && parsedDebt.amount) {
+              // Settle repayment / refund
+              const settlementResult = await settleDebtByPerson(
+                user._id,
+                parsedDebt.personName,
+                parsedDebt.amount,
+                parsedDebt.settlementType || 'received'
+              );
+              const reply = buildDebtSettledMessage(
+                settlementResult.personName,
+                settlementResult.settledTotal,
+                parsedDebt.settlementType || 'received',
+                settlementResult.remainingForPerson
+              );
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
+              return;
+            } else if (parsedDebt.type && parsedDebt.personName && parsedDebt.amount) {
+              // New debt entry (lent or borrowed)
+              const savedDebt = await recordDebt(
+                user._id,
+                parsedDebt.personName,
+                parsedDebt.amount,
+                parsedDebt.type,
+                { notes: parsedDebt.notes }
+              );
+              // Calculate updated person balance
+              const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
+              const remaining = parsedDebt.type === 'lent'
+                ? (personSummary?.totalLentRemaining || parsedDebt.amount)
+                : (personSummary?.totalBorrowedRemaining || parsedDebt.amount);
+
+              const reply = buildDebtLoggedMessage(
+                savedDebt.personName,
+                savedDebt.amount,
+                savedDebt.type,
+                remaining
+              );
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
+              return;
+            }
+          }
+        }
+
+        // --- STEP 2.10: Daily Expense Tracker Fast-Path (0 Cost, Instant Response) ---
+        // Allow expense commands, queries and deletions (yesterday, day before yesterday, specific dates like '10 oct', months)
+        if (!isReminderAction) {
+          // 2.10A: Expense Deletion Handling (Explicit expense delete or Active expense context delete)
           const hasDeleteVerb = /(?:ডিলিট|মুছে|মুছ|delete|remove|ক্লিয়ার|বাতিল|cancel|বাদ|ফেলে)/i.test(cleanText);
           const hasExplicitReminder = /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|সেহরি|সাহরি|রোজা)/i.test(cleanText);
           const hasExplicitNote = /(?:নোট|note)/i.test(cleanText);
@@ -4005,110 +4130,6 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 dSummary.dateTotal,
                 dSummary.monthTotal,
                 parsedExpense.dateLabelBn
-              );
-              await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-              return;
-            }
-          }
-        }
-
-        // --- STEP 2.10: Udhar / Debt Tracker Fast-Path (0 Cost, Instant Response) ---
-        if (!isReminderAction) {
-          const parsedDebt = parseDebtInput(cleanText);
-          if (parsedDebt) {
-            if (parsedDebt.isQuery) {
-              await ensureLegacyDebtNotesMigrated(user._id);
-              if (parsedDebt.queryType === 'person' && parsedDebt.personName) {
-                const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
-                if (personSummary) {
-                  const reply = buildPersonDebtMessage(personSummary);
-                  await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-                } else {
-                  await sendMetaWhatsAppMessage(
-                    fromNumber,
-                    `👤 *${parsedDebt.personName}*-এর সাথে কোনো আগের ধার-দেনা বা বাকি লেনদেন পাওয়া যায়নি।`
-                  );
-                }
-              } else {
-                // Overall summary
-                const overallSummary = await getDebtSummary(user._id);
-                const reply = buildDebtSummaryMessage(overallSummary);
-                await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-              }
-              return;
-            } else if (parsedDebt.isDelete) {
-              const delResult = await deleteDebts(user._id, parsedDebt.deleteScope || 'all', parsedDebt.personName);
-              const reply = buildDebtDeletedMessage(delResult.deletedCount, delResult.scope as any, delResult.personName);
-              await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-              return;
-            } else if (parsedDebt.multipleDebts && parsedDebt.multipleDebts.length > 0) {
-              for (const item of parsedDebt.multipleDebts) {
-                await recordDebt(
-                  user._id,
-                  item.personName,
-                  item.amount,
-                  item.type,
-                  { notes: item.notes }
-                );
-              }
-              const overallSummary = await getDebtSummary(user._id);
-              const reply = buildMultipleDebtsLoggedMessage(parsedDebt.multipleDebts, overallSummary);
-              await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-              return;
-            } else if (parsedDebt.isSettlement && parsedDebt.personName && parsedDebt.amount) {
-              // Settle repayment / refund
-              const settlementResult = await settleDebtByPerson(
-                user._id,
-                parsedDebt.personName,
-                parsedDebt.amount,
-                parsedDebt.settlementType || 'received'
-              );
-              const reply = buildDebtSettledMessage(
-                settlementResult.personName,
-                settlementResult.settledTotal,
-                parsedDebt.settlementType || 'received',
-                settlementResult.remainingForPerson
-              );
-              await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-              return;
-            } else if (parsedDebt.type && parsedDebt.personName && parsedDebt.amount) {
-              // New debt entry (lent or borrowed)
-              const savedDebt = await recordDebt(
-                user._id,
-                parsedDebt.personName,
-                parsedDebt.amount,
-                parsedDebt.type,
-                { notes: parsedDebt.notes }
-              );
-              // Calculate updated person balance
-              const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
-              const remaining = parsedDebt.type === 'lent'
-                ? (personSummary?.totalLentRemaining || parsedDebt.amount)
-                : (personSummary?.totalBorrowedRemaining || parsedDebt.amount);
-
-              const reply = buildDebtLoggedMessage(
-                savedDebt.personName,
-                savedDebt.amount,
-                savedDebt.type,
-                remaining
               );
               await sendMetaWhatsAppMessage(
                 fromNumber,

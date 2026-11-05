@@ -405,6 +405,12 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   if (!text) return null;
   const clean = text.trim();
 
+  // Exclude debt / udhar / baki / lending / borrowing operations from expense tracking
+  const isDebtRelated = /(?:পাবো|পাব|পাবে|দেবো|দেনা|ধার|বাকি|উধার|হাওলাত|করজ|কাছে|kache|pabo|debo|dhar|dena|baki|udhar|paona|pauna|pawna|ferot|ফেরত|sodh|শোধ|porishodh|পরিশোধ)/i.test(clean);
+  if (isDebtRelated) {
+    return null;
+  }
+
   // Extract any specific, past or relative date from the text
   const dateInfo = parseExpenseDate(clean, referenceDate);
   const textWithoutDate = dateInfo?.cleanedText !== undefined ? dateInfo.cleanedText : clean;
