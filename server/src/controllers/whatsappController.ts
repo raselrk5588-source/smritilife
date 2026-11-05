@@ -3992,13 +3992,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         // --- STEP 2.10: Daily Expense Tracker Fast-Path (0 Cost, Instant Response) ---
         // Allow expense commands, queries and deletions (yesterday, day before yesterday, specific dates like '10 oct', months)
         if (!isReminderAction) {
-          // 2.10A: Expense Deletion Handling (Explicit expense delete or Active expense context delete)
-          const hasDeleteVerb = /(?:ডিলিট|মুছে|মুছ|delete|remove|ক্লিয়ার|বাতিল|cancel|বাদ|ফেলে)/i.test(cleanText);
+          // 2.10A: Expense Deletion Handling (Explicit expense delete, Active expense context delete, or Direct item delete)
+          const hasDeleteVerb = /(?:ডিলিট|মুছে|মুছ|বাদ|ফেলে|ফেলো|ফেল|সরাই|সরায়|সরিয়ে|সরাও|কেটে|বাতিল|ক্লিয়ার|লাগবে\s*না|দরকার\s*(?:নাই|নেই)|\b(?:delete|dlt|del|remove|remv|cancel|clear|muche|mucho|muco|muce|felo|fele|fela|bad|baad|sorai|shorai|soriye|shoriye|sorao|shorao|kete|lagbe\s*na|lagbena|dorkar\s*(?:nai|nei))\b)/i.test(cleanText);
           const hasExplicitReminder = /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|সেহরি|সাহরি|রোজা)/i.test(cleanText);
-          const hasExplicitNote = /(?:নোট|note)/i.test(cleanText);
+          const hasExplicitNote = /(?:নোট|note|ঠিকানা|address|ডকুমেন্ট|document|ভল্ট|vault)/i.test(cleanText);
           const hasExplicitContact = /(?:কন্ট্যাক্ট|contact|নম্বর)/i.test(cleanText);
           const hasExplicitTodo = /(?:টু-ডু|todo|চেকলিস্ট|checklist)/i.test(cleanText);
-          const hasExplicitExpense = /(?:খরচ|khoroc|khoros|expense|expenses|ব্যয়|ব্যায়|খাতা)/i.test(cleanText);
+          const hasExplicitExpense = /(?:খরচ|খরচের|খরচা|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses|ব্যয়|ব্যায়|খাতা)/i.test(cleanText);
 
           const expContext = userExpenseContext.get(user._id.toString());
           const isExpContextActive = !!(expContext && expContext.expiresAt > Date.now() && expContext.expenses.length > 0);
@@ -4006,7 +4006,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           if (hasDeleteVerb && !hasExplicitReminder && !hasExplicitNote && !hasExplicitContact && !hasExplicitTodo) {
             if (hasExplicitExpense || isExpContextActive) {
               // 1. Delete ALL expenses for date
-              if (/(?:সব|সকল|all|sob|shob)\s*(?:খরচ|khoroc|khoros|expense)/i.test(cleanText)) {
+              if (/(?:সব|সকল|all|sob|shob)\s*(?:খরচ|খরচা|khoroch|khoroc|khoros|cost|expense)/i.test(cleanText)) {
                 const targetDate = expContext?.targetDate || new Date();
                 const dateLabel = expContext?.dateLabelBn || 'আজকের';
                 const delRes = await deleteAllExpensesForDate(user._id, targetDate);
@@ -4025,9 +4025,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               // 2. Delete by Index (e.g. "1 number delete kore daw", "১ নম্বরটা ডিলিট করো", "শেষেরটা ডিলিট করো")
               let targetIndex: number | undefined = undefined;
               const enDigits = bnToEnDigits(cleanText);
-              const indexMatch = enDigits.match(/(\d+)\s*(?:number|nmbr|numbr|no|নম্বর|নাম্বার|নং)?\s*(?:ta|ti|টা|টি)?/i);
-              if (indexMatch) {
-                targetIndex = parseInt(indexMatch[1], 10);
+              const explicitIndexMatch = enDigits.match(/(?:^|\s)(\d{1,2})\s*(?:number|nmbr|numbr|no|নম্বর|নাম্বার|নং)\s*(?:ta|ti|টা|টি)?/i);
+              const bareIndexMatch = enDigits.match(/^\s*(\d{1,2})\s*(?:ta|ti|টা|টি)?\s*(?:delete|dlt|del|remove|ডিলিট|মুছে|বাদ|সরাই|সরিয়ে|কেটে|বাতিল)/i);
+              if (explicitIndexMatch) {
+                targetIndex = parseInt(explicitIndexMatch[1], 10);
+              } else if (bareIndexMatch && !/(?:টাকা|taka|takar|tk)/i.test(cleanText)) {
+                targetIndex = parseInt(bareIndexMatch[1], 10);
               } else if (/(?:protom|first|প্রথম)(?:\s*(?:ta|ti|টা|টি))?/i.test(cleanText)) {
                 targetIndex = 1;
               } else if (/(?:last|shesh|শেষ|লাস্ট)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি))?/i.test(cleanText)) {
@@ -4054,12 +4057,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     result.deletedExpense.amount,
                     result.dateTotal,
                     result.monthTotal,
-                    dateLabel
+                    dateLabel,
+                    result.remainingExpenses
                   );
                   await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
+                    fromNumber,
+                    (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                  );
                   return;
                 } else {
                   await sendMetaWhatsAppMessage(
@@ -4069,19 +4073,28 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   return;
                 }
               }
+            }
 
-              // 3. Delete by Title/Keyword (e.g. "rate dinner delete koro", "লাঞ্চ ডিলিট করো")
-              const cleanedQuery = cleanText
-                .replace(/(?:খরচ|khoroc|khoros|expense|expenses|হিসাব|ব্যয়|ব্যয়|টা|টি|ডিলিট|মুছে|মুছ|delete|remove|ক্লিয়ার|বাতিল|cancel|বাদ|ফেলে|করে|দাও|করো|দিন|dao|daw|koro|kore)/gi, '')
-                .trim();
+            // 3. Delete by Title/Keyword (e.g. "riksha vara delete kore daw", "riksha vara muche felo", "riksha vara bad daw", "riksha vara sorai daw", "riksha vara lagbe na")
+            const cleanedQuery = cleanText
+              .replace(/(?:[০-৯0-9]+(?:\.[০-৯0-9]+)?\s*(?:টাকার|টাকায়|টাকায়|টাকা|takar|takay|taka|tk|৳)?)/gi, '')
+              .replace(/(?:আজকের?|আজকে?|আজ|ajker?|ajke?|গতকালকের?|গতকালের?|গতকাল|কালকের?|gotokalker|gotokaler|gotokal|খরচের|খরচ|খরচা|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses|হিসাব|hisab|ব্যয়|ব্যয়|লিস্ট|list|থেকে|theke|টা|টি|\b(?:ta|ti|ar|er)\b|ডিলিট|মুছে|মুছ|বাদ|ফেলে|ফেলো|ফেল|সরাই|সরায়|সরিয়ে|সরাও|কেটে|ক্লিয়ার|বাতিল|লাগবে\s*না|দরকার\s*(?:নাই|নেই)|\b(?:delete|dlt|del|remove|remv|cancel|clear|muche|mucho|muco|muce|felo|fele|fela|bad|baad|sorai|shorai|soriye|shoriye|sorao|shorao|kete|lagbe\s*na|lagbena|dorkar\s*(?:nai|nei)|kore|koro|kor|daw|dao|deo|de|din)\b|করে|দাও|দেও|দে|করো|কর|দিন)/gi, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
 
-              if (cleanedQuery.length >= 2) {
+            if (cleanedQuery.length >= 2) {
+              const escapedNoteCheck = cleanedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const hasMatchingNote = (!hasExplicitExpense && !isExpContextActive)
+                ? await Note.exists({ userId: user._id, title: new RegExp(`^${escapedNoteCheck}$`, 'i') })
+                : null;
+
+              if (!hasMatchingNote) {
                 const targetDate = expContext?.targetDate || new Date();
                 const result = await deleteExpenseByTitle(user._id, targetDate, cleanedQuery);
                 if (result) {
                   if (result.remainingCount > 0) {
                     userExpenseContext.set(user._id.toString(), {
-                      targetDate,
+                      targetDate: result.deletedExpense.date || targetDate,
                       dateLabelBn: expContext?.dateLabelBn || 'আজকের',
                       expenses: result.remainingExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
                       expiresAt: Date.now() + 15 * 60 * 1000
@@ -4094,17 +4107,20 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     result.deletedExpense.amount,
                     result.dateTotal,
                     result.monthTotal,
-                    expContext?.dateLabelBn || 'আজকের'
+                    expContext?.dateLabelBn || 'আজকের',
+                    result.remainingExpenses
                   );
                   await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
+                    fromNumber,
+                    (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                  );
                   return;
                 }
               }
+            }
 
-              // 4. Context is active and user sent generic delete command (like "delete kore daw" in the screenshot)
+            if (hasExplicitExpense || isExpContextActive) {
+              // 4. Context is active and user sent generic delete command (like "delete kore daw", "muche felo", "bad daw")
               if (isExpContextActive && expContext) {
                 if (expContext.expenses.length === 1) {
                   const result = await deleteExpenseByIndex(user._id, expContext.targetDate, 1);
@@ -4115,12 +4131,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                       result.deletedExpense.amount,
                       result.dateTotal,
                       result.monthTotal,
-                      expContext.dateLabelBn
+                      expContext.dateLabelBn,
+                      result.remainingExpenses
                     );
                     await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
+                      fromNumber,
+                      (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                    );
                     return;
                   }
                 } else if (expContext.expenses.length > 1) {
@@ -4139,12 +4156,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     result.deletedExpense.amount,
                     result.dateTotal,
                     result.monthTotal,
-                    'আজকের'
+                    'আজকের',
+                    result.remainingExpenses
                   );
                   await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
+                    fromNumber,
+                    (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                  );
                   return;
                 } else {
                   await sendMetaWhatsAppMessage(fromNumber, 'আপনার কোনো খরচের এন্ট্রি পাওয়া যায়নি।');

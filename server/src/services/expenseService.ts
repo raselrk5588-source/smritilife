@@ -1183,20 +1183,33 @@ export const deleteAllExpensesForDate = async (
 };
 
 /**
- * Format Response Message for Expense Deletion
+ * Format Response Message for Expense Deletion (with updated remaining list and adjusted totals)
  */
 export const buildExpenseDeletedMessage = (
   deletedTitle: string,
   deletedAmount: number,
   dayTotal: number,
   monthTotal: number,
-  dateLabelBn: string = 'আজকের'
+  dateLabelBn: string = 'আজকের',
+  remainingExpenses?: Array<{ title: string; amount: number }>
 ): string => {
   const label = dateLabelBn.includes('আজ') ? 'আজকের' : dateLabelBn;
   const displayTitle = toBanglaExpenseTitle(deletedTitle) || deletedTitle;
-  return `🗑️ আপনার খরচের তালিকা থেকে *"${displayTitle}" (${formatTaka(deletedAmount)})* সফলভাবে মুছে ফেলা হয়েছে!\n\n` +
+  let remainingBlock = '';
+  if (remainingExpenses && remainingExpenses.length > 0) {
+    const items = remainingExpenses
+      .map((e, idx) => {
+        const dTitle = toBanglaExpenseTitle(e.title) || e.title;
+        const cat = detectExpenseCategory(`${e.title} ${dTitle}`);
+        return `${enToBnDigits(idx + 1)}. ${cat.icon} ${dTitle}: *${formatTaka(e.amount)}*`;
+      })
+      .join('\n');
+    remainingBlock = `\n📋 *বাকি খরচের তালিকা:*\n${items}\n`;
+  }
+  return `🗑️ আপনার খরচের তালিকা থেকে *"${displayTitle}" (${formatTaka(deletedAmount)})* সফলভাবে বাদ দেওয়া হয়েছে!\n` +
+         `${remainingBlock}\n` +
          `📊 *${label} নতুন মোট খরচ:* ${formatTaka(dayTotal)}\n` +
-         `📅 *চলতি মাসের মোট:* ${formatTaka(monthTotal)}`;
+         `📅 *চলতি মাসের নতুন মোট:* ${formatTaka(monthTotal)}`;
 };
 
 /**
