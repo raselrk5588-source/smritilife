@@ -59,16 +59,19 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
   if (/মনে|ডাক|তুলে|alarm|অ্যালার্ম|wake\s*me/i.test(clean)) return null;
 
   // 1. General Queries
-  // "ধার দেনার হিসাব", "বাকি খাতা", "কার কাছে কত পাবো", "পাওনা কত", "দেনা কত", "dhar denar hisab", "baki khata"
-  if (
-    /(?:ধার\s*দেনার?|বাকি|দেনা\s*পাওনা|উধার)\s*(?:হিসাব|খাতা|লিস্ট|তালিকা|কত|দেখাও|দেখান)/i.test(clean) ||
-    /^(?:ধার\s*দেনা|বাকি\s*খাতা|কার\s*কাছে\s*কত\s*পাবো|আমার\s*পাওনা\s*কত|আমার\s*দেনা\s*কত|পাওনা\s*কত|দেনা\s*কত|dhar\s*dena|baki\s*khata)$/i.test(clean) ||
-    /(?:dhar\s*dena|baki\s*khata|udhar)\s*(?:hisab|koto|list)?/i.test(lower) ||
-    /(?:kar\s*kache\s*koto\s*pabo|amar\s*paona\s*koto|amar\s*dena\s*koto|paona\s*koto|dena\s*koto)/i.test(lower)
-  ) {
-    // Check if query is about a specific person (e.g. "রনির ধার দেনার হিসাব")
-    const specificPersonMatch = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:এর|-?er)?\s*(?:হিসাব|কাছে\s*কত\s*পাবো|কাছে\s*পাওনা|hisab|kache\s*koto\s*pabo)\s*(?:কত|koto|bolo|বলো|কি)?\??$/i);
-    if (specificPersonMatch && !/ধার|দেনা|বাকি|মোট|আজ|কাল/i.test(specificPersonMatch[1].trim())) {
+  // "ধার দেনার হিসাব", "বাকি খাতা", "কার কাছে কত পাবো", "পাওনা কত", "দেনা কত", "koto taka pabo", "pauna takar hisab", "paona takar hisab dao"
+  const isGeneralDebtQuery =
+    /(?:ধার\s*দেনার?|বাকি|দেনা\s*পাওনা|উধার|পাওনা|দেনা)\s*(?:টাকার?)?\s*(?:হিসাব|খাতা|লিস্ট|তালিকা|কত|দেখাও|দেখান|দাও|দিন|চাই|বলো|বলেন|বলুন|দিতে\s*বলছি|দিতে\s*বললাম)/i.test(clean) ||
+    /^(?:ধার\s*দেনা|বাকি\s*খাতা|কার\s*কাছে\s*কত\s*পাবো|আমার\s*পাওনা\s*কত|আমার\s*দেনা\s*কত|পাওনা\s*কত|দেনা\s*কত|পাওনা\s*টাকার?\s*হিসাব|দেনা\s*টাকার?\s*হিসাব|ধার\s*দেনার?\s*হিসাব)$/i.test(clean) ||
+    /(?:কত\s*টাকা\s*পাবো|কত\s*টাকা\s*পাব|কত\s*পাবো|কত\s*পাব|কার\s*কাছে\s*কত\s*পাবো|পাওনা\s*টাকা|দেনা\s*টাকা|মোট\s*পাওনা|মোট\s*দেনা)/i.test(clean) ||
+    /(?:dhar\s*dena|baki\s*khata|udhar|paona|pauna|dena)\s*(?:takar?)?\s*(?:hisab|khata|list|koto|dao|daw|dehao|dekhao|bolo|bolte|dite\s*bolchi|dite\s*bollam|chai)?/i.test(lower) ||
+    /(?:koto\s*taka\s*pabo|koto\s*pabo|koto\s*taka\s*pabo\s*ami|ami\s*koto\s*taka\s*pabo|kar\s*kache\s*koto\s*pabo|amar\s*paona\s*koto|amar\s*pauna\s*koto|amar\s*dena\s*koto|paona\s*koto|pauna\s*koto|dena\s*koto|baki\s*koto|mot\s*paona|mot\s*pauna|mot\s*dena)/i.test(lower) ||
+    /^(?:dhar\s*dena|baki\s*khata|paona|pauna|dena)$/i.test(lower);
+
+  if (isGeneralDebtQuery) {
+    // Check if query is about a specific person (e.g. "রনির ধার দেনার হিসাব", "asad ar hisab", "আসাদের কাছে কত পাবো")
+    const specificPersonMatch = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:এর|-?er|-?ar|র)?\s*(?:হিসাব|কাছে\s*কত\s*পাবো|কাছে\s*পাওনা|hisab|kache\s*koto\s*pabo)\s*(?:কত|koto|bolo|বলো|কি)?\??$/i);
+    if (specificPersonMatch && !/ধার|দেনা|বাকি|পাওনা|মোট|আজ|কাল|টাকা|হিসাব|dhar|dena|baki|paona|pauna|taka|hisab|ami|আমি/i.test(specificPersonMatch[1].trim())) {
       const pName = cleanPersonName(specificPersonMatch[1]);
       if (pName && pName.length >= 2) {
         return {
@@ -85,11 +88,11 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
     };
   }
 
-  // Specific person query like "রনির কাছে কত পাবো" or "রনির হিসাব কত" or "roni er hisab koto"
-  const pQuery = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:এর|-?er)?\s*(?:কাছে\s*কত\s*পাবো|এর\s*হিসাব\s*কত|এর\s*হিসাব|er\s*hisab\s*koto|kache\s*koto\s*pabo)\??$/i);
+  // Specific person query like "রনির কাছে কত পাবো" or "রনির হিসাব কত" or "roni er hisab koto" or "asad ar kache koto pabo"
+  const pQuery = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:এর|-?er|-?ar|র)?\s*(?:কাছে\s*কত\s*পাবো|এর\s*হিসাব\s*কত|এর\s*হিসাব|er\s*hisab\s*koto|ar\s*hisab\s*koto|kache\s*koto\s*pabo)\??$/i);
   if (pQuery) {
     const pName = cleanPersonName(pQuery[1]);
-    if (pName && pName.length >= 2 && !/ধার|দেনা|বাকি|মোট|আজ|কাল/i.test(pName)) {
+    if (pName && pName.length >= 2 && !/ধার|দেনা|বাকি|মোট|আজ|কাল|টাকা|পাওনা|dhar|dena|baki|paona|pauna|taka|hisab|ami|আমি/i.test(pName)) {
       return {
         isQuery: true,
         queryType: 'person',

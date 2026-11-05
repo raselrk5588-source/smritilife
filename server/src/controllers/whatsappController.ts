@@ -5678,6 +5678,25 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 }
               }
 
+              // 1.5. Check if user is asking for Debts / Udhar / Baki Khata / Paona / Dena
+              const isDebtWordInQ = /(?:পাওনা|দেনা|ধার|বাকি|উধার|paona|pauna|dena|dhar|baki|udhar|pabo|debo|দিতে\s*বলছি)/i.test(`${query} ${cleanText}`);
+              if (isDebtWordInQ) {
+                const parsedDebt = parseDebtInput(cleanText) || parseDebtInput(query);
+                if (parsedDebt && parsedDebt.isQuery) {
+                  if (parsedDebt.queryType === 'person' && parsedDebt.personName) {
+                    const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
+                    if (personSummary) {
+                      await sendMetaWhatsAppMessage(fromNumber, buildPersonDebtMessage(personSummary));
+                      break;
+                    }
+                  } else {
+                    const overallSummary = await getDebtSummary(user._id);
+                    await sendMetaWhatsAppMessage(fromNumber, buildDebtSummaryMessage(overallSummary));
+                    break;
+                  }
+                }
+              }
+
               // 2. Check Reminders (Birthdays, Events, Medicine schedules, Meetings, Deadlines)
               const remResult = await searchReminders(user._id.toString(), query, cleanText);
               if (remResult.topReminder) {
