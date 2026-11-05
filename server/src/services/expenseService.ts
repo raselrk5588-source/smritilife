@@ -155,24 +155,36 @@ export const BENGALI_MONTHS = [
 
 export const MONTH_MAP: Record<string, number> = {
   // Bengali
-  'জানুয়ারি': 1, 'জানুয়ারি': 1, 'ফেব্রুয়ারি': 2, 'ফেব্রুয়ারি': 2, 'মার্চ': 3,
-  'এপ্রিল': 4, 'মে': 5, 'জুন': 6, 'জুলাই': 7, 'আগস্ট': 8, 'আগষ্ট': 8,
-  'সেপ্টেম্বর': 9, 'সেপ্টেম্বার': 9, 'অক্টোবর': 10, 'অক্টোবার': 10,
-  'নভেম্বর': 11, 'নভেম্বার': 11, 'ডিসেম্বর': 12, 'ডিসেম্বার': 12,
-  // English / Banglish
-  'january': 1, 'jan': 1, 'januyari': 1,
-  'february': 2, 'feb': 2, 'februari': 2,
-  'march': 3, 'mar': 3,
-  'april': 4, 'apr': 4,
+  'জানুয়ারি': 1, 'জানুয়ারি': 1, 'জানুয়ারির': 1, 'জানুয়ারির': 1,
+  'ফেব্রুয়ারি': 2, 'ফেব্রুয়ারি': 2, 'ফেব্রুয়ারির': 2, 'ফেব্রুয়ারির': 2,
+  'মার্চ': 3, 'মার্চের': 3,
+  'এপ্রিল': 4, 'এপ্রিলের': 4,
+  'মে': 5,
+  'জুন': 6, 'জুনের': 6,
+  'জুলাই': 7, 'জুলাইয়ের': 7, 'জুলাইয়ের': 7, 'জুলাইর': 7,
+  'আগস্ট': 8, 'আগষ্ট': 8, 'আগস্টের': 8, 'আগষ্টের': 8,
+  'সেপ্টেম্বর': 9, 'সেপ্টেম্বার': 9, 'সেপ্টেম্বরের': 9, 'সেপ্টেম্বারের': 9,
+  'অক্টোবর': 10, 'অক্টোবার': 10, 'অক্টোবরের': 10, 'অক্টোবারের': 10,
+  'নভেম্বর': 11, 'নভেম্বার': 11, 'নভেম্বরের': 11, 'নভেম্বারের': 11,
+  'ডিসেম্বর': 12, 'ডিসেম্বার': 12, 'ডিসেম্বরের': 12, 'ডিসেম্বারের': 12,
+  // English / Banglish (including common phonetic spellings like octobor, novembor, septembor, agost)
+  'january': 1, 'jan': 1, 'januyari': 1, 'januari': 1, 'januvari': 1, 'januaryr': 1,
+  'february': 2, 'feb': 2, 'februari': 2, 'februvari': 2, 'februaryr': 2,
+  'march': 3, 'mar': 3, 'marcher': 3,
+  'april': 4, 'apr': 4, 'epril': 4, 'apriler': 4,
   'may': 5,
-  'june': 6, 'jun': 6,
-  'july': 7, 'jul': 7,
-  'august': 8, 'aug': 8,
-  'september': 9, 'sep': 9, 'sept': 9,
-  'october': 10, 'oct': 10,
-  'november': 11, 'nov': 11,
-  'december': 12, 'dec': 12
+  'june': 6, 'jun': 6, 'juner': 6,
+  'july': 7, 'jul': 7, 'julai': 7, 'julyr': 7,
+  'august': 8, 'aug': 8, 'agost': 8, 'agust': 8, 'ogost': 8, 'auguster': 8,
+  'september': 9, 'sep': 9, 'sept': 9, 'septembor': 9, 'septembar': 9, 'septemberer': 9,
+  'october': 10, 'oct': 10, 'octobor': 10, 'octobar': 10, 'oktobor': 10, 'oktober': 10, 'octoberer': 10, 'octoborer': 10,
+  'november': 11, 'nov': 11, 'novembor': 11, 'novembar': 11, 'nobhembor': 11, 'novemberer': 11, 'novemborer': 11,
+  'december': 12, 'dec': 12, 'decembor': 12, 'decembar': 12, 'disembor': 12, 'decemberer': 12, 'decemborer': 12
 };
+
+const MONTH_NAMES_PATTERN = Object.keys(MONTH_MAP)
+  .sort((a, b) => b.length - a.length)
+  .join('|');
 
 export interface ExtractedDateInfo {
   dayDate?: {
@@ -207,15 +219,68 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     return new Date(`${y}-${pad(m)}-${pad(d)}T12:00:00.000+06:00`);
   };
 
-  // 1. Month: "গত মাস", "গত মাসের", "last month", "last mas"
-  if (/(?:গত\s*মাসের?|last\s*months?|last\s*maser?|previous\s*month)/i.test(clean)) {
+  // 1. Specific [Day] [Month] e.g. "10 oct", "10 october", "১০ অক্টোবর", "14 octobor"
+  const dayMonthRegex = new RegExp(
+    `(?:^|\\s)([০-৯0-9]{1,2})\\s*(?:th|st|nd|rd)?\\s*(?:শে|ই|এ|এর|তারিখ|তারিখের|tarikh|tarik)?\\s*(?:of\\s*)?(${MONTH_NAMES_PATTERN})(?:\\s*(?:মাসের?|maser?|mas\\s*(?:ar|er))?)?(?:\\s*(?:এর|এ|te|e|a|ar|er))?(?:\\s*([০-৯0-9]{4}))?(?=\\s|$|[?।!])`,
+    'i'
+  );
+  const dmMatch = clean.match(dayMonthRegex);
+  if (dmMatch) {
+    const day = parseInt(bnToEnDigits(dmMatch[1]), 10);
+    const mNum = MONTH_MAP[dmMatch[2].toLowerCase()];
+    let year = dmMatch[3] ? parseInt(bnToEnDigits(dmMatch[3]), 10) : refYear;
+    if (day >= 1 && day <= 31 && mNum) {
+      if (!dmMatch[3] && mNum > refMonth) {
+        year = refYear - 1;
+      }
+      const cleaned = clean.replace(dmMatch[0], ' ').trim();
+      return {
+        dayDate: {
+          date: makeDhakaDate(year, mNum, day),
+          dateLabelBn: `${enToBnDigits(day)} ${BENGALI_MONTHS[mNum]}, ${enToBnDigits(year)}`,
+          isSpecificDate: true
+        },
+        cleanedText: cleaned
+      };
+    }
+  }
+
+  // 2. Specific [Month] [Day] e.g. "october 10", "অক্টোবর ১০", "octobor ar 10 tarikh"
+  const monthDayRegex = new RegExp(
+    `(?:^|\\s)(${MONTH_NAMES_PATTERN})\\s*(?:মাসের?|maser?|month)?\\s*(?:এর|এ|ar|er|of)?\\s*([০-৯0-9]{1,2})(?:th|st|nd|rd)?\\s*(?:তারিখ|তারিখের|তারিখে|tarikh|tarik|tarikher|tarikhe)?(?:\\s*(?:এর|এ|te|e|a|ar|er))?(?:\\s*([০-৯0-9]{4}))?(?=\\s|$|[?।!])`,
+    'i'
+  );
+  const mdMatch = clean.match(monthDayRegex);
+  if (mdMatch) {
+    const mNum = MONTH_MAP[mdMatch[1].toLowerCase()];
+    const day = parseInt(bnToEnDigits(mdMatch[2]), 10);
+    let year = mdMatch[3] ? parseInt(bnToEnDigits(mdMatch[3]), 10) : refYear;
+    if (day >= 1 && day <= 31 && mNum) {
+      if (!mdMatch[3] && mNum > refMonth) {
+        year = refYear - 1;
+      }
+      const cleaned = clean.replace(mdMatch[0], ' ').trim();
+      return {
+        dayDate: {
+          date: makeDhakaDate(year, mNum, day),
+          dateLabelBn: `${enToBnDigits(day)} ${BENGALI_MONTHS[mNum]}, ${enToBnDigits(year)}`,
+          isSpecificDate: true
+        },
+        cleanedText: cleaned
+      };
+    }
+  }
+
+  // 3. Last Month: "গত মাস", "গত মাসের", "আগের মাসের", "last month", "last mas ar", "goto mas er"
+  const lastMonthRegex = /(?:(?:গত|আগের|বিগত)\s*মাস(?:ের|ে)?(?:\s*এর)?|(?:last|previous|prev|goto|ager|bigoto)\s*(?:months?|mas(?:er|e)?|mash(?:er|e)?)(?:\s*(?:ar|er|a|e))?)/i;
+  if (lastMonthRegex.test(clean)) {
     let prevMonth = refMonth - 1;
     let prevYear = refYear;
     if (prevMonth < 1) {
       prevMonth = 12;
       prevYear -= 1;
     }
-    const cleaned = clean.replace(/(?:গত\s*মাসের?|last\s*months?|last\s*maser?|previous\s*month)/i, '').trim();
+    const cleaned = clean.replace(lastMonthRegex, ' ').trim();
     return {
       monthDate: {
         year: prevYear,
@@ -226,28 +291,70 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     };
   }
 
-  // 2. Specific Month: e.g. "সেপ্টেম্বর মাসের খরচ", "september maser khoroc", "october khoroc"
-  const monthMatch = clean.match(/(?:^|\s)(জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|আগষ্ট|সেপ্টেম্বর|সেপ্টেম্বার|অক্টোবর|অক্টোবার|নভেম্বর|নভেম্বার|ডিসেম্বর|ডিসেম্বার|january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec)\s*(?:মাসের?|maser?|month)?(?:\s*(?:এর|এ|te|e|a))?\s*(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroc|khoros|khoroch|khoroa|koros|koroch|cost|costs|expense|expenses|হিসাব|hisab)/i);
+  // 4. This / Current Month: "এই মাসের", "চলতি মাসের", "ay mas ar", "ei mas er", "ai maser", "this month"
+  const thisMonthRegex = /(?:(?:এই|এ|চলতি|বর্তমান)\s*মাস(?:ের|ে)?(?:\s*এর)?|(?:ay|ai|ei|a|this|current|cholti|colti|bortoman)\s*(?:months?|mas(?:er|e)?|mash(?:er|e)?)(?:\s*(?:ar|er|a|e))?)/i;
+  if (thisMonthRegex.test(clean)) {
+    const cleaned = clean.replace(thisMonthRegex, ' ').trim();
+    return {
+      monthDate: {
+        year: refYear,
+        month: refMonth,
+        monthLabelBn: `চলতি মাস (${BENGALI_MONTHS[refMonth]} ${enToBnDigits(refYear)})`
+      },
+      cleanedText: cleaned
+    };
+  }
+
+  // 5. Specific Month (without day): e.g. "সেপ্টেম্বর মাসের খরচ", "octobor ar khoros koto", "অক্টোবরের খরচ দাও", "novembor ar hisab"
+  const monthOnlyRegex = new RegExp(
+    `(?:^|\\s)(${MONTH_NAMES_PATTERN})(?:\\s*([০-৯0-9]{4}))?\\s*(?:মাসের?|মাসে|mas(?:er)?|mash(?:er)?|month)?(?:\\s*(?:এর|এ|ar|er|te|e|a|of))?(?=\\s|$|[?।!])`,
+    'i'
+  );
+  const monthMatch = clean.match(monthOnlyRegex);
   if (monthMatch) {
-    const mNum = MONTH_MAP[monthMatch[1].toLowerCase()];
-    if (mNum) {
-      let mYear = refYear;
-      if (mNum > refMonth) {
-        mYear = refYear - 1;
+    const matchedMonthWord = monthMatch[1].toLowerCase();
+    // Avoid matching English "may" unless expense/month context is present
+    if (matchedMonthWord !== 'may' || /(?:month|mas|mash|মাস|খরচ|khoroc|khoros|khoroch|cost|expense|হিসাব|hisab)/i.test(clean)) {
+      const mNum = MONTH_MAP[matchedMonthWord];
+      if (mNum) {
+        let mYear = monthMatch[2] ? parseInt(bnToEnDigits(monthMatch[2]), 10) : refYear;
+        if (!monthMatch[2] && mNum > refMonth) {
+          mYear = refYear - 1;
+        }
+        const cleaned = clean.replace(monthMatch[0], ' ').trim();
+        return {
+          monthDate: {
+            year: mYear,
+            month: mNum,
+            monthLabelBn: `${BENGALI_MONTHS[mNum]} ${enToBnDigits(mYear)}`
+          },
+          cleanedText: cleaned
+        };
       }
-      const cleaned = clean.replace(monthMatch[0], 'খরচ').trim();
-      return {
-        monthDate: {
-          year: mYear,
-          month: mNum,
-          monthLabelBn: `${BENGALI_MONTHS[mNum]} ${enToBnDigits(mYear)}`
-        },
-        cleanedText: cleaned
-      };
     }
   }
 
-  // 2.5. Multi-day Range: e.g. "last 2 din ar khoros koto", "গত ২ দিনের খরচ", "last 7 days cost", "বিগত ৩ দিনের হিসাব"
+  // 5.5. Week Range: e.g. "এই সপ্তাহের খরচ", "গত সপ্তাহের খরচ", "last week ar khoros", "this week cost"
+  const weekMatch = clean.match(/(?:(?:এই|গত|বিগত|আগের)\s*সপ্তাহ(?:ের|ে)?|(?:this|last|past|goto|ay|ai|ei)\s*(?:weeks?|soptah(?:er|o)?|shoptah(?:er|o)?)(?:\s*(?:ar|er))?)/i);
+  if (weekMatch) {
+    const startRef = new Date(referenceDate);
+    startRef.setDate(startRef.getDate() - 6);
+    const startDhaka = startRef.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+    const startDate = new Date(`${startDhaka}T00:00:00.000+06:00`);
+    const endDate = new Date(`${dhakaStr}T23:59:59.999+06:00`);
+    const cleaned = clean.replace(weekMatch[0], ' ').trim();
+    return {
+      rangeDays: {
+        days: 7,
+        startDate,
+        endDate,
+        labelBn: 'গত ৭ দিনের (সপ্তাহের)'
+      },
+      cleanedText: cleaned
+    };
+  }
+
+  // 5.6. Multi-day Range: e.g. "last 2 din ar khoros koto", "গত ২ দিনের খরচ", "last 7 days cost", "বিগত ৩ দিনের হিসাব"
   const rangeMatch =
     clean.match(/(?:last|past|goto|গত|বিগত|আগের)\s*([০-৯0-9]+)\s*(?:দিনের?|din\s*(?:er|ar|e)?|diner|days?(?:\s*of)?)(?:\s*(?:এর|এ|ar|er))?/i) ||
     clean.match(/(?:^|\s)([০-৯0-9]+)\s*(?:দিনের|din\s*(?:er|ar)|diner|days?\s*of)(?:\s*(?:এর|এ|ar|er))?/i);
@@ -272,7 +379,7 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     }
   }
 
-  // 3. Yesterday: গতকাল, গত কাল, কালকের, gotokal, gotokalker, gotokaler, kotokalker, koto kalker, kalker, yesterday
+  // 6. Yesterday: গতকাল, গত কাল, কালকের, gotokal, gotokalker, gotokaler, kotokalker, koto kalker, kalker, yesterday
   const yesterdayRegex = /(?:গত\s*কাল(?:কের?|ের)?|গতকাল(?:কের?|ের)?|কালকের?|(?:goto|koto)\s*ka?l(?:ker?|er)?|(?:gotoka?l|kotoka?l)(?:ker?|er)?|kalke?r|yesterday(?:'s)?)/i;
   if (yesterdayRegex.test(clean)) {
     const yDate = new Date(referenceDate);
@@ -290,7 +397,7 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     };
   }
 
-  // 4. Day before yesterday: গত পরশু, গতপরশু, পরশুর, goto porshu, porshur, day before yesterday
+  // 7. Day before yesterday: গত পরশু, গতপরশু, পরশুর, goto porshu, porshur, day before yesterday
   const porshuRegex = /(?:গত\s*পরশুর?|গতপরশুর?|পরশুর?|goto\s*porshur?|goto\s*porshu|porshur?|day\s*before\s*yesterday)/i;
   if (porshuRegex.test(clean)) {
     const pDate = new Date(referenceDate);
@@ -308,7 +415,7 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     };
   }
 
-  // 5. N days ago: e.g. "৩ দিন আগের", "3 din ager"
+  // 8. N days ago: e.g. "৩ দিন আগের", "3 din ager"
   const nDaysMatch = clean.match(/([০-৯0-9]+)\s*(?:দিন\s*আগের?|din\s*ager?)/i);
   if (nDaysMatch) {
     const daysAgo = parseInt(bnToEnDigits(nDaysMatch[1]), 10);
@@ -329,54 +436,8 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     }
   }
 
-  // 6. [Day] [Month] e.g. "10 oct", "10 october", "১০ অক্টোবর", "10th October"
-  const dayMonthRegex = /(?:^|\s)([০-৯0-9]{1,2})\s*(?:th|st|nd|rd)?\s*(?:শে|ই|এ|এর)?\s*(জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|আগষ্ট|সেপ্টেম্বর|সেপ্টেম্বার|অক্টোবর|অক্টোবার|নভেম্বর|নভেম্বার|ডিসেম্বর|ডিসেম্বার|january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec)(?:\s*(?:এর|এ|te|e|a))?(?:\s*([০-৯0-9]{4}))?/i;
-  const dmMatch = clean.match(dayMonthRegex);
-  if (dmMatch) {
-    const day = parseInt(bnToEnDigits(dmMatch[1]), 10);
-    const mNum = MONTH_MAP[dmMatch[2].toLowerCase()];
-    let year = dmMatch[3] ? parseInt(bnToEnDigits(dmMatch[3]), 10) : refYear;
-    if (day >= 1 && day <= 31 && mNum) {
-      if (!dmMatch[3] && mNum > refMonth) {
-        year = refYear - 1;
-      }
-      const cleaned = clean.replace(dmMatch[0], '').trim();
-      return {
-        dayDate: {
-          date: makeDhakaDate(year, mNum, day),
-          dateLabelBn: `${enToBnDigits(day)} ${BENGALI_MONTHS[mNum]}, ${enToBnDigits(year)}`,
-          isSpecificDate: true
-        },
-        cleanedText: cleaned
-      };
-    }
-  }
-
-  // 7. [Month] [Day] e.g. "october 10", "অক্টোবর ১০"
-  const monthDayRegex = /(?:^|\s)(জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|আগষ্ট|সেপ্টেম্বর|সেপ্টেম্বার|অক্টোবর|অক্টোবার|নভেম্বর|নভেম্বার|ডিসেম্বর|ডিসেম্বার|january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec)\s*([০-৯0-9]{1,2})(?:th|st|nd|rd)?(?:\s*(?:এর|এ|te|e|a))?(?:\s*([০-৯0-9]{4}))?/i;
-  const mdMatch = clean.match(monthDayRegex);
-  if (mdMatch) {
-    const mNum = MONTH_MAP[mdMatch[1].toLowerCase()];
-    const day = parseInt(bnToEnDigits(mdMatch[2]), 10);
-    let year = mdMatch[3] ? parseInt(bnToEnDigits(mdMatch[3]), 10) : refYear;
-    if (day >= 1 && day <= 31 && mNum) {
-      if (!mdMatch[3] && mNum > refMonth) {
-        year = refYear - 1;
-      }
-      const cleaned = clean.replace(mdMatch[0], '').trim();
-      return {
-        dayDate: {
-          date: makeDhakaDate(year, mNum, day),
-          dateLabelBn: `${enToBnDigits(day)} ${BENGALI_MONTHS[mNum]}, ${enToBnDigits(year)}`,
-          isSpecificDate: true
-        },
-        cleanedText: cleaned
-      };
-    }
-  }
-
-  // 8. DD/MM or DD-MM or DD/MM/YYYY
-  const slashDateMatch = clean.match(/(?:^|\s)([০-৯0-9]{1,2})[/-]([০-৯0-9]{1,2})(?:[/-]([০-৯0-9]{2,4}))?(?:\s*(?:এর|এ|te|e|a))?/i);
+  // 9. DD/MM or DD-MM or DD/MM/YYYY
+  const slashDateMatch = clean.match(/(?:^|\s)([০-৯0-9]{1,2})[/-]([০-৯0-9]{1,2})(?:[/-]([০-৯0-9]{2,4}))?(?:\s*(?:এর|এ|te|e|a|ar|er))?/i);
   if (slashDateMatch) {
     const day = parseInt(bnToEnDigits(slashDateMatch[1]), 10);
     const month = parseInt(bnToEnDigits(slashDateMatch[2]), 10);
@@ -575,13 +636,13 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
 
   // Check if text is an expense query
   const hasExpenseWord = /(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khorosh|khoroj|khoroa|khorca|khorcha|koroch|koroc|koros|korosh|khroch|cost|costs|spending|spent|expense|expenses|হিসাব|hisab)/i.test(clean);
-  const hasQueryWord = /(?:কত|koto|koro|মোট|mot|total|হয়েছে|হলো|holo|hoyeche|hoise|ছিল|chilo|দেখা|দেখাও|dekha|dekhao|লিস্ট|list|দাও|daw|dao|বলো|bolo|summary)/i.test(clean);
-  const isDirectExpensePhrase = /^(?:আজকের|আজকে|আজ|aj|ajke|ajker|গতকাল|গতকালের|কালকের|gotokal|gotokalker|gotokaler|এই\s*মাসের|মাসের|চলতি\s*মাসের|last\s*month)?\s*(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)\s*\??$/i.test(clean);
+  const hasQueryWord = /(?:কত|koto|koro|মোট|mot|total|হয়েছে|হলো|holo|hoyeche|hoise|ছিল|chilo|দেখা|দেখাও|dekha|dekhao|দেখতে|dekte|dekhte|চাই|cai|chai|লিস্ট|list|দাও|দেও|daw|dao|dew|বলো|bolo|summary|কী\s*কী|কি\s*কি|ki\s*ki)/i.test(clean);
+  const isDirectExpensePhrase = /^(?:আজকের|আজকে|আজ|aj|ajke|ajker|গতকাল|গতকালের|কালকের|gotokal|gotokalker|gotokaler|এই\s*মাসের|মাসের|চলতি\s*মাসের|ay\s*mas(?:\s*ar|\s*er)?|ei\s*mas(?:\s*ar|\s*er)?|ai\s*mas(?:\s*ar|\s*er)?|maser|masher|last\s*month|this\s*month)?\s*(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)(?:\s*(?:দাও|দেও|দেখাও|কত|daw|dao|dekhao|koto|list|লিস্ট))?\s*\??$/i.test(clean);
 
   const isQuery = (hasExpenseWord && (hasQueryWord || clean.endsWith('?'))) || isDirectExpensePhrase;
 
-  // 1. Month Query (e.g. "গত মাসের খরচ কত", "সেপ্টেম্বর মাসের খরচ", "এই মাসের খরচ")
-  if (dateInfo?.monthDate) {
+  // 1. Month Query (e.g. "গত মাসের খরচ কত", "সেপ্টেম্বর মাসের খরচ", "এই মাসের খরচ", "ay mas ar khoros daw", "octobor ar khoros koto")
+  if (dateInfo?.monthDate && (isQuery || hasExpenseWord)) {
     return {
       isQuery: true,
       queryType: 'monthly',
@@ -590,8 +651,8 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   }
 
   if (
-    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|month|monthly|maser|last\s*month)\s*(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)/i.test(clean) ||
-    /^(?:মাসের\s*খরচ|এই\s*মাসের\s*খরচ|মাসের\s*হিসাব)$/i.test(clean)
+    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|এই\s*মাস|চলতি\s*মাস|ay\s*mas|ei\s*mas|ai\s*mas|cholti\s*mas|month|monthly|maser|masher|mas\s*ar|mas\s*er|mash\s*ar|mash\s*er|last\s*month|this\s*month)\s*(?:এর|র|ar|er)?\s*(?:মোট\s*|mot\s*|total\s*)?(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)/i.test(clean) ||
+    /^(?:মাসের\s*খরচ|এই\s*মাসের\s*খরচ|মাসের\s*হিসাব|maser\s*khoros|maser\s*khoroch|maser\s*hisab|monthly\s*cost|monthly\s*expense)$/i.test(clean)
   ) {
     return {
       isQuery: true,
@@ -797,7 +858,8 @@ export const getExpenseSummaryForMonth = async (
   // Category-wise distribution
   const categoryMap = new Map<string, { nameBn: string; icon: string; amount: number; count: number }>();
   for (const exp of monthExpenses) {
-    const cat = detectExpenseCategory(exp.title);
+    const displayTitle = toBanglaExpenseTitle(exp.title) || exp.title;
+    const cat = detectExpenseCategory(`${exp.title} ${displayTitle}`);
     const existing = categoryMap.get(exp.category) || {
       nameBn: exp.categoryBn || cat.nameBn,
       icon: cat.icon,
@@ -819,6 +881,7 @@ export const getExpenseSummaryForMonth = async (
   })).sort((a, b) => b.amount - a.amount);
 
   return {
+    monthExpenses,
     monthTotal,
     monthCount: monthExpenses.length,
     categoryBreakdown,
@@ -850,14 +913,15 @@ export const getExpenseSummary = async (userId: string | mongoose.Types.ObjectId
   const monthExpenses = await Expense.find({
     userId,
     date: { $gte: startOfMonth, $lte: endOfToday }
-  });
+  }).sort({ date: -1 });
 
   const monthTotal = monthExpenses.reduce((sum, item) => sum + item.amount, 0);
 
   // Category-wise distribution this month
   const categoryMap = new Map<string, { nameBn: string; icon: string; amount: number; count: number }>();
   for (const exp of monthExpenses) {
-    const cat = detectExpenseCategory(exp.title);
+    const displayTitle = toBanglaExpenseTitle(exp.title) || exp.title;
+    const cat = detectExpenseCategory(`${exp.title} ${displayTitle}`);
     const existing = categoryMap.get(exp.category) || {
       nameBn: exp.categoryBn || cat.nameBn,
       icon: cat.icon,
@@ -882,6 +946,7 @@ export const getExpenseSummary = async (userId: string | mongoose.Types.ObjectId
     todayExpenses,
     todayTotal,
     todayCount: todayExpenses.length,
+    monthExpenses,
     monthTotal,
     monthCount: monthExpenses.length,
     categoryBreakdown,
@@ -1023,20 +1088,43 @@ export const buildMonthlyExpenseQueryMessage = (
   monthTotal: number,
   monthCount: number,
   categoryBreakdown: Array<{ nameBn: string; icon: string; amount: number; percentage: number }>,
-  monthLabelBn: string = 'চলতি মাসের'
+  monthLabelBn: string = 'চলতি মাসের',
+  monthExpenses?: IExpense[]
 ): string => {
   if (monthCount === 0) {
-    return `📅 *${monthLabelBn} খরচের হিসাব:*\n\nএই মাসে এখনও কোনো খরচ এন্ট্রি নেই।\n\n💡 খরচ যোগ করতে লিখুন: যেমন "লাঞ্চ ১২০ টাকা"`;
+    return `📅 *${monthLabelBn} খরচের হিসাব খাতা*\n\n${monthLabelBn} এখনও কোনো খরচ এন্ট্রি নেই।\n\n💡 খরচ যোগ করতে লিখুন: যেমন "লাঞ্চ ১২০ টাকা"`;
+  }
+
+  let itemsSection = '';
+  if (monthExpenses && monthExpenses.length > 0) {
+    const maxDisplay = 25;
+    const shown = monthExpenses.slice(0, maxDisplay);
+    const itemsList = shown
+      .map((e, idx) => {
+        const displayTitle = toBanglaExpenseTitle(e.title) || e.title;
+        const cat = detectExpenseCategory(`${e.title} ${displayTitle}`);
+        const dStr = new Date(e.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+        const [, mNum, dNum] = dStr.split('-').map(Number);
+        const shortDate = `${enToBnDigits(dNum)} ${BENGALI_MONTHS[mNum] || ''}`.trim();
+        return `${enToBnDigits(idx + 1)}. ${cat.icon} ${displayTitle}: *${formatTaka(e.amount)}* _(${shortDate})_`;
+      })
+      .join('\n');
+    const moreText = monthExpenses.length > maxDisplay
+      ? `\n_...এবং আরও ${enToBnDigits(monthExpenses.length - maxDisplay)}টি এন্ট্রি_`
+      : '';
+    itemsSection = `📋 *খরচের তালিকা:*\n${itemsList}${moreText}\n\n`;
   }
 
   const breakdownList = categoryBreakdown
     .map(c => `• ${c.icon} ${c.nameBn}: *${formatTaka(c.amount)}* (${enToBnDigits(c.percentage)}%)`)
     .join('\n');
 
-  return `📅 *${monthLabelBn} খরচের সারাংশ*\n\n` +
-         `💰 *মোট খরচ:* ${formatTaka(monthTotal)} (${enToBnDigits(monthCount)}টি এন্ট্রি)\n\n` +
+  return `📅 *${monthLabelBn} খরচের হিসাব খাতা*\n\n` +
+         itemsSection +
          `📊 *খাতভিত্তিক বিভাজন:*\n` +
          `${breakdownList}\n\n` +
+         `──────────────\n` +
+         `💰 *মোট খরচ:* ${formatTaka(monthTotal)} (${enToBnDigits(monthCount)}টি এন্ট্রি)\n\n` +
          `🌐 সম্পূর্ণ গ্রাফ ও খাতা দেখতে: https://smritilife.com/app/expenses`;
 };
 

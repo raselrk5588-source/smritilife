@@ -4185,11 +4185,20 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     parsedExpense.monthYear.month,
                     parsedExpense.monthYear.monthLabelBn
                   );
+                  if (mSummary.monthExpenses.length > 0) {
+                    userExpenseContext.set(user._id.toString(), {
+                      targetDate: mSummary.monthExpenses[0].date,
+                      dateLabelBn: mSummary.monthLabelBn,
+                      expenses: mSummary.monthExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                      expiresAt: Date.now() + 15 * 60 * 1000
+                    });
+                  }
                   const reply = buildMonthlyExpenseQueryMessage(
                     mSummary.monthTotal,
                     mSummary.monthCount,
                     mSummary.categoryBreakdown,
-                    mSummary.monthLabelBn
+                    mSummary.monthLabelBn,
+                    mSummary.monthExpenses
                   );
                   await sendMetaWhatsAppMessage(
                 fromNumber,
@@ -4197,11 +4206,20 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               );
                 } else {
                   const summary = await getExpenseSummary(user._id);
+                  if (summary.monthExpenses.length > 0) {
+                    userExpenseContext.set(user._id.toString(), {
+                      targetDate: summary.monthExpenses[0].date,
+                      dateLabelBn: 'চলতি মাসের',
+                      expenses: summary.monthExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                      expiresAt: Date.now() + 15 * 60 * 1000
+                    });
+                  }
                   const reply = buildMonthlyExpenseQueryMessage(
                     summary.monthTotal,
                     summary.monthCount,
                     summary.categoryBreakdown,
-                    'চলতি মাসের'
+                    'চলতি মাসের',
+                    summary.monthExpenses
                   );
                   await sendMetaWhatsAppMessage(
                 fromNumber,
@@ -5828,7 +5846,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     mSummary.monthTotal,
                     mSummary.monthCount,
                     mSummary.categoryBreakdown,
-                    mSummary.monthLabelBn
+                    mSummary.monthLabelBn,
+                    mSummary.monthExpenses
                   );
                 } else {
                   const summary = await getExpenseSummary(user._id);
@@ -5836,7 +5855,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     summary.monthTotal,
                     summary.monthCount,
                     summary.categoryBreakdown,
-                    'চলতি মাসের'
+                    'চলতি মাসের',
+                    summary.monthExpenses
                   );
                 }
               } else if (fallbackExpense.queryType === 'range' && fallbackExpense.rangeDays) {
