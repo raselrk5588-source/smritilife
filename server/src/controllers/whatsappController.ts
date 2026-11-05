@@ -14,6 +14,7 @@ import Contact from '../models/Contact';
 import AITrainingRule from '../models/AITrainingRule';
 import UserDocument from '../models/UserDocument';
 import SystemSettings from '../models/SystemSettings';
+import Debt from '../models/Debt';
 import { getMaintenanceStatus, updateMaintenanceCache } from '../services/maintenanceService';
 import { analyzeMessage, analyzeAudioMessage, transcribeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache, getLastUserTurn } from '../services/aiWhatsAppService';
 import { searchReminders, formatReminderMatchMessage, formatMultipleRemindersMessage } from '../services/memoryRetrievalService';
@@ -40,7 +41,20 @@ import {
   formatTaka,
   bnToEnDigits
 } from '../services/expenseService';
-import { parseDebtInput, recordDebt, settleDebtByPerson, getDebtSummary, getPersonDebtSummary, buildDebtLoggedMessage, buildDebtSettledMessage, buildDebtSummaryMessage, buildPersonDebtMessage } from '../services/debtService';
+import {
+  parseDebtInput,
+  parseSingleDebtLine,
+  recordDebt,
+  settleDebtByPerson,
+  getDebtSummary,
+  getPersonDebtSummary,
+  buildDebtLoggedMessage,
+  buildMultipleDebtsLoggedMessage,
+  buildDebtSettledMessage,
+  buildDebtSummaryMessage,
+  buildPersonDebtMessage,
+  ParsedDebtItem
+} from '../services/debtService';
 import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes, analyzeDocumentWithAI, isConsumableItem, extractNewDocumentTitle } from '../services/documentService';
 
 export interface ReminderActionState {
@@ -111,6 +125,45 @@ export interface PendingMedicineState {
 }
 
 export const userPendingMedicineState = new Map<string, PendingMedicineState>();
+
+/**
+ * Auto-migrate legacy notes where debts were accidentally saved as a Note instead of in Debt collection
+ */
+export const ensureLegacyDebtNotesMigrated = async (userId: any): Promise<number> => {
+  try {
+    const debtCount = await Debt.countDocuments({ userId });
+    if (debtCount > 0) return 0;
+
+    const candidateNotes = await Note.find({
+      userId,
+      $or: [
+        { title: /(?:পাওনা|দেনা|ধার|বাকি|পাওয়া)/i },
+        { content: /(?:কাছে\s*পাবো|kache\s*pabo|ধার\s*দেনা|টাকা\s*পাব|ar\s*kache\s*taka\s*pabo)/i }
+      ]
+    });
+
+    let migratedCount = 0;
+    for (const cNote of candidateNotes) {
+      const lines = (cNote.content || '').split(/\r?\n+/).map((l: string) => l.trim()).filter(Boolean);
+      let migratedFromThisNote = false;
+      for (const l of lines) {
+        const parsed = parseSingleDebtLine(l);
+        if (parsed) {
+          await recordDebt(userId, parsed.personName, parsed.amount, parsed.type, { notes: 'Auto-migrated from note' });
+          migratedCount++;
+          migratedFromThisNote = true;
+        }
+      }
+      if (migratedFromThisNote) {
+        await Note.deleteOne({ _id: cNote._id });
+      }
+    }
+    return migratedCount;
+  } catch (err) {
+    console.error('Error auto-migrating legacy debt notes:', err);
+    return 0;
+  }
+};
 
 export async function parseMedicinePrescriptionText(text: string): Promise<{
   medicines: PendingMedicineItem[];
@@ -3965,6 +4018,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           const parsedDebt = parseDebtInput(cleanText);
           if (parsedDebt) {
             if (parsedDebt.isQuery) {
+              await ensureLegacyDebtNotesMigrated(user._id);
               if (parsedDebt.queryType === 'person' && parsedDebt.personName) {
                 const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
                 if (personSummary) {
@@ -3988,6 +4042,23 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
               );
               }
+              return;
+            } else if (parsedDebt.multipleDebts && parsedDebt.multipleDebts.length > 0) {
+              for (const item of parsedDebt.multipleDebts) {
+                await recordDebt(
+                  user._id,
+                  item.personName,
+                  item.amount,
+                  item.type,
+                  { notes: item.notes }
+                );
+              }
+              const overallSummary = await getDebtSummary(user._id);
+              const reply = buildMultipleDebtsLoggedMessage(parsedDebt.multipleDebts, overallSummary);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
               return;
             } else if (parsedDebt.isSettlement && parsedDebt.personName && parsedDebt.amount) {
               // Settle repayment / refund
@@ -5453,6 +5524,32 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               break;
             }
 
+            // Guard: If this is actually debt/lent/borrowed info, save directly into Debt!
+            if (/(?:পাওনা|দেনা|ধার|বাকি|পাওয়া)/i.test(title) || /(?:কাছে\s*পাবো|kache\s*pabo|ধার\s*দেনা|ar\s*kache\s*taka\s*pabo)/i.test(`${content} ${cleanText}`)) {
+              const fullTextToScan = `${content}\n${cleanText}`;
+              const lines = fullTextToScan.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
+              const debtItems: ParsedDebtItem[] = [];
+              const seenPeople = new Set<string>();
+              for (const l of lines) {
+                const item = parseSingleDebtLine(l);
+                if (item && !seenPeople.has(item.personName.toLowerCase())) {
+                  seenPeople.add(item.personName.toLowerCase());
+                  debtItems.push(item);
+                }
+              }
+              if (debtItems.length > 0) {
+                for (const item of debtItems) {
+                  await recordDebt(user._id, item.personName, item.amount, item.type, { notes: item.notes });
+                }
+                const overallSummary = await getDebtSummary(user._id);
+                const reply = debtItems.length === 1
+                  ? buildDebtLoggedMessage(debtItems[0].personName, debtItems[0].amount, debtItems[0].type, debtItems[0].amount)
+                  : buildMultipleDebtsLoggedMessage(debtItems, overallSummary);
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+                break;
+              }
+            }
+
             // Check if existing note exists for this user with same or similar title
             const cleanTitleRegex = new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
             let note = await Note.findOne({ userId: user._id, title: cleanTitleRegex });
@@ -5681,6 +5778,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               // 1.5. Check if user is asking for Debts / Udhar / Baki Khata / Paona / Dena
               const isDebtWordInQ = /(?:পাওনা|দেনা|ধার|বাকি|উধার|paona|pauna|dena|dhar|baki|udhar|pabo|debo|দিতে\s*বলছি)/i.test(`${query} ${cleanText}`);
               if (isDebtWordInQ) {
+                await ensureLegacyDebtNotesMigrated(user._id);
                 const parsedDebt = parseDebtInput(cleanText) || parseDebtInput(query);
                 if (parsedDebt && parsedDebt.isQuery) {
                   if (parsedDebt.queryType === 'person' && parsedDebt.personName) {

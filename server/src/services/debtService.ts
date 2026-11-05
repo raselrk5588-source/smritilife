@@ -2,6 +2,13 @@ import mongoose from 'mongoose';
 import Debt, { IDebt, IDebtTransaction } from '../models/Debt';
 import { bnToEnDigits, enToBnDigits, formatTaka } from './expenseService';
 
+export interface ParsedDebtItem {
+  type: 'lent' | 'borrowed';
+  personName: string;
+  amount: number;
+  notes?: string;
+}
+
 export interface ParsedDebt {
   isQuery: boolean;
   queryType?: 'all' | 'person';
@@ -11,6 +18,7 @@ export interface ParsedDebt {
   personName?: string;
   amount?: number;
   notes?: string;
+  multipleDebts?: ParsedDebtItem[];
 }
 
 export interface DebtPersonSummary {
@@ -42,9 +50,126 @@ export interface OverallDebtSummary {
  */
 export const cleanPersonName = (raw: string): string => {
   return raw
-    .replace(/^(?:ভাই|vai|bhai|mr|md|মুহা|জনাব|কাকু|মামা|চাচা)\s+/i, '')
-    .replace(/\s+(?:-?কে|-?k|-?ke|-?er|এর|-?theke|থেকে|ar)$/i, '')
+    .trim()
+    .replace(/^(?:mr|md|মুহা|জনাব|কাকু|মামা|চাচা)\s+/i, '')
+    .replace(/\s+(?:-?কে|-?k|-?ke|-?er|এর|-?theke|থেকে|-?ar|ar)$/i, '')
+    .replace(/(?:-?এর|এর|-?er|-?ar|য়ের|\u09DF\u09C7\u09B0|ের|\u09C7\u09B0|র)$/i, '')
     .trim();
+};
+
+/**
+ * Parse a single debt/lent line (e.g. from WhatsApp multi-line text or a note)
+ */
+export const parseSingleDebtLine = (line: string): ParsedDebtItem | null => {
+  if (!line) return null;
+  const cleanLine = line.replace(/^[\s\d\.\-\*•📍📌🟢🔴]+/g, '').trim();
+  if (!cleanLine) return null;
+
+  // Pattern 1 (lent with kache): [person] [এর/er/ar/র/ের/য়ের]? [কাছে/kache] [টাকা/taka]? [পাবো/পাব/pabo]? [:=]? [amount] [টাকা/tk]? [পাবো/পাব/pabo]?
+  // E.g. "Asad ar kache taka pabo 3500", "Manik vai ar kache pabo 3000", "আসাদের কাছে পাবো: ৩,৫০০ টাকা"
+  const lentKachePattern = cleanLine.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|\u09C7\u09B0|য়ের|\u09DF\u09C7\u09B0)?\s*(?:কাছে|kache)\s*(?:টাকা|taka|tk)?\s*(?:পাবো|পাব|হবে|বাকি|ধার|পাওয়া|pabo|pabo\s*ami)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:পাবো|পাব|হবে|pabo)?$/i
+  );
+  if (lentKachePattern) {
+    const rawPerson = lentKachePattern[1].trim();
+    const rawAmount = lentKachePattern[2].replace(/,/g, '');
+    const amount = parseFloat(bnToEnDigits(rawAmount));
+    if (rawPerson && amount > 0 && !/^(ধার|দেনা|বাকি|টাকা|হিসাব|dhar|dena|baki|taka|hisab)$/i.test(rawPerson)) {
+      const person = cleanPersonName(rawPerson);
+      if (person) {
+        return { type: 'lent', personName: person, amount };
+      }
+    }
+  }
+
+  // Pattern 1b (lent without kache): [person] [পাবো/পাব/pabo] [:=]? [amount]
+  const lentDirectPattern = cleanLine.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|\u09C7\u09B0|য়ের|\u09DF\u09C7\u09B0)?\s*(?:পাবো|পাব|pabo)\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?$/i
+  );
+  if (lentDirectPattern) {
+    const rawPerson = lentDirectPattern[1].trim();
+    const rawAmount = lentDirectPattern[2].replace(/,/g, '');
+    const amount = parseFloat(bnToEnDigits(rawAmount));
+    if (rawPerson && amount > 0 && !/^(ধার|দেনা|বাকি|টাকা|হিসাব|ami|আমি)$/i.test(rawPerson)) {
+      const person = cleanPersonName(rawPerson);
+      if (person) {
+        return { type: 'lent', personName: person, amount };
+      }
+    }
+  }
+
+  // Pattern 2 (lent): "রনিকে ৫০০ টাকা ধার দিলাম" / "roni k 500 taka dhar dilam"
+  const lentPatternA = cleanLine.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?কে|-?k|-?ke)\s*(?:ধার|হাওলাত|বাকি|করজ|dhar|hawlat|baki)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:ধার|হাওলাত|বাকি|করজ|dhar|hawlat|baki)?\s*(?:দিলাম|দিয়াছি|দেওয়া\s*হলো|dilam|diasi|dilum)$/i
+  );
+  if (lentPatternA) {
+    const person = cleanPersonName(lentPatternA[1]);
+    const amount = parseFloat(bnToEnDigits(lentPatternA[2].replace(/,/g, '')));
+    if (person && amount > 0) {
+      return { type: 'lent', personName: person, amount };
+    }
+  }
+
+  // Pattern 3 (lent): "রনি ৫০০ টাকা ধার নিলো" / "roni dhar nilo 500"
+  const lentPatternB = cleanLine.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:amar\s*kach\s*theke|আমার\s*কাছ\s*থেকে)?\s*(?:ধার|হাওলাত|বাকি|করজ|dhar|hawlat|baki)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:ধার|হাওলাত|বাকি|করজ|dhar|hawlat|baki)?\s*(?:নিলো|নিয়েছে|নিছে|nilo|niyeche|nise)$/i
+  );
+  if (lentPatternB) {
+    const person = cleanPersonName(lentPatternB[1]);
+    const amount = parseFloat(bnToEnDigits(lentPatternB[2].replace(/,/g, '')));
+    if (person && amount > 0) {
+      return { type: 'lent', personName: person, amount };
+    }
+  }
+
+  // Pattern 4 (lent): "রনিকে ৫০০ ধার" / "roni ke 500 dhar" / "রনি বাকি ৫০০"
+  const lentPatternC = cleanLine.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?কে|-?k|-?ke)?\s*(?:বাকি|ধার|হাওলাত|baki|dhar)\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?$/i
+  );
+  if (lentPatternC) {
+    const person = cleanPersonName(lentPatternC[1]);
+    const amount = parseFloat(bnToEnDigits(lentPatternC[2].replace(/,/g, '')));
+    if (person && amount > 0 && !/দোকান|মেস|হোটেল|বাড়িওয়ালা/i.test(person)) {
+      return { type: 'lent', personName: person, amount };
+    }
+  }
+
+  // Pattern 5 (borrowed): "করিমের কাছ থেকে ১০০০ টাকা ধার নিলাম"
+  const borrowedPatternA = cleanLine.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর\s*কাছ\s*থেকে|-?এর\s*থেকে|theke|থেকে|er\s*kach\s*theke)\s*(?:ধার|হাওলাত|করজ|বাকি|dhar|hawlat|baki)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:ধার|হাওলাত|করজ|বাকি|dhar|hawlat|baki)?\s*(?:নিলাম|নিয়েছি|nilam|niesi|nilum)$/i
+  );
+  if (borrowedPatternA) {
+    const person = cleanPersonName(borrowedPatternA[1]);
+    const amount = parseFloat(bnToEnDigits(borrowedPatternA[2].replace(/,/g, '')));
+    if (person && amount > 0) {
+      return { type: 'borrowed', personName: person, amount };
+    }
+  }
+
+  // Pattern 6 (borrowed): "দোকানে বাকি ৩০০ টাকা"
+  const borrowedPatternB = cleanLine.match(
+    /^(?:দোকানে|দোকান|মুদি|হোটেল|মেস|মালিক|বাড়িওয়ালা|dokan|dokane|hotel|mess)\s*(?:বাকি|ধার|baki|dhar)\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?$/i
+  );
+  if (borrowedPatternB) {
+    const amount = parseFloat(bnToEnDigits(borrowedPatternB[1].replace(/,/g, '')));
+    if (amount > 0) {
+      return { type: 'borrowed', personName: 'দোকান (বাকি)', amount };
+    }
+  }
+
+  // Pattern 7 (borrowed): "করিমের কাছে ৫০০ দেনা" / "করিম পাবে ৫০০" / "korim pabe 500"
+  const borrowedPatternC = cleanLine.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর\s*কাছে|-?কাছে|kache)?\s*(?:দেনা|পাবে|pabe)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:দেনা|বাকি|ধার|dena|baki|পাবে|pabe)$/i
+  );
+  if (borrowedPatternC) {
+    const person = cleanPersonName(borrowedPatternC[1]);
+    const amount = parseFloat(bnToEnDigits(borrowedPatternC[2].replace(/,/g, '')));
+    if (person && amount > 0) {
+      return { type: 'borrowed', personName: person, amount };
+    }
+  }
+
+  return null;
 };
 
 /**
@@ -57,6 +182,26 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
 
   // Exclude reminders / alarms / wake up commands
   if (/মনে|ডাক|তুলে|alarm|অ্যালার্ম|wake\s*me/i.test(clean)) return null;
+
+  // Multi-line debt entry detection
+  if (clean.includes('\n')) {
+    const lines = clean.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1) {
+      const parsedItems: ParsedDebtItem[] = [];
+      for (const l of lines) {
+        const item = parseSingleDebtLine(l);
+        if (item) {
+          parsedItems.push(item);
+        }
+      }
+      if (parsedItems.length >= 2 || (parsedItems.length === lines.length && parsedItems.length > 0)) {
+        return {
+          isQuery: false,
+          multipleDebts: parsedItems
+        };
+      }
+    }
+  }
 
   // 1. General Queries
   // "ধার দেনার হিসাব", "বাকি খাতা", "কার কাছে কত পাবো", "পাওনা কত", "দেনা কত", "koto taka pabo", "pauna takar hisab", "paona takar hisab dao"
@@ -229,6 +374,19 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
         amount
       };
     }
+  }
+
+  // 5. Fallback check with single-line parser (e.g. "Asad ar kache taka pabo 3500", "Pias pabo 4000")
+  const single = parseSingleDebtLine(clean);
+  if (single) {
+    return {
+      isQuery: false,
+      isSettlement: false,
+      type: single.type,
+      personName: single.personName,
+      amount: single.amount,
+      notes: single.notes
+    };
   }
 
   return null;
@@ -534,6 +692,31 @@ export const buildDebtLoggedMessage = (
     `• মোট বাকি: *${formattedRemaining}* (${isLent ? 'পাওনা' : 'দেনা'})\n\n` +
     `💡 _হিসাব দেখতে লিখুন: "ধার দেনা" বা "${personName}-এর হিসাব"_\n` +
     `_স্মৃতি লাইফ - আপনার বিশ্বস্ত ডিজিটাল খাতা_`
+  );
+};
+
+/**
+ * Build WhatsApp Response: Multiple Debts Logged
+ */
+export const buildMultipleDebtsLoggedMessage = (
+  debts: Array<{ personName: string; amount: number; type: 'lent' | 'borrowed' }>,
+  overallSummary: OverallDebtSummary
+): string => {
+  let listText = '';
+  debts.forEach((d, idx) => {
+    const isLent = d.type === 'lent';
+    const icon = isLent ? '🟢' : '🔴';
+    const label = isLent ? 'পাবো' : 'দেবো';
+    listText += `${idx + 1}. ${icon} *${d.personName}*: ${formatTaka(d.amount)} (${label})\n`;
+  });
+
+  return (
+    `🤝 *ধার-দেনা ও বাকি হিসাব সংরক্ষিত হয়েছে!*\n\n` +
+    `${listText.trim()}\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `🟢 *মোট পাওনা:* ${formatTaka(overallSummary.totalReceivable)}\n` +
+    `🔴 *মোট দেনা:* ${formatTaka(overallSummary.totalPayable)}\n\n` +
+    `💡 _বিস্তারিত জানতে লিখুন: "পাওনা টাকা দাও" বা "ধার দেনা"_`
   );
 };
 
