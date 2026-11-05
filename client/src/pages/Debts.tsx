@@ -11,7 +11,6 @@ import {
   Clock, 
   Phone, 
   Calendar, 
-  MessageCircle, 
   Send, 
   X, 
   Sparkles, 
@@ -359,32 +358,6 @@ export default function Debts() {
             </div>
           </div>
 
-        </div>
-
-        {/* WhatsApp Voice / Text Help Box */}
-        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 border border-emerald-200/70 rounded-2xl p-4 mb-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
-              <MessageCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-800">
-                  হোয়াটসঅ্যাপে সরাসরি ভয়েস বা মেসেজ পাঠিয়ে হিসাব রাখুন!
-                </h3>
-                <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  ০ টোকেন খরচ
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 mt-0.5">
-                লিখুন: <span className="font-semibold text-emerald-800">"রনিকে ৫০০ টাকা ধার দিলাম"</span> বা <span className="font-semibold text-emerald-800">"দোকানে বাকি ৩০০ টাকা"</span> বা <span className="font-semibold text-emerald-800">"ধার দেনার হিসাব কত"</span>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-1.5 text-xs text-emerald-800 font-semibold bg-white/80 px-3 py-1.5 rounded-xl border border-emerald-200 shrink-0">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>অটোমেটিক আপডেট হবে</span>
-          </div>
         </div>
 
         {/* Filters & Search Controls */}
