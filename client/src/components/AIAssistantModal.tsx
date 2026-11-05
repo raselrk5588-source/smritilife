@@ -277,7 +277,7 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean;
       let body: any = {
         title: parsedText,
         date: parsedData.date || new Date().toISOString(),
-        time: parsedData.time || "10:00",
+        time: parsedData.time || (isWakeup ? "07:00" : "09:00"),
         category: isWakeup ? 'wakeup' : (parsedData.category || 'General'),
         isAlarm: isWakeup
       };
@@ -498,7 +498,7 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean;
                     <div className="flex items-center text-slate-600 font-medium text-xs">
                       <Clock className="w-3.5 h-3.5 mr-2 text-slate-400" />
                       <span className="w-12">সময়</span>
-                      <span className="text-slate-800">{parsedData.time || "10:00"}</span>
+                      <span className="text-slate-800">{parsedData.time || "০৯:০০"}</span>
                     </div>
                   </div>
                 )}

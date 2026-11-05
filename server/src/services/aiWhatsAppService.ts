@@ -124,12 +124,77 @@ export const matchRelativeDuration = (rawText: string): number | null => {
 /**
  * Intelligent Bengali/Banglish time parser for phrases like "sokal 9ta", "bikal 4ta", "rat 8ta", "dupur 2ta", "sondha 7ta", "1pm", "4:30 pm"
  */
-export const parseBengaliTime = (rawText: string): string => {
+export const parseBengaliTime = (rawText: string, targetDate?: Date): string => {
+  if (!rawText) return '09:00';
+
+  // 1. Convert Bengali digits (০-৯) to English (0-9)
   const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
-  const text = rawText.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
+  let text = rawText.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
+
+  // 2. Convert Bengali spoken word numbers (e.g. "আটটায়", "সাড়ে আটটা", "দেড়টা", etc.)
+  const wordReplacements: [RegExp, string][] = [
+    // Half past & quarters:
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:আট|aat|8)\b/gi, '8:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:নয়|নয়|noy|9)\b/gi, '9:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:দশ|dosh|10)\b/gi, '10:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:এগারো|egaro|11)\b/gi, '11:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:বারো|baro|12)\b/gi, '12:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:এক|ek|1)\b/gi, '1:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:দুই|দুটো|dui|2)\b/gi, '2:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:তিন|tin|3)\b/gi, '3:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:চার|char|4)\b/gi, '4:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:পাঁচ|পাচ|pach|5)\b/gi, '5:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:ছয়|ছয়|choy|6)\b/gi, '6:30'],
+    [/(?:সাড়ে|সাড়ে|share|sade)\s*(?:সাত|sat|7)\b/gi, '7:30'],
+    [/(?:দেড়|দেড়|der)\s*(?:টা|টায়|টায়|ta|tay)?\b/gi, '1:30 '],
+    [/(?:আড়াই|আড়াই|arai)\s*(?:টা|টায়|টায়|ta|tay)?\b/gi, '2:30 '],
+    [/(?:পৌনে|poune)\s*(?:আট|aat|8)\b/gi, '7:45'],
+    [/(?:পৌনে|poune)\s*(?:নয়|নয়|noy|9)\b/gi, '8:45'],
+    [/(?:পৌনে|poune)\s*(?:দশ|dosh|10)\b/gi, '9:45'],
+    [/(?:পৌনে|poune)\s*(?:এগারো|egaro|11)\b/gi, '10:45'],
+    [/(?:পৌনে|poune)\s*(?:বারো|baro|12)\b/gi, '11:45'],
+    [/(?:পৌনে|poune)\s*(?:এক|ek|1)\b/gi, '12:45'],
+    [/(?:পৌনে|poune)\s*(?:দুই|দুটো|dui|2)\b/gi, '1:45'],
+    [/(?:পৌনে|poune)\s*(?:তিন|tin|3)\b/gi, '2:45'],
+    [/(?:পৌনে|poune)\s*(?:চার|char|4)\b/gi, '3:45'],
+    [/(?:পৌনে|poune)\s*(?:পাঁচ|পাচ|pach|5)\b/gi, '4:45'],
+    [/(?:পৌনে|poune)\s*(?:ছয়|ছয়|choy|6)\b/gi, '5:45'],
+    [/(?:পৌনে|poune)\s*(?:সাত|sat|7)\b/gi, '6:45'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:আট|aat|8)\b/gi, '8:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:নয়|নয়|noy|9)\b/gi, '9:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:দশ|dosh|10)\b/gi, '10:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:এগারো|egaro|11)\b/gi, '11:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:বারো|baro|12)\b/gi, '12:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:এক|ek|1)\b/gi, '1:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:দুই|দুটো|dui|2)\b/gi, '2:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:তিন|tin|3)\b/gi, '3:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:চার|char|4)\b/gi, '4:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:পাঁচ|পাচ|pach|5)\b/gi, '5:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:ছয়|ছয়|choy|6)\b/gi, '6:15'],
+    [/(?:সোয়া|সোয়া|sowa)\s*(?:সাত|sat|7)\b/gi, '7:15'],
+
+    // Numbers with টা/টায়/টায়/ta/tay:
+    [/(?:বারো|baro)\s*(?:টা|টায়|টায়|ta|tay)/gi, '12টা'],
+    [/(?:এগারো|egaro)\s*(?:টা|টায়|টায়|ta|tay)/gi, '11টা'],
+    [/(?:দশ|dosh)\s*(?:টা|টায়|টায়|ta|tay)/gi, '10টা'],
+    [/(?:নয়|নয়|noy)\s*(?:টা|টায়|টায়|ta|tay)/gi, '9টা'],
+    [/(?:আট|aat)\s*(?:টা|টায়|টায়|ta|tay)/gi, '8টা'],
+    [/(?:সাত|sat)\s*(?:টা|টায়|টায়|ta|tay)/gi, '7টা'],
+    [/(?:ছয়|ছয়|choy)\s*(?:টা|টায়|টায়|ta|tay)/gi, '6টা'],
+    [/(?:পাঁচ|পাচ|pach)\s*(?:টা|টায়|টায়|ta|tay)/gi, '5টা'],
+    [/(?:চার|চারটে|char)\s*(?:টা|টায়|টায়|ta|tay)/gi, '4টা'],
+    [/(?:তিন|তিনটে|tin)\s*(?:টা|টায়|টায়|ta|tay)/gi, '3টা'],
+    [/(?:দুটো|দুই|দুটায়|দুটা|dui)\s*(?:টা|টায়|টায়|ta|tay)?/gi, '2টা'],
+    [/(?:এক|ek)\s*(?:টা|টায়|টায়|ta|tay)/gi, '1টা'],
+  ];
+
+  for (const [pattern, replacement] of wordReplacements) {
+    text = text.replace(pattern, replacement);
+  }
+
   const lower = text.toLowerCase();
 
-  // 1. Check relative duration
+  // 3. Check relative duration first (e.g. "20 mnt por", "10 minute por")
   const relativeMins = matchRelativeDuration(text);
   if (relativeMins !== null) {
     const now = new Date();
@@ -141,40 +206,105 @@ export const parseBengaliTime = (rawText: string): string => {
     return `${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
   }
 
-  const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|sehri|sahari|seheri|saheri/i.test(lower);
-  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|টায়|am|pm|AM|PM)?/i);
-  if (!timeMatch) {
-    if (isSehri) return '04:00';
-    return '10:00';
+  // 4. Try matching explicit time expressions:
+  let hour: number | null = null;
+  let minute = '00';
+  let tag = '';
+
+  // Pattern A: HH:MM with optional am/pm/টা
+  const colonMatch = text.match(/(\d{1,2}):(\d{2})\s*(টা|টায়|টায়|ta|tay|am|pm|AM|PM)?/i);
+  if (colonMatch) {
+    hour = parseInt(colonMatch[1], 10);
+    minute = colonMatch[2];
+    tag = (colonMatch[3] || '').toLowerCase();
   }
 
-  let hour = parseInt(timeMatch[1], 10);
-  const minute = timeMatch[2] || '00';
-  const tag = (timeMatch[3] || '').toLowerCase();
-
-  const isMorning = isSehri || lower.includes('সকাল') || lower.includes('ভোর') || lower.includes('sokal') || lower.includes('shokal') || lower.includes('vhor') || lower.includes('vor') || tag === 'am';
-  const isNoon = lower.includes('দুপুর') || lower.includes('dupur') || lower.includes('dupor');
-  const isAfternoon = lower.includes('বিকাল') || lower.includes('বিকেল') || lower.includes('bikal') || lower.includes('bikele') || lower.includes('bikale');
-  const isEvening = lower.includes('সন্ধ্যা') || lower.includes('সন্ধে') || lower.includes('sondha') || lower.includes('shondha') || lower.includes('shondhe');
-  const isNight = lower.includes('রাত') || lower.includes('রাত্রে') || lower.includes('rat') || lower.includes('raat') || lower.includes('ratri') || lower.includes('ratre');
-  const isPM = !isSehri && (tag === 'pm' || isNoon || isAfternoon || isEvening || isNight);
-
-  if (isPM) {
-    if (hour < 12) {
-      if (isNight && (hour === 1 || hour === 2 || hour === 3 || hour === 4)) {
-        hour = hour;
-      } else if (isNight && hour === 12) {
-        hour = 0; // midnight 12:00
-      } else {
-        hour += 12;
-      }
+  // Pattern B: e.g. "8 টা", "8টায়", "8ta", "8 pm", "8টার সময়"
+  if (hour === null) {
+    const explicitTagMatch = text.match(/(\d{1,2})\s*(?:টা|টায়|টায়|টার\s*(?:সময়|সময়)?|ta|tay|am|pm|AM|PM)\b/i);
+    if (explicitTagMatch) {
+      hour = parseInt(explicitTagMatch[1], 10);
+      const tagMatch = explicitTagMatch[0].match(/(am|pm)/i);
+      tag = tagMatch ? tagMatch[1].toLowerCase() : '';
     }
-  } else if (isMorning) {
-    if (hour === 12) hour = 0;
   }
 
-  if (hour >= 24) hour = 10;
-  return `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
+  // Pattern C: Time preceded by time-of-day: e.g. "সকাল 8", "রাত 9", "বিকাল 5", "দুপুর 1"
+  if (hour === null) {
+    const precededMatch = text.match(/(?:সকাল|ভোর|দুপুর|বিকাল|বিকেল|সন্ধ্যা|রাত|shokal|sokal|vhor|dupur|bikal|sondha|rat)\s*(\d{1,2})\b/i);
+    if (precededMatch) {
+      hour = parseInt(precededMatch[1], 10);
+    }
+  }
+
+  // Pattern D: English "at 8", "at 9:30"
+  if (hour === null) {
+    const engAtMatch = text.match(/\bat\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
+    if (engAtMatch) {
+      hour = parseInt(engAtMatch[1], 10);
+      if (engAtMatch[2]) minute = engAtMatch[2];
+      if (engAtMatch[3]) tag = engAtMatch[3].toLowerCase();
+    }
+  }
+
+  // 5. If an hour was found, normalize AM/PM:
+  if (hour !== null) {
+    const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|sehri|sahari|seheri|saheri/i.test(lower);
+    const isMorning = isSehri || lower.includes('সকাল') || lower.includes('ভোর') || lower.includes('sokal') || lower.includes('shokal') || lower.includes('vhor') || lower.includes('vor') || tag === 'am';
+    const isNoon = lower.includes('দুপুর') || lower.includes('dupur') || lower.includes('dupor');
+    const isAfternoon = lower.includes('বিকাল') || lower.includes('বিকেল') || lower.includes('bikal') || lower.includes('bikele') || lower.includes('bikale');
+    const isEvening = lower.includes('সন্ধ্যা') || lower.includes('সন্ধে') || lower.includes('sondha') || lower.includes('shondha') || lower.includes('shondhe');
+    const isNight = lower.includes('রাত') || lower.includes('রাত্রে') || lower.includes('rat') || lower.includes('raat') || lower.includes('ratri') || lower.includes('ratre');
+    const isPM = !isSehri && (tag === 'pm' || isNoon || isAfternoon || isEvening || isNight);
+
+    if (isPM) {
+      if (hour < 12) {
+        if (isNight && (hour === 1 || hour === 2 || hour === 3 || hour === 4)) {
+          hour = hour;
+        } else if (isNight && hour === 12) {
+          hour = 0; // midnight 12:00
+        } else {
+          hour += 12;
+        }
+      }
+    } else if (isMorning) {
+      if (hour === 12) hour = 0;
+    }
+
+    if (hour >= 24) hour = 9;
+    return `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
+  }
+
+  // 6. If no explicit hour was found, check if a time period was mentioned:
+  const isSehri = /সেহরি|সাহরি|সেহেরি|সাহেরি|sehri|sahari|seheri|saheri/i.test(lower);
+  if (isSehri) return '04:00';
+
+  if (/ভোর|ভোরে|vhor|vor/i.test(lower)) return '05:30';
+  if (/সকাল|সকালে|sokal|shokal/i.test(lower)) {
+    const isWake = /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|তুলে|ডেকে|ডাকা/i.test(lower);
+    return isWake ? '07:00' : '09:00';
+  }
+  if (/দুপুর|দুপুরে|dupur/i.test(lower)) return '13:30';
+  if (/বিকাল|বিকেল|বিকালে|বিকেলে|bikal/i.test(lower)) return '17:00';
+  if (/সন্ধ্যা|সন্ধ্যায়|সন্ধে|sondha|shondha/i.test(lower)) return '19:00';
+  if (/রাত|রাতে|রাত্রে|rat|raat/i.test(lower)) return '21:00';
+
+  // 7. If NO time was mentioned at all:
+  const isWake = /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|তুলে|ডেকে|ডাকা/i.test(lower);
+  if (isWake) return '07:00'; // Default wake-up time is 7:00 AM, NOT 10:00 AM!
+
+  // Check if today in Bangladesh
+  const now = new Date();
+  const dhakaTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false, hour: '2-digit', minute: '2-digit' });
+  const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
+
+  // If this reminder is for today and current time is already past morning, set 1 hour later
+  if (cHour >= 9 && cHour < 22) {
+    const nextH = (cHour + 1) % 24;
+    return `${nextH.toString().padStart(2, '0')}:00`;
+  }
+
+  return '09:00';
 };
 
 /**

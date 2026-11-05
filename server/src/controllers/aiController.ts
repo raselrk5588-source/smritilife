@@ -7,45 +7,6 @@ import Note from '../models/Note';
 import UserDocument from '../models/UserDocument';
 
 export const parseCommand = async (req: Request, res: Response) => {
-  const extractTime = (text: string): string => {
-    // 1. Check relative duration first (e.g. "20 mnt por", "20 minute por", "আধা ঘণ্টা পর")
-    const relativeMins = matchRelativeDuration(text);
-    if (relativeMins !== null) {
-      const now = new Date();
-      const dhakaTimeStr = now.toLocaleTimeString('en-GB', {
-        timeZone: 'Asia/Dhaka',
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      const [cHour, cMin] = dhakaTimeStr.split(':').map(Number);
-      const totalMinutes = cHour * 60 + cMin + relativeMins;
-      const finalHour = Math.floor(totalMinutes / 60) % 24;
-      const finalMin = totalMinutes % 60;
-      return `${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
-    }
-
-    let time = "10:00"; // default
-    
-    // Convert Bengali numbers to English for regex
-    const bnToEn: Record<string, string> = {'০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9'};
-    let enText = text.replace(/[০-৯]/g, (m) => bnToEn[m] || m);
-  
-    // Match something like "5:00 টা", "10 টা", "5pm"
-    const timeMatch = enText.match(/(\d{1,2})(?::(\d{2}))?\s*(টা|টায়|am|pm|AM|PM)?/);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1], 10);
-      const minute = timeMatch[2] || "00";
-      
-      if (enText.includes("বিকাল") || enText.includes("বিকেল") || enText.includes("সন্ধ্যা") || enText.includes("রাত") || timeMatch[3]?.toLowerCase() === 'pm') {
-        if (hour < 12) hour += 12;
-      }
-      
-      time = `${hour.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
-    }
-    return time;
-  };
-
   const extractSubject = (text: string): string => {
     let subject = text;
     
@@ -215,7 +176,7 @@ export const parseCommand = async (req: Request, res: Response) => {
       }
     }
 
-    const computedTime = parseBengaliTime(command) || extractTime(command);
+    const computedTime = parseBengaliTime(command);
     const computedDateObj = parseRelativeDate(command, computedTime);
     const computedDateStr = computedDateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 

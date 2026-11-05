@@ -4001,7 +4001,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
               const sendNow = !!aiResponse.data.sendNow;
               const reminderDate = new Date(aiResponse.data.date || new Date());
-              let reminderTime = aiResponse.data.time || '10:00';
+              const detectedTextTime = parseBengaliTime(cleanText);
+              let reminderTime = aiResponse.data.time;
+              if (!reminderTime || (reminderTime === '10:00' && !cleanText.match(/\b(?:10|১০|দশ|dosh)\b/i))) {
+                reminderTime = detectedTextTime;
+              } else if (detectedTextTime && detectedTextTime !== '09:00' && detectedTextTime !== '10:00') {
+                reminderTime = detectedTextTime;
+              }
+              if (!reminderTime) reminderTime = '09:00';
               let formattedTime = formatTime12Hour(reminderTime);
 
               // 1. Gather all target recipients (Multi-contact broadcast support)
@@ -4210,9 +4217,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 }
 
                 // Default Sehri time to 04:00 AM if no time was explicitly mentioned
-                if (isSehri && reminderTime === '10:00' && !cleanText.match(/\b(?:10|১০)\b/)) {
+                if (isSehri && reminderTime === '10:00' && !cleanText.match(/\b(?:10|১০|দশ)\b/)) {
                   reminderTime = '04:00';
                   formattedTime = '04:00 AM';
+                } else if (isWakeup && (reminderTime === '10:00' || reminderTime === '09:00') && !cleanText.match(/\b(?:10|১০|দশ|9|৯|নয়|নয়)\b/)) {
+                  reminderTime = '07:00';
+                  formattedTime = '07:00 AM';
                 }
 
                 // 1. Detect if user explicitly stated a date, day of week, or relative day/duration in their text
