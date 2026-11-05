@@ -62,6 +62,7 @@ import {
   ParsedDebt,
   ParsedDebtItem
 } from '../services/debtService';
+import { handleWhatsAppPeriodCommand, looksPeriodRelated } from '../services/periodService';
 import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes, analyzeDocumentWithAI, isConsumableItem, extractNewDocumentTitle } from '../services/documentService';
 
 export interface ReminderActionState {
@@ -2495,7 +2496,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         const hasExplicitDocWord =
           /(?:ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|প্রেস্ক্রিপশন|রিপোর্ট|রিসিপ্ট|ভল্ট|এনআইডি|সার্টিফিকেট|পাসপোর্ট|টিকিট|টোকেন|চাবি|লোগো|pic|image|photo|chobi|file|doc|document|prescription|report|receipt|vault|nid|certificate|passport|ticket|token|key|logo)\b/i.test(cleanText);
         const isNonDocTopic =
-          /(?:টাকা|taka|tk|পাবো|পাব|pabo|দেবো|দিবো|debo|dibo|পাওনা|paona|pauna|pawna|দেনা|dena|ধার|dhar|বাকি|baki|উধার|udhar|খরচ|khoroch|হিসাব|hisab|মোট|mot|total|ওষুধ|ঔষধ|osud|osudh|medicine|রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নামাজ|namaj|সেহরি|sehri|ইফতার|iftar)/i.test(cleanText);
+          /(?:টাকা|taka|tk|পাবো|পাব|pabo|দেবো|দিবো|debo|dibo|পাওনা|paona|pauna|pawna|দেনা|dena|ধার|dhar|বাকি|baki|উধার|udhar|খরচ|khoroch|হিসাব|hisab|মোট|mot|total|ওষুধ|ঔষধ|osud|osudh|medicine|রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নামাজ|namaj|সেহরি|sehri|ইফতার|iftar|পিরিয়ড|পিরিয়ড|মাসিক|period|priod|masik|mashik|menstrual)/i.test(cleanText);
 
         if (userDocsCount > 0 && !isDeleteIntent && !isDocUpdateIntent && (!isNonDocTopic || hasExplicitDocWord) && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
           const docResult = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
@@ -3861,6 +3862,18 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             `🕌 *আজকের ৫ ওয়াক্ত নামাজের সময়সূচি*\n📍 জেলা: *${times.districtBn}*\n📅 ${times.hijriDay} ${times.hijriMonthName} ${times.hijriYear} হিজরি\n\n• ফজর: *${times.prayers.fajrFormatted}* (সেহরি শেষ: ${times.sehriFormatted})\n• সূর্যোদয়: *${times.prayers.sunriseFormatted}*\n• জোহর: *${times.prayers.dhuhrFormatted}*\n• আসর: *${times.prayers.asrFormatted}*\n• মাগরিব: *${times.prayers.maghribFormatted}* (ইফতার)\n• এশা: *${times.prayers.ishaFormatted}*\n\n💡 জেলা পরিবর্তন করতে লিখুন: "আমার জেলা চট্টগ্রাম" বা আপনার জেলার নাম`
           );
           return;
+        }
+
+        // --- STEP 2.85: Period & Cycle Day Count Tracker ---
+        if (looksPeriodRelated(cleanText)) {
+          const periodReply = await handleWhatsAppPeriodCommand(user._id, cleanText);
+          if (periodReply) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${periodReply}` : periodReply
+            );
+            return;
+          }
         }
 
         // --- STEP 2.9: Udhar / Debt Tracker (AI-Powered + Fast Regex Fallback) ---

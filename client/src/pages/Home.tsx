@@ -423,6 +423,38 @@ export default function Home() {
           </div>
         </Link>
 
+        {/* Period & Cycle Day Count Feature Card */}
+        <Link 
+          to="/app/period"
+          className="block bg-gradient-to-r from-rose-700 via-pink-600 to-fuchsia-700 rounded-2xl md:rounded-3xl p-3 md:p-4 text-white shadow-md hover:shadow-lg transition-all group border border-rose-400/30"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                <Heart className="w-4 h-4 md:w-5 md:h-5 text-rose-100 fill-rose-200/40" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-1.5 mb-0.5">
+                  <span className="text-[9px] uppercase tracking-wider font-extrabold text-rose-100 bg-white/20 px-2 py-0.5 rounded-full border border-white/25">
+                    {t('হেলথ ও সাইকেল ট্র্যাকার', 'Period & Cycle Tracker')}
+                  </span>
+                  <span className="text-[9px] text-rose-100 font-semibold hidden sm:inline">ডে কাউন্ট ও অটো রিমাইন্ডার</span>
+                </div>
+                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
+                  🌸 পিরিয়ড ও সাইকেল ডে কাউন্টার (নারীদের স্বাস্থ্য সহকারী)
+                </h4>
+                <p className="text-[9px] md:text-xs text-rose-100/90 font-medium line-clamp-1">
+                  সাইকেলের কততম দিন চলছে, পরবর্তী সম্ভাব্য তারিখ ও ২ দিন আগে গোপনীয় হোয়াটসঅ্যাপ রিমাইন্ডার
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1 text-rose-100 text-xs font-bold pl-2 shrink-0">
+              <span className="hidden sm:inline">ট্র্যাকার খুলুন</span>
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </Link>
+
         {/* Tasks and Calendar Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
           
