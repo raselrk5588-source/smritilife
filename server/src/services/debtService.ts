@@ -14,6 +14,8 @@ export interface ParsedDebt {
   queryType?: 'all' | 'person';
   isSettlement?: boolean;
   settlementType?: 'received' | 'paid'; // received = পাওনা উসুল/ফেরত পেয়েছি, paid = দেনা শোধ করেছি
+  isDelete?: boolean;
+  deleteScope?: 'all' | 'person' | 'lent' | 'borrowed';
   type?: 'lent' | 'borrowed'; // lent = আমি পাবো, borrowed = আমি দেবো
   personName?: string;
   amount?: number;
@@ -203,15 +205,62 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
     }
   }
 
-  // 1. General Queries
+  // 1. Debt Deletion Commands (e.g. "pawna takar list delete kore daw", "সব পাওনা ডিলিট করো", "asad ar pawna delete kore daw")
+  const isDeleteIntent = /(?:delete|del|remove|মুছে|মুছ|ডিলিট|বাতিল|কেটে|ফেলে)/i.test(clean);
+  const isDebtDeleteWord = /(?:ধার\s*দেনা|বাকি\s*খাতা|পাওনা|দেনা|ধার|বাকি|উধার|paona|pauna|pawna|dena|dhar|baki|udhar|হিসাব|hisab)/i.test(clean);
+
+  if (isDeleteIntent && isDebtDeleteWord) {
+    // 1a. General / All debts delete
+    if (/^(?:সব|সকল|all|shob|sob|আমার|amar|amr)?\s*(?:ধার\s*দেনা|বাকি\s*খাতা|সব\s*হিসাব|dhar\s*dena|baki\s*khata)\s*(?:টাকার?|takar?|taka)?\s*(?:delete|del|remove|মুছে|মুছ|ডিলিট)/i.test(clean) ||
+        /^(?:delete|del|remove|মুছে|মুছ|ডিলিট)\s*(?:করে\s*দাও|করো|দিন)?\s*(?:সব|সকল|all|shob|sob)?\s*(?:ধার\s*দেনা|বাকি\s*খাতা|সব\s*হিসাব|dhar\s*dena|baki\s*khata)/i.test(clean)) {
+      return { isQuery: false, isDelete: true, deleteScope: 'all' };
+    }
+
+    // 1b. All Lent / Pawna list delete (e.g. "pawna takar list delete kore daw", "সব পাওনা ডিলিট করো")
+    if (/^(?:সব|সকল|all|shob|sob|আমার|amar|amr)?\s*(?:পাওনা|paona|pauna|pawna)\s*(?:টাকার?|takar?|taka)?\s*(?:লিস্ট|তালিকা|খাতা|হিসাব|list)?\s*(?:delete|del|remove|মুছে|মুছ|ডিলিট)/i.test(clean) ||
+        /^(?:delete|del|remove|মুছে|মুছ|ডিলিট)\s*(?:করে\s*দাও|করো|দিন)?\s*(?:সব|সকল|all|shob|sob)?\s*(?:পাওনা|paona|pauna|pawna)\s*(?:টাকার?|takar?|taka)?\s*(?:লিস্ট|তালিকা|খাতা|হিসাব|list)?/i.test(clean)) {
+      return { isQuery: false, isDelete: true, deleteScope: 'lent' };
+    }
+
+    // 1c. All Borrowed / Dena list delete
+    if (/^(?:সব|সকল|all|shob|sob|আমার|amar|amr)?\s*(?:দেনা|dena)\s*(?:টাকার?|takar?|taka)?\s*(?:লিস্ট|তালিকা|খাতা|হিসাব|list)?\s*(?:delete|del|remove|মুছে|মুছ|ডিলিট)/i.test(clean) ||
+        /^(?:delete|del|remove|মুছে|মুছ|ডিলিট)\s*(?:করে\s*দাও|করো|দিন)?\s*(?:সব|সকল|all|shob|sob)?\s*(?:দেনা|dena)\s*(?:টাকার?|takar?|taka)?\s*(?:লিস্ট|তালিকা|খাতা|হিসাব|list)?/i.test(clean)) {
+      return { isQuery: false, isDelete: true, deleteScope: 'borrowed' };
+    }
+
+    // 1d. Person-specific delete (e.g. "asad ar pawna delete kore daw", "আসাদের হিসাব ডিলিট করো", "delete asad pawna")
+    const personMatch1 = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|য়ের)?\s*(?:পাওনা|দেনা|ধার|বাকি|হিসাব|paona|pauna|pawna|dena|dhar|baki|hisab)\s*(?:delete|del|remove|মুছে|মুছ|ডিলিট)/i);
+    const personMatch2 = clean.match(/(?:delete|del|remove|মুছে|মুছ|ডিলিট)\s*(?:করে\s*দাও|করো|দিন)?\s*([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের|য়ের)?\s*(?:পাওনা|দেনা|ধার|বাকি|হিসাব|paona|pauna|pawna|dena|dhar|baki|hisab)/i);
+    const personMatch = personMatch1 || personMatch2;
+
+    if (personMatch) {
+      const candidate = personMatch[1].trim();
+      const isReserved = /(?:সব|সকল|all|shob|sob|লিস্ট|তালিকা|খাতা|list|taka|টাকা|আমার|amar|amr|পাওনা|দেনা|ধার|বাকি|paona|pauna|pawna|dena|dhar|baki)/i.test(candidate);
+      if (!isReserved) {
+        const pName = cleanPersonName(candidate);
+        if (pName && pName.length >= 2) {
+          return {
+            isQuery: false,
+            isDelete: true,
+            deleteScope: 'person',
+            personName: pName
+          };
+        }
+      }
+    }
+
+    return { isQuery: false, isDelete: true, deleteScope: 'all' };
+  }
+
+  // 2. General Queries
   // "ধার দেনার হিসাব", "বাকি খাতা", "কার কাছে কত পাবো", "পাওনা কত", "দেনা কত", "koto taka pabo", "pauna takar hisab", "paona takar hisab dao"
   const isGeneralDebtQuery =
     /(?:ধার\s*দেনার?|বাকি|দেনা\s*পাওনা|উধার|পাওনা|দেনা)\s*(?:টাকার?)?\s*(?:হিসাব|খাতা|লিস্ট|তালিকা|কত|দেখাও|দেখান|দাও|দিন|চাই|বলো|বলেন|বলুন|দিতে\s*বলছি|দিতে\s*বললাম)/i.test(clean) ||
     /^(?:ধার\s*দেনা|বাকি\s*খাতা|কার\s*কাছে\s*কত\s*পাবো|আমার\s*পাওনা\s*কত|আমার\s*দেনা\s*কত|পাওনা\s*কত|দেনা\s*কত|পাওনা\s*টাকার?\s*হিসাব|দেনা\s*টাকার?\s*হিসাব|ধার\s*দেনার?\s*হিসাব)$/i.test(clean) ||
     /(?:কত\s*টাকা\s*পাবো|কত\s*টাকা\s*পাব|কত\s*পাবো|কত\s*পাব|কার\s*কাছে\s*কত\s*পাবো|পাওনা\s*টাকা|দেনা\s*টাকা|মোট\s*পাওনা|মোট\s*দেনা)/i.test(clean) ||
-    /(?:dhar\s*dena|baki\s*khata|udhar|paona|pauna|dena)\s*(?:takar?)?\s*(?:hisab|khata|list|koto|dao|daw|dehao|dekhao|bolo|bolte|dite\s*bolchi|dite\s*bollam|chai)?/i.test(lower) ||
-    /(?:koto\s*taka\s*pabo|koto\s*pabo|koto\s*taka\s*pabo\s*ami|ami\s*koto\s*taka\s*pabo|kar\s*kache\s*koto\s*pabo|amar\s*paona\s*koto|amar\s*pauna\s*koto|amar\s*dena\s*koto|paona\s*koto|pauna\s*koto|dena\s*koto|baki\s*koto|mot\s*paona|mot\s*pauna|mot\s*dena)/i.test(lower) ||
-    /^(?:dhar\s*dena|baki\s*khata|paona|pauna|dena)$/i.test(lower);
+    /(?:dhar\s*dena|baki\s*khata|udhar|paona|pauna|pawna|dena)\s*(?:takar?)?\s*(?:hisab|khata|list|koto|dao|daw|dehao|dekhao|bolo|bolte|dite\s*bolchi|dite\s*bollam|chai)?/i.test(lower) ||
+    /(?:koto\s*taka\s*pabo|koto\s*pabo|koto\s*taka\s*pabo\s*ami|ami\s*koto\s*taka\s*pabo|kar\s*kache\s*koto\s*pabo|amar\s*paona\s*koto|amar\s*pauna\s*koto|amar\s*pawna\s*koto|amar\s*dena\s*koto|paona\s*koto|pauna\s*koto|pawna\s*koto|dena\s*koto|baki\s*koto|mot\s*paona|mot\s*pauna|mot\s*pawna|mot\s*dena)/i.test(lower) ||
+    /^(?:dhar\s*dena|baki\s*khata|paona|pauna|pawna|dena)$/i.test(lower);
 
   if (isGeneralDebtQuery) {
     // Check if query is about a specific person (e.g. "রনির ধার দেনার হিসাব", "asad ar hisab", "আসাদের কাছে কত পাবো")
@@ -549,6 +598,29 @@ export const settleDebtByPerson = async (
 };
 
 /**
+ * Delete debts by scope (all, person, lent, borrowed)
+ */
+export const deleteDebts = async (
+  userId: string | mongoose.Types.ObjectId,
+  scope: 'all' | 'person' | 'lent' | 'borrowed',
+  personName?: string
+): Promise<{ deletedCount: number; scope: 'all' | 'person' | 'lent' | 'borrowed'; personName?: string }> => {
+  let filter: any = { userId };
+  if (scope === 'person' && personName) {
+    const cleanName = cleanPersonName(personName);
+    const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.personName = { $regex: new RegExp(`^${escaped}$`, 'i') };
+  } else if (scope === 'lent') {
+    filter.type = 'lent';
+  } else if (scope === 'borrowed') {
+    filter.type = 'borrowed';
+  }
+
+  const result = await Debt.deleteMany(filter);
+  return { deletedCount: result.deletedCount || 0, scope, personName: personName ? cleanPersonName(personName) : undefined };
+};
+
+/**
  * Get Overall Debt Summary (Total Receivable, Total Payable, Net Balance)
  */
 export const getDebtSummary = async (userId: string | mongoose.Types.ObjectId): Promise<OverallDebtSummary> => {
@@ -562,42 +634,44 @@ export const getDebtSummary = async (userId: string | mongoose.Types.ObjectId): 
   let receivableCount = 0;
   let payableCount = 0;
 
-  const receivableMap: Record<string, { amount: number; phone?: string }> = {};
-  const payableMap: Record<string, { amount: number }> = {};
+  const receivableMap: Record<string, { displayName: string; amount: number; phone?: string }> = {};
+  const payableMap: Record<string, { displayName: string; amount: number }> = {};
   const activePeopleSet = new Set<string>();
 
   for (const debt of activeDebts) {
     const remaining = Math.max(0, debt.amount - debt.paidAmount);
     if (remaining <= 0) continue;
 
-    activePeopleSet.add(debt.personName.toLowerCase());
+    const normName = cleanPersonName(debt.personName).trim();
+    const key = normName.toLowerCase();
+    activePeopleSet.add(key);
 
     if (debt.type === 'lent') {
       totalReceivable += remaining;
       receivableCount++;
-      if (!receivableMap[debt.personName]) {
-        receivableMap[debt.personName] = { amount: 0, phone: debt.personPhone };
+      if (!receivableMap[key]) {
+        receivableMap[key] = { displayName: normName, amount: 0, phone: debt.personPhone };
       }
-      receivableMap[debt.personName].amount += remaining;
-      if (debt.personPhone && !receivableMap[debt.personName].phone) {
-        receivableMap[debt.personName].phone = debt.personPhone;
+      receivableMap[key].amount += remaining;
+      if (debt.personPhone && !receivableMap[key].phone) {
+        receivableMap[key].phone = debt.personPhone;
       }
     } else {
       totalPayable += remaining;
       payableCount++;
-      if (!payableMap[debt.personName]) {
-        payableMap[debt.personName] = { amount: 0 };
+      if (!payableMap[key]) {
+        payableMap[key] = { displayName: normName, amount: 0 };
       }
-      payableMap[debt.personName].amount += remaining;
+      payableMap[key].amount += remaining;
     }
   }
 
-  const topReceivables = Object.entries(receivableMap)
-    .map(([personName, data]) => ({ personName, amount: data.amount, phone: data.phone }))
+  const topReceivables = Object.values(receivableMap)
+    .map(data => ({ personName: data.displayName, amount: data.amount, phone: data.phone }))
     .sort((a, b) => b.amount - a.amount);
 
-  const topPayables = Object.entries(payableMap)
-    .map(([personName, data]) => ({ personName, amount: data.amount }))
+  const topPayables = Object.values(payableMap)
+    .map(data => ({ personName: data.displayName, amount: data.amount }))
     .sort((a, b) => b.amount - a.amount);
 
   return {
@@ -747,6 +821,33 @@ export const buildDebtSettledMessage = (
     `${statusNote}\n\n` +
     `_স্মৃতি লাইফ - আপনার বিশ্বস্ত ডিজিটাল খাতা_`
   );
+};
+
+/**
+ * Build WhatsApp Response: Debt Deletion
+ */
+export const buildDebtDeletedMessage = (
+  deletedCount: number,
+  scope: 'all' | 'person' | 'lent' | 'borrowed',
+  personName?: string
+): string => {
+  if (deletedCount === 0) {
+    if (scope === 'person' && personName) {
+      return `ℹ️ *${personName}*-এর নামে কোনো সক্রিয় ধার-দেনার রেকর্ড পাওয়া যায়নি।`;
+    }
+    return `ℹ️ আপনার কোনো সক্রিয় ধার-দেনার রেকর্ড পাওয়া যায়নি।`;
+  }
+
+  if (scope === 'person' && personName) {
+    return `🗑️ *${personName}*-এর সব (${enToBnDigits(deletedCount)}টি) ধার-দেনার হিসাব সফলভাবে মুছে ফেলা হয়েছে!`;
+  }
+  if (scope === 'lent') {
+    return `🗑️ আপনার সব (${enToBnDigits(deletedCount)}টি) পাওনা টাকার হিসাব তালিকা সফলভাবে মুছে ফেলা হয়েছে!`;
+  }
+  if (scope === 'borrowed') {
+    return `🗑️ আপনার সব (${enToBnDigits(deletedCount)}টি) দেনার হিসাব তালিকা সফলভাবে মুছে ফেলা হয়েছে!`;
+  }
+  return `🗑️ আপনার ধার-দেনা খাতার সব (${enToBnDigits(deletedCount)}টি) হিসাব সফলভাবে মুছে ফেলা হয়েছে!`;
 };
 
 /**

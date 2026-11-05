@@ -45,12 +45,14 @@ import {
   parseDebtInput,
   parseSingleDebtLine,
   recordDebt,
+  deleteDebts,
   settleDebtByPerson,
   getDebtSummary,
   getPersonDebtSummary,
   buildDebtLoggedMessage,
   buildMultipleDebtsLoggedMessage,
   buildDebtSettledMessage,
+  buildDebtDeletedMessage,
   buildDebtSummaryMessage,
   buildPersonDebtMessage,
   ParsedDebtItem
@@ -4043,6 +4045,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               );
               }
               return;
+            } else if (parsedDebt.isDelete) {
+              const delResult = await deleteDebts(user._id, parsedDebt.deleteScope || 'all', parsedDebt.personName);
+              const reply = buildDebtDeletedMessage(delResult.deletedCount, delResult.scope as any, delResult.personName);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
+              return;
             } else if (parsedDebt.multipleDebts && parsedDebt.multipleDebts.length > 0) {
               for (const item of parsedDebt.multipleDebts) {
                 await recordDebt(
@@ -5939,6 +5949,17 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               .replace(/(?:আমার|amr|amar|নোট|note|ঠিকানা|অ্যাড্রেস|এড্রেস|address|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
               .trim();
 
+            // Intercept debt / udhar delete if misclassified by AI as delete_note
+            const isDebtWordInDelete = /(?:পাওনা|দেনা|ধার|বাকি|উধার|paona|pauna|pawna|dena|dhar|baki|udhar)/i.test(`${query} ${cleanText}`);
+            if (isDebtWordInDelete) {
+              const parsedDebtDel = parseDebtInput(cleanText) || parseDebtInput(query);
+              const scope = parsedDebtDel?.deleteScope || (/(?:দেনা|dena)/i.test(`${query} ${cleanText}`) ? 'borrowed' : /(?:পাওনা|paona|pauna|pawna)/i.test(`${query} ${cleanText}`) ? 'lent' : 'all');
+              const delResult = await deleteDebts(user._id, scope, parsedDebtDel?.personName);
+              const reply = buildDebtDeletedMessage(delResult.deletedCount, scope, delResult.personName);
+              await sendMetaWhatsAppMessage(fromNumber, reply);
+              break;
+            }
+
             if (data.deleteAll || /সব|সকল|all|sob|shob/i.test(query)) {
               const res = await Note.deleteMany({ userId: user._id });
               await sendMetaWhatsAppMessage(fromNumber, `🗑️ আপনার সব (${res.deletedCount}টি) নোট সফলভাবে মুছে ফেলা হয়েছে।`);
@@ -5980,8 +6001,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             }
 
             if (!deletedNote) {
-              // Fallback: delete most recent note
-              deletedNote = await Note.findOne({ userId: user._id }).sort({ createdAt: -1 });
+              // Only delete most recent note if the user explicitly commanded a generic delete without any specific title/topic
+              const isGenericLastCmd = /^(?:নোট|note|আমার\s*নোট|লাস্ট|শেষ|আগেরটা|last)\s*(?:ডিলিট|মুছে|delete|remove)?$/i.test(cleanText.trim());
+              if (isGenericLastCmd && !coreQuery) {
+                deletedNote = await Note.findOne({ userId: user._id }).sort({ createdAt: -1 });
+              }
             }
 
             if (deletedNote) {
