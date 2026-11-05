@@ -3,10 +3,11 @@ import mongoose from 'mongoose';
 
 export interface ParsedExpense {
   isQuery: boolean;
-  queryType?: 'daily' | 'monthly';
+  queryType?: 'daily' | 'monthly' | 'range';
   targetDate?: Date;
   dateLabelBn?: string;
   monthYear?: { year: number; month: number; monthLabelBn: string };
+  rangeDays?: { days: number; startDate: Date; endDate: Date; labelBn: string };
   title?: string;
   amount?: number;
   paymentMethod?: string;
@@ -174,6 +175,12 @@ export interface ExtractedDateInfo {
     month: number;
     monthLabelBn: string;
   };
+  rangeDays?: {
+    days: number;
+    startDate: Date;
+    endDate: Date;
+    labelBn: string;
+  };
   cleanedText?: string;
 }
 
@@ -210,7 +217,7 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
   }
 
   // 2. Specific Month: e.g. "সেপ্টেম্বর মাসের খরচ", "september maser khoroc", "october khoroc"
-  const monthMatch = clean.match(/(?:^|\s)(জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|আগষ্ট|সেপ্টেম্বর|সেপ্টেম্বার|অক্টোবর|অক্টোবার|নভেম্বর|নভেম্বার|ডিসেম্বর|ডিসেম্বার|january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec)\s*(?:মাসের?|maser?|month)?(?:\s*(?:এর|এ|te|e|a))?\s*(?:খরচ|khoroc|khoros|হিসাব)/i);
+  const monthMatch = clean.match(/(?:^|\s)(জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|আগষ্ট|সেপ্টেম্বর|সেপ্টেম্বার|অক্টোবর|অক্টোবার|নভেম্বর|নভেম্বার|ডিসেম্বর|ডিসেম্বার|january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec)\s*(?:মাসের?|maser?|month)?(?:\s*(?:এর|এ|te|e|a))?\s*(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroc|khoros|khoroch|khoroa|koros|koroch|cost|costs|expense|expenses|হিসাব|hisab)/i);
   if (monthMatch) {
     const mNum = MONTH_MAP[monthMatch[1].toLowerCase()];
     if (mNum) {
@@ -230,8 +237,33 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     }
   }
 
-  // 3. Yesterday: গতকাল, গত কাল, কালকের, gotokal, gotokaal, goto kal, yesterday
-  const yesterdayRegex = /(?:গত\s*কাল(?:কের?|ের)?|গতকাল(?:কের?|ের)?|কালকের?|goto\s*kal(?:ker?|er)?|gotokal(?:er)?|gotokaal(?:er)?|yesterday)/i;
+  // 2.5. Multi-day Range: e.g. "last 2 din ar khoros koto", "গত ২ দিনের খরচ", "last 7 days cost", "বিগত ৩ দিনের হিসাব"
+  const rangeMatch =
+    clean.match(/(?:last|past|goto|গত|বিগত|আগের)\s*([০-৯0-9]+)\s*(?:দিনের?|din\s*(?:er|ar|e)?|diner|days?(?:\s*of)?)(?:\s*(?:এর|এ|ar|er))?/i) ||
+    clean.match(/(?:^|\s)([০-৯0-9]+)\s*(?:দিনের|din\s*(?:er|ar)|diner|days?\s*of)(?:\s*(?:এর|এ|ar|er))?/i);
+  if (rangeMatch && !/(?:দিন\s*আগের?|din\s*ager?|days?\s*ago)/i.test(clean)) {
+    const daysCount = parseInt(bnToEnDigits(rangeMatch[1]), 10);
+    if (!isNaN(daysCount) && daysCount >= 1 && daysCount <= 90) {
+      const startRef = new Date(referenceDate);
+      startRef.setDate(startRef.getDate() - (daysCount - 1));
+      const startDhaka = startRef.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const startDate = new Date(`${startDhaka}T00:00:00.000+06:00`);
+      const endDate = new Date(`${dhakaStr}T23:59:59.999+06:00`);
+      const cleaned = clean.replace(rangeMatch[0], ' ').trim();
+      return {
+        rangeDays: {
+          days: daysCount,
+          startDate,
+          endDate,
+          labelBn: `গত ${enToBnDigits(daysCount)} দিনের`
+        },
+        cleanedText: cleaned
+      };
+    }
+  }
+
+  // 3. Yesterday: গতকাল, গত কাল, কালকের, gotokal, gotokalker, gotokaler, gotokaal, goto kal, kalker, yesterday
+  const yesterdayRegex = /(?:গত\s*কাল(?:কের?|ের)?|গতকাল(?:কের?|ের)?|কালকের?|goto\s*ka?l(?:ker?|er)?|gotoka?l(?:ker?|er)?|kalke?r|yesterday(?:'s)?)/i;
   if (yesterdayRegex.test(clean)) {
     const yDate = new Date(referenceDate);
     yDate.setDate(yDate.getDate() - 1);
@@ -416,9 +448,9 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   const textWithoutDate = dateInfo?.cleanedText !== undefined ? dateInfo.cleanedText : clean;
 
   // Check if text is an expense query
-  const hasExpenseWord = /(?:খরচ|খরচের|khoroc|khoros|expense|expenses|হিসাব|hisab)/i.test(clean);
+  const hasExpenseWord = /(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khorosh|khoroj|khoroa|khorca|khorcha|koroch|koroc|koros|korosh|khroch|cost|costs|spending|spent|expense|expenses|হিসাব|hisab)/i.test(clean);
   const hasQueryWord = /(?:কত|koto|koro|মোট|mot|total|হয়েছে|হলো|holo|hoyeche|hoise|ছিল|chilo|দেখা|দেখাও|dekha|dekhao|লিস্ট|list|দাও|daw|dao|বলো|bolo|summary)/i.test(clean);
-  const isDirectExpensePhrase = /^(?:আজকের|আজকে|আজ|aj|ajke|ajker|গতকাল|গতকালের|কালকের|gotokal|এই\s*মাসের|মাসের|চলতি\s*মাসের|last\s*month)?\s*(?:খরচ|khoroc|khoros|হিসাব|expense)\s*\??$/i.test(clean);
+  const isDirectExpensePhrase = /^(?:আজকের|আজকে|আজ|aj|ajke|ajker|গতকাল|গতকালের|কালকের|gotokal|gotokalker|gotokaler|এই\s*মাসের|মাসের|চলতি\s*মাসের|last\s*month)?\s*(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)\s*\??$/i.test(clean);
 
   const isQuery = (hasExpenseWord && (hasQueryWord || clean.endsWith('?'))) || isDirectExpensePhrase;
 
@@ -432,12 +464,21 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   }
 
   if (
-    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|month|monthly|maser|last\s*month)\s*(?:খরচ|khoroc|khoros|হিসাব)/i.test(clean) ||
+    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|month|monthly|maser|last\s*month)\s*(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)/i.test(clean) ||
     /^(?:মাসের\s*খরচ|এই\s*মাসের\s*খরচ|মাসের\s*হিসাব)$/i.test(clean)
   ) {
     return {
       isQuery: true,
       queryType: 'monthly'
+    };
+  }
+
+  // 1.5. Multi-day Range Query (e.g. "last 2 din ar khoros koto", "last 2 din ar cost koto", "গত ২ দিনের খরচ কত")
+  if (dateInfo?.rangeDays && (isQuery || hasExpenseWord)) {
+    return {
+      isQuery: true,
+      queryType: 'range',
+      rangeDays: dateInfo.rangeDays
     };
   }
 
@@ -756,6 +797,77 @@ export const buildDailyExpenseQueryMessage = (
          `${itemsList}\n\n` +
          `──────────────\n` +
          `💵 *ওই দিনের মোট:* ${formatTaka(total)} (${enToBnDigits(expenses.length)}টি এন্ট্রি)\n` +
+         `📅 *চলতি মাসের মোট:* ${formatTaka(monthTotal)}\n\n` +
+         `🌐 বিস্তারিত খাতা: https://smritilife.com/app/expenses`;
+};
+
+/**
+ * Get Expense Summary for a Multi-Day Range (e.g. Last N Days)
+ */
+export const getExpenseSummaryForRange = async (
+  userId: string | mongoose.Types.ObjectId,
+  startDate: Date,
+  endDate: Date,
+  labelBn: string = 'গত কয়েক দিনের'
+) => {
+  const rangeExpenses = await Expense.find({
+    userId,
+    date: { $gte: startDate, $lte: endDate }
+  }).sort({ date: -1 });
+
+  const rangeTotal = rangeExpenses.reduce((sum, item) => sum + item.amount, 0);
+
+  const dhakaDateStr = endDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+  const [yearStr, monthStr] = dhakaDateStr.split('-');
+  const startOfMonth = new Date(`${yearStr}-${monthStr}-01T00:00:00.000+06:00`);
+  const lastDay = new Date(Number(yearStr), Number(monthStr), 0).getDate();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const endOfMonth = new Date(`${yearStr}-${monthStr}-${pad(lastDay)}T23:59:59.999+06:00`);
+
+  const monthExpenses = await Expense.find({
+    userId,
+    date: { $gte: startOfMonth, $lte: endOfMonth }
+  });
+  const monthTotal = monthExpenses.reduce((sum, item) => sum + item.amount, 0);
+
+  return {
+    rangeExpenses,
+    rangeTotal,
+    rangeCount: rangeExpenses.length,
+    monthTotal,
+    labelBn
+  };
+};
+
+/**
+ * Format Response Message for Multi-Day Range Query (e.g. Last 2 Days)
+ */
+export const buildRangeExpenseQueryMessage = (
+  expenses: IExpense[],
+  total: number,
+  monthTotal: number,
+  labelBn: string = 'গত কয়েক দিনের'
+): string => {
+  if (expenses.length === 0) {
+    return `📝 *${labelBn} খরচের হিসাব খাতা*\n\n` +
+           `${labelBn} আপনার কোনো খরচ রেকর্ড করা নেই।\n\n` +
+           `💡 খরচ যোগ করতে লিখুন, যেমন: "আজ বাজার ৫০০ টাকা"`;
+  }
+
+  const itemsList = expenses
+    .map((e, idx) => {
+      const cat = detectExpenseCategory(e.title);
+      const dStr = new Date(e.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const [, mNum, dNum] = dStr.split('-').map(Number);
+      const shortDate = `${enToBnDigits(dNum)} ${BENGALI_MONTHS[mNum] || ''}`.trim();
+      return `${enToBnDigits(idx + 1)}. ${cat.icon} ${e.title}: *${formatTaka(e.amount)}* _(${shortDate})_`;
+    })
+    .join('\n');
+
+  return `📊 *${labelBn} খরচের হিসাব খাতা*\n\n` +
+         `${itemsList}\n\n` +
+         `──────────────\n` +
+         `💵 *${labelBn} মোট:* ${formatTaka(total)} (${enToBnDigits(expenses.length)}টি এন্ট্রি)\n` +
          `📅 *চলতি মাসের মোট:* ${formatTaka(monthTotal)}\n\n` +
          `🌐 বিস্তারিত খাতা: https://smritilife.com/app/expenses`;
 };

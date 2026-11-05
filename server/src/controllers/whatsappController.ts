@@ -28,10 +28,12 @@ import {
   getExpenseSummary,
   getExpenseSummaryForDate,
   getExpenseSummaryForMonth,
+  getExpenseSummaryForRange,
   detectExpenseCategory,
   buildExpenseLoggedMessage,
   buildDailyExpenseQueryMessage,
   buildMonthlyExpenseQueryMessage,
+  buildRangeExpenseQueryMessage,
   deleteExpenseByIndex,
   deleteExpenseByTitle,
   deleteLastExpense,
@@ -4187,6 +4189,29 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
               );
                 }
+              } else if (parsedExpense.queryType === 'range' && parsedExpense.rangeDays) {
+                const rSummary = await getExpenseSummaryForRange(
+                  user._id,
+                  parsedExpense.rangeDays.startDate,
+                  parsedExpense.rangeDays.endDate,
+                  parsedExpense.rangeDays.labelBn
+                );
+                userExpenseContext.set(user._id.toString(), {
+                  targetDate: parsedExpense.rangeDays.endDate,
+                  dateLabelBn: rSummary.labelBn,
+                  expenses: rSummary.rangeExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                  expiresAt: Date.now() + 15 * 60 * 1000
+                });
+                const reply = buildRangeExpenseQueryMessage(
+                  rSummary.rangeExpenses,
+                  rSummary.rangeTotal,
+                  rSummary.monthTotal,
+                  rSummary.labelBn
+                );
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                );
               } else {
                 // Daily query (Today, Yesterday, Day before yesterday, Specific Date like 10 Oct)
                 const targetDate = parsedExpense.targetDate || new Date();
@@ -5732,6 +5757,64 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 text += `💡 নির্দিষ্ট কোনো তথ্য জানতে লিখুন: "[নাম] দাও" (যেমন: "বাসার ঠিকানা দাও")\n💡 ডিলিট করতে লিখুন: "[নাম] ডিলিট করো"`;
                 await sendMetaWhatsAppMessage(fromNumber, text.trim());
               }
+              break;
+            }
+
+            // Safety check: If Gemini routed an Expense query (e.g. "আজকের খরচ", "গতকালের খরচ", "last 2 din ar cost koto") to query_note, answer from Expense collection first
+            const fallbackExpense = parseExpenseInput(cleanText) || parseExpenseInput(query);
+            if (fallbackExpense && fallbackExpense.isQuery) {
+              let expReply = '';
+              if (fallbackExpense.queryType === 'monthly') {
+                if (fallbackExpense.monthYear) {
+                  const mSummary = await getExpenseSummaryForMonth(
+                    user._id,
+                    fallbackExpense.monthYear.year,
+                    fallbackExpense.monthYear.month,
+                    fallbackExpense.monthYear.monthLabelBn
+                  );
+                  expReply = buildMonthlyExpenseQueryMessage(
+                    mSummary.monthTotal,
+                    mSummary.monthCount,
+                    mSummary.categoryBreakdown,
+                    mSummary.monthLabelBn
+                  );
+                } else {
+                  const summary = await getExpenseSummary(user._id);
+                  expReply = buildMonthlyExpenseQueryMessage(
+                    summary.monthTotal,
+                    summary.monthCount,
+                    summary.categoryBreakdown,
+                    'চলতি মাসের'
+                  );
+                }
+              } else if (fallbackExpense.queryType === 'range' && fallbackExpense.rangeDays) {
+                const rSummary = await getExpenseSummaryForRange(
+                  user._id,
+                  fallbackExpense.rangeDays.startDate,
+                  fallbackExpense.rangeDays.endDate,
+                  fallbackExpense.rangeDays.labelBn
+                );
+                expReply = buildRangeExpenseQueryMessage(
+                  rSummary.rangeExpenses,
+                  rSummary.rangeTotal,
+                  rSummary.monthTotal,
+                  rSummary.labelBn
+                );
+              } else {
+                const targetDate = fallbackExpense.targetDate || new Date();
+                const dSummary = await getExpenseSummaryForDate(
+                  user._id,
+                  targetDate,
+                  fallbackExpense.dateLabelBn || 'আজকের'
+                );
+                expReply = buildDailyExpenseQueryMessage(
+                  dSummary.dateExpenses,
+                  dSummary.dateTotal,
+                  dSummary.monthTotal,
+                  dSummary.dateLabelBn
+                );
+              }
+              await sendMetaWhatsAppMessage(fromNumber, expReply);
               break;
             }
 
