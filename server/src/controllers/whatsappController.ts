@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { Request, Response } from 'express';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import User from '../models/User';
 import OtpToken from '../models/OtpToken';
 import Reminder from '../models/Reminder';
@@ -111,19 +112,19 @@ export interface PendingMedicineState {
 
 export const userPendingMedicineState = new Map<string, PendingMedicineState>();
 
-export function parseMedicinePrescriptionText(text: string): {
+export async function parseMedicinePrescriptionText(text: string): Promise<{
   medicines: PendingMedicineItem[];
   hasStartDate: boolean;
   startDate?: Date;
   startDateLabel?: string;
-} | null {
+} | null> {
   if (!text || typeof text !== 'string') return null;
   const raw = text.trim();
   const lower = raw.toLowerCase();
 
-  const hasMedKeyword = /(?:ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|ট্যাবলেট|ক্যাপসুল|ডাক্তার|প্রেসক্রিপশন|osudh|osud|ousodh|ousud|oshudh|oshud|নাপা|napa|প্যারাসিটামল|paracetamol|সেক্লো|seclo|অ্যান্টাসিড|antacid|গ্যাস্ট্রিক|গ্যাস|gas|gastric|ফ্ল্যাজিল|flagyl|অ্যামোক্সিসিলিন|amoxicillin|এজিথ্রোমাইসিন|azithromycin|ম্যাক্সপ্রো|maxpro|সারজেল|sergel|প্যানটনিক|pantonic|প্যানটোপ্রাজল|pantoprazole|অমিপ্রাজল|omeprazole|মন্টিন|montene|মোন্টাস|montas|হিস্টাসিন|histasin|ফেভেক্স|fexofenadine|ফেক্সো|ক্যালসিয়াম|calcium|ভিটামিন|vitamin|প্রেসার|ডায়াবেটিস|ইনসুলিন|সিরাপ|syrup)/i.test(lower);
+  const hasMedKeyword = /(?:ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|ট্যাবলেট|ক্যাপসুল|ডাক্তার|প্রেসক্রিপশন|osudh|osud|ousodh|ousud|oshudh|oshud|নাপা|napa|প্যারাসিটামল|paracetamol|সেক্লো|seclo|অ্যান্টাসিড|antacid|গ্যাস্ট্রিক|গ্যাস|gas|gastric|ফ্ল্যাজিল|flagyl|অ্যামোক্সিসিলিন|amoxicillin|এজিথ্রোমাইসিন|azithromycin|ম্যাক্সপ্রো|maxpro|সারজেল|sergel|প্যানটনিক|pantonic|প্যানটোপ্রাজল|pantoprazole|অমিপ্রাজল|omeprazole|মন্টিন|montene|মোন্টাস|montas|হিস্টাসিন|histasin|ফেভেক্স|fexofenadine|ফেক্সো|ক্যালসিয়াম|calcium|ভিটামিন|vitamin|প্রেসার|ডায়াবেটিস|ইনসুলিন|সিরাপ|syrup|neofloxin|zis|enterogermina|cefixime|alastrol|ebat|ebastine|torax|ace|h\+)/i.test(lower);
   
-  const hasDosagePattern = /(?:১\+১\+১|1\+1\+1|১\+০\+১|1\+0\+1|০\+১\+১|0\+1\+1|১\+০\+০|1\+0\+0|০\+০\+১|0\+0\+1|\b[১-৩1-3]\s*বেলা\b|\b[১-৩1-3]\s*bela\b|\b[১-৩1-3]\s*bar\b|\b[১-৩1-3]\s*times\b|সকাল|দুপুর|রাত|sokal|dupur|rat|shokal|raat|bikele?|সন্ধ্যা)/i.test(lower);
+  const hasDosagePattern = /(?:১\+১\+১|1\+1\+1|১\+০\+১|1\+0\+1|০\+১\+১|0\+1\+1|১\+০\+০|1\+0\+0|০\+০\+১|0\+0\+1|\b[১-৩1-3]\s*বেলা\b|\b[১-৩1-3]\s*bela\b|\b[১-৩1-3]\s*bar\b|\b[১-৩1-3]\s*times\b|সকাল|দুপুর|রাত|sokal|dupur|rat|shokal|raat|bikele?|সন্ধ্যা|camos|চামচ|spoon|tablets?|টা\s*kore|capsules?|ড্রপ|drops?)/i.test(lower);
   
   const hasDuration = /(?:[০-৯\d]+)\s*(?:দিন|din|days?|সপ্তাহ|weeks?|মাস|months?)|(?:[০-৯\d]+)\s*(?:তারিখ|তারিখে|tarik|tarikh|october|november|december|january|february|march|april|may|june|july|august|september|অক্টোবর|নভেম্বর|ডিসেম্বর|জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর)?\s*(?:পর্যন্ত|porjonto|porjanto|till|until)|(?:পর্যন্ত|porjonto|porjanto|till|until)\s*(\d{1,2}|[০-৯]{1,2})/i.test(lower);
 
@@ -196,17 +197,182 @@ export function parseMedicinePrescriptionText(text: string): {
         if (tMonth > 11) { tMonth = 0; tYear += 1; }
       }
       explicitEndDate = new Date(Date.UTC(tYear, tMonth, dNum, 0, 0, 0, 0));
-      hasStartDate = true; // When an explicit end date is given, start date defaults to today
+      hasStartDate = true;
     }
   }
 
+  // --- METHOD 1: AI Prescription & Routine Parser (Gemini 2.5 Flash) ---
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) {
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const prompt = `You are an expert medical prescription and reminder parser for Smriti Life (a personal assistant in Bangladesh).
+A user sent the following medicine prescription / routine text (in Bengali, English, or Banglish):
+"""
+${raw}
+"""
+
+CURRENT BANGLADESH DATE: ${dhakaStr}
+
+TASK:
+Extract all medicine items, their doses/instructions, daily routine slot times, meal timing, duration, and start date.
+
+CRITICAL RULES:
+1. Ignore conversational commands and instruction lines like "reminder diow aj theke", "reminder dao", "mone koriye dio", "please", "আজ থেকে রিমাইন্ডার দিও". These are COMMANDS, NEVER medicines! NEVER include "reminder diow" or "reminder" as a medicine!
+2. Each medicine name must be clean and include dose/strength if specified (e.g., "Neofloxin 1 চামচ", "Zis DS 1 চামচ", "Enterogermina 1টি").
+3. Routine array MUST contain ONLY these exact slot strings:
+   - "সকাল" (morning / sokal / sokale / breakfast / 1+0+0)
+   - "দুপুর" (noon / dupur / dupure / lunch / 0+1+0)
+   - "রাত" (night / rat / rate / raat / dinner / 0+0+1)
+   Examples:
+   - "sokal r rat a" -> ["সকাল", "রাত"]
+   - "dupure 10 din" -> ["দুপুর"]
+   - "3 bela" / "sokal dupur rat" -> ["সকাল", "দুপুর", "রাত"]
+4. Meal timing:
+   - "before" if before food ("খাবারের আগে", "khabar age", "before meal", or gastric antacids)
+   - "after" if after food ("খাবারের পরে", "khabar pore", or default)
+5. Duration:
+   - Number of days. If one item specifies duration (e.g. "10 din") and others don't, apply the 10 days duration across all medicines from the same prescription unless specified otherwise. Default is 7 days.
+6. Start Date:
+   - "aj theke" / "আজ থেকে" -> hasStartDate: true, startDate: "${dhakaStr}"
+   - "kal theke" / "কাল থেকে" -> hasStartDate: true, startDate: tomorrow
+   - If user gave start date, set hasStartDate: true. Otherwise false.
+
+Return JSON ONLY with this exact schema:
+{
+  "hasStartDate": true,
+  "startDate": "YYYY-MM-DD",
+  "medicines": [
+    {
+      "name": "Neofloxin 1 চামচ",
+      "routine": ["সকাল", "রাত"],
+      "mealTiming": "after",
+      "durationDays": 10
+    },
+    {
+      "name": "Zis DS 1 চামচ",
+      "routine": ["সকাল", "রাত"],
+      "mealTiming": "after",
+      "durationDays": 10
+    },
+    {
+      "name": "Enterogermina 1টি",
+      "routine": ["দুপুর"],
+      "mealTiming": "after",
+      "durationDays": 10
+    }
+  ]
+}`;
+
+      const candidateModels = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+      for (const modelName of candidateModels) {
+        try {
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 1024,
+              responseMimeType: 'application/json'
+            }
+          });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout ${modelName}`)), 7000)
+          );
+          const result: any = await Promise.race([
+            model.generateContent([prompt]),
+            timeoutPromise
+          ]);
+          const responseText = result.response.text();
+          const parsed = JSON.parse(responseText.trim());
+
+          if (parsed && Array.isArray(parsed.medicines) && parsed.medicines.length > 0) {
+            const validMeds: PendingMedicineItem[] = [];
+            for (const item of parsed.medicines) {
+              const name = (item.name || '').trim();
+              // Strict exclusion of command words as medicine
+              if (!name || /^(?:reminder|reminder\s*diow|diow|রিমাইন্ডার|দিও|osudh|medicine|ওষুধ|ঔষধ)$/i.test(name)) {
+                continue;
+              }
+              const routine: string[] = [];
+              const rawRoutines = Array.isArray(item.routine) ? item.routine : [item.routine];
+              for (const r of rawRoutines) {
+                const rStr = String(r).toLowerCase();
+                if (rStr.includes('সকাল') || rStr.includes('morning') || rStr.includes('sokal')) routine.push('সকাল');
+                else if (rStr.includes('দুপুর') || rStr.includes('noon') || rStr.includes('afternoon') || rStr.includes('dupur')) routine.push('দুপুর');
+                else if (rStr.includes('রাত') || rStr.includes('night') || rStr.includes('rat') || rStr.includes('raat')) routine.push('রাত');
+              }
+              if (routine.length === 0) routine.push('সকাল', 'রাত');
+
+              const durationDays = Number(item.durationDays) || 7;
+              const mealTiming = item.mealTiming === 'before' ? 'before' : 'after';
+              const mealTimingText = mealTiming === 'before' ? 'খাবারের আগে' : 'খাবারের পরে';
+
+              validMeds.push({
+                name,
+                routine,
+                mealTiming,
+                mealTimingText,
+                durationDays,
+                customTimes: {},
+                endDate: explicitEndDate
+              });
+            }
+
+            if (validMeds.length > 0) {
+              let finalStartDate = startDate;
+              let finalHasStart = hasStartDate;
+              if (parsed.hasStartDate && parsed.startDate) {
+                const parts = parsed.startDate.split('-').map(Number);
+                if (parts.length === 3) {
+                  finalStartDate = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 0, 0, 0));
+                  finalHasStart = true;
+                }
+              }
+              return {
+                medicines: validMeds,
+                hasStartDate: finalHasStart,
+                startDate: finalStartDate,
+                startDateLabel: startDateLabel || (finalHasStart ? 'আজ' : undefined)
+              };
+            }
+          }
+        } catch (e) {
+          // try next candidate model
+        }
+      }
+    } catch (err) {
+      console.warn('[parseMedicinePrescriptionText] Gemini parser error, using regex fallback:', err);
+    }
+  }
+
+  // --- METHOD 2: Enhanced Robust Regex Fallback ---
   let rawSegments = raw
     .replace(/^(?:ডাক্তার|doctor|প্রেসক্রিপশন|prescription)[^\n:;,]*[:;,-]?\s*/i, '')
     .split(/(?:\r?\n|;|(?<=\b(?:দিন|din|days?))\s*[,&]\s*|(?<=\b(?:দিন|din|days?))\s+(?:আর|এবং|and)\s+|(?<=\b(?:খাব|হবে|khete\s*hbe))\s*[,&]\s*|\b[১-৯\d]+\.\s+)/i)
     .map(s => s.trim())
     .filter(s => s.length > 2);
 
+  // Filter out pure command/instruction lines
+  rawSegments = rawSegments.filter(s => {
+    const sLower = s.toLowerCase().trim();
+    if (/^(?:reminder|remindar|রিমাইন্ডার|alarm|অ্যালার্ম)\s*(?:diow|dio|dao|diyo|diben|den|set|koro|করো|দিও|দাও|দেন)?\s*(?:aj|ajke|kal|kalke|আজ|আজকে|কাল|কালকে)?\s*(?:theke|থেকে)?$/i.test(sLower)) return false;
+    if (/^(?:aj|ajke|kal|kalke|আজ|আজকে|কাল|কালকে)\s*(?:theke|থেকে)$/i.test(sLower)) return false;
+    if (/^(?:mone\s*koriye\s*di[ow]|মনে\s*করিয়ে\s*দিও)$/i.test(sLower)) return false;
+    return true;
+  });
+
   if (rawSegments.length === 0) rawSegments = [raw];
+
+  // Scan across entire text for max duration (so all medicines in same prescription share the course duration)
+  let maxDetectedDuration = 7;
+  for (const s of rawSegments) {
+    const dM = s.match(/([০-৯\d]+)\s*(?:দিন|din|days?)/i);
+    if (dM) {
+      const numStr = dM[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m);
+      const parsedDays = parseInt(numStr, 10);
+      if (parsedDays > maxDetectedDuration) maxDetectedDuration = parsedDays;
+    }
+  }
 
   const medicines: PendingMedicineItem[] = [];
 
@@ -214,14 +380,14 @@ export function parseMedicinePrescriptionText(text: string): {
     const segLower = seg.toLowerCase();
 
     // Duration extraction
-    let durationDays = 7;
+    let durationDays = maxDetectedDuration;
     const durMatch = segLower.match(/([০-৯\d]+)\s*(?:দিন|din|days?)/i);
     const weekMatch = segLower.match(/([০-৯\d]+)\s*(?:সপ্তাহ|weeks?)/i);
     const monthMatch = segLower.match(/([০-৯\d]+)\s*(?:মাস|months?)/i);
 
     if (durMatch) {
       const numStr = durMatch[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m);
-      durationDays = parseInt(numStr, 10) || 7;
+      durationDays = parseInt(numStr, 10) || maxDetectedDuration;
     } else if (weekMatch) {
       const numStr = weekMatch[1].replace(/[০-৯]/g, m => bnToEnMap[m] || m);
       durationDays = (parseInt(numStr, 10) || 1) * 7;
@@ -244,11 +410,11 @@ export function parseMedicinePrescriptionText(text: string): {
       routine = ['সকাল', 'দুপুর'];
     } else if (/দুপুর.*রাত|dupur.*rat|০\+১\+১|0\+1\+1/i.test(segLower)) {
       routine = ['দুপুর', 'রাত'];
-    } else if (/০\+০\+১|0\+0\+1|\b(?:রাত|রাতে|rate|raate)\b/i.test(segLower)) {
+    } else if (/০\+০\+১|0\+0\+1|\b(?:রাত|রাতে|rate|raate|rat\s*e|rat\s*a)\b/i.test(segLower)) {
       routine = ['রাত'];
-    } else if (/১\+০\+০|1\+0\+0|\b(?:সকাল|সকালে|sokal|shokal)\b/i.test(segLower)) {
+    } else if (/১\+০\+০|1\+0\+0|\b(?:সকাল|সকালে|sokal|shokal|sokale|sokal\s*e|sokal\s*a)\b/i.test(segLower)) {
       routine = ['সকাল'];
-    } else if (/০\+১\+০|0\+1\+0|\b(?:দুপুর|দুপুরে|dupur)\b/i.test(segLower)) {
+    } else if (/০\+১\+০|0\+1\+0|\b(?:দুপুর|দুপুরে|dupur|dupure|dupur\s*e|dupur\s*a)\b/i.test(segLower)) {
       routine = ['দুপুর'];
     } else {
       routine = ['সকাল', 'রাত'];
@@ -269,7 +435,7 @@ export function parseMedicinePrescriptionText(text: string): {
       customTimes['রাত'] = `${h.toString().padStart(2, '0')}:00`;
     }
 
-    // Meal timing extraction with minutes (e.g. "khabar 30 minutes age", "খাবারের ৩০ মিনিট আগে")
+    // Meal timing extraction with minutes
     let mealTiming = 'after';
     let mealTimingText = 'খাবারের পরে';
     const isBefore = /(?:খাবারের\s*আগে|খাওয়ার\s*আগে|khabarer\s*age|khawar\s*age|khabar\s*.*age|khawar\s*.*age|before\s*(?:food|meal))/i.test(segLower) ||
@@ -289,9 +455,10 @@ export function parseMedicinePrescriptionText(text: string): {
       mealTimingText = 'খাবারের আগে';
     }
 
-    // Clean medicine name preserving strength/dosage (e.g. "sanbur(30)" -> "Sanbur (30)", "napa 500" -> "Napa 500")
+    // Clean medicine name preserving strength/dosage
     let cleanName = seg;
     cleanName = cleanName.replace(/mone\s*koriye\s*di[ow]|মনে\s*করিয়ে\s*দিও/gi, '');
+    cleanName = cleanName.replace(/\b(?:reminder|remindar|রিমাইন্ডার)\s*(?:diow|dio|dao|diyo|diben|den|set|koro|করো|দিও|দাও|দেন)?\b/gi, '');
     cleanName = cleanName.replace(/\b(?:aj\s*thake|আজ\s*থেকে|aj\s*theke|আজকে\s*থেকে)\b/gi, '');
     cleanName = cleanName.replace(/\b(?:aj|ajke|kal|kalke|আজ|আজকে|কাল|কালকে)\b/gi, '');
     cleanName = cleanName.replace(/\b(?:agami|আগামী)\b/gi, '');
@@ -299,18 +466,21 @@ export function parseMedicinePrescriptionText(text: string): {
     cleanName = cleanName.replace(/\b(?:khete\s*hobe|খেতে\s*হবে|khete\s*hbe|khawa\s*lagbe|খাওয়া\s*লাগবে)\b/gi, '');
     cleanName = cleanName.replace(/\b(?:khabar|khabarer|khawar|খাবারের|খাওয়ার)\s*(?:\d{1,2}|[০-৯]{1,2})?\s*(?:minutes?|mins?|মিনিট)?\s*(?:age|pore|আগে|পরে)\b/gi, '');
     cleanName = cleanName.replace(/\b(?:before|after)\s*(?:food|meal)\b/gi, '');
-    cleanName = cleanName.replace(/\b(?:sokal|dupur|rat|shokal|raat|সকাল|দুপুর|রাত)\s*(?:\d{1,2}|[০-৯]{1,2})?\s*(?:tay|ta|টায়|টায়)?\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:sokal|dupur|rat|shokal|raat|সকাল|দুপুর|রাত)\s*(?:e|a|এ|য়)?\s*(?:\d{1,2}|[০-৯]{1,2})?\s*(?:tay|ta|টায়|টায়)?\b/gi, '');
     cleanName = cleanName.replace(/\b(?:\d{1,2}|[০-৯]{1,2})\s*(?:tay|ta|টায়|টায়)\b/gi, '');
     cleanName = cleanName.replace(/\b[১-৩1-3]\s*(?:bela|বেলা)\s*(?:kore|করে)?\b/gi, '');
     cleanName = cleanName.replace(/\b(?:ey|ei|এই)?\s*(?:osudh|osud|oshudh|oshud|ওষুধ|ঔষধ|medicine|tablet|ট্যাবলেট)\s*(?:ta|টি|টা)?\b/gi, '');
     cleanName = cleanName.replace(/\b(?:r|ar|এবং|আর)\b/gi, '');
     cleanName = cleanName.replace(/\b(?:doctor|ডাক্তার|আমাকে|আমারে|আমার|দিছে|দিয়েছে)\b/gi, '');
+    cleanName = cleanName.replace(/\b(?:10|7|[০-৯\d]+)\s*(?:din|দিন|days?)\b/gi, '');
+    cleanName = cleanName.replace(/\s+(?:kore|kore\s*a|kore\s*e|করে)\s*$/gi, '');
     cleanName = cleanName.replace(/[.,:;!\?_]+/g, ' ').replace(/\s+/g, ' ').trim();
     cleanName = cleanName.replace(/([a-zA-Z\u0980-\u09FF]+)\((\d+)\)/g, '$1 ($2)');
     if (cleanName.length > 0) cleanName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
 
-    if (!cleanName || cleanName.length < 2) {
-      cleanName = 'ওষুধ';
+    // Reject non-medicine junk names
+    if (!cleanName || cleanName.length < 2 || /^(?:reminder|reminder\s*diow|diow|রিমাইন্ডার|দিও|osudh|medicine|ওষুধ|ঔষধ)$/i.test(cleanName.trim())) {
+      continue;
     }
 
     medicines.push({
@@ -339,6 +509,14 @@ export async function createMedicineRemindersFromPending(
   medicines: PendingMedicineItem[],
   startDate: Date
 ): Promise<{ count: number; startDateBn: string; routineSummary: string }> {
+  // Purge any accidental "Reminder diow" or "reminder" items from existing user medicine reminders
+  try {
+    await Reminder.updateMany(
+      { userId, category: 'medicine' },
+      { $pull: { medicines: { name: { $regex: /^(?:reminder|reminder\s*diow|রিমাইন্ডার)/i } } } }
+    );
+  } catch (e) {}
+
   const routineTimes: Record<string, string> = {
     'সকাল': '08:30',
     'Morning': '08:30',
@@ -368,6 +546,11 @@ export async function createMedicineRemindersFromPending(
   let overallEndDate: Date | null = null;
 
   for (const med of medicines) {
+    // Strictly skip command words
+    if (/^(?:reminder|reminder\s*diow|রিমাইন্ডার)/i.test(med.name.trim())) {
+      continue;
+    }
+
     const duration = med.durationDays || 7;
     if (duration > maxDuration) maxDuration = duration;
 
@@ -411,6 +594,21 @@ export async function createMedicineRemindersFromPending(
     }
   }
 
+  // Live Bangladesh Date and Time
+  const nowDhaka = new Date();
+  const currentDhakaTime = nowDhaka.toLocaleTimeString('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
+  }); // Format "HH:mm" e.g. "23:20"
+
+  const currentDhakaDate = nowDhaka.toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Dhaka'
+  }); // Format "YYYY-MM-DD" e.g. "2026-11-05"
+
+  const startDStr = startDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+
   // Create or merge slot reminders
   let totalSlots = 0;
   const slotSummaries: string[] = [];
@@ -422,12 +620,16 @@ export async function createMedicineRemindersFromPending(
   };
 
   for (const slotKey of ['সকাল', 'দুপুর', 'রাত'] as const) {
-    const medsForSlot = slotMedsMap[slotKey];
+    let medsForSlot = slotMedsMap[slotKey].filter(m => !/^(?:reminder|reminder\s*diow|রিমাইন্ডার)/i.test(m.name.trim()));
     if (medsForSlot.length === 0) continue;
 
     const slotTitle = `${slotKey}ের ওষুধ`;
     const slotCustomTime = medsForSlot.find(m => m.customTime)?.customTime;
     const slotTime = slotCustomTime || routineTimes[slotKey] || '08:30';
+
+    // If start date is today and slot time has ALREADY passed for today (e.g. creating 8:30 AM / 9:00 PM reminder at 11:20 PM):
+    // Mark lastDispatchedDate as today so it DOES NOT dispatch immediately in the middle of the night!
+    const isSlotPassedForToday = (startDStr === currentDhakaDate && slotTime <= currentDhakaTime);
 
     const existing = await Reminder.findOne({
       userId,
@@ -437,7 +639,7 @@ export async function createMedicineRemindersFromPending(
     });
 
     if (existing) {
-      let combined = existing.medicines || [];
+      let combined = (existing.medicines || []).filter(item => !/^(?:reminder|reminder\s*diow|রিমাইন্ডার)/i.test(item.name.trim()));
       for (const m of medsForSlot) {
         const idx = combined.findIndex(item => item.name.toLowerCase() === m.name.toLowerCase());
         if (idx >= 0) combined[idx] = m;
@@ -447,6 +649,9 @@ export async function createMedicineRemindersFromPending(
       existing.status = 'Pending';
       existing.time = slotTime;
       existing.date = startDate;
+      if (isSlotPassedForToday) {
+        existing.lastDispatchedDate = currentDhakaDate;
+      }
       await existing.save();
       totalSlots++;
     } else {
@@ -461,7 +666,8 @@ export async function createMedicineRemindersFromPending(
         medicineRoutine: slotKey,
         medicines: medsForSlot,
         status: 'Pending',
-        isAlarm: false
+        isAlarm: false,
+        lastDispatchedDate: isSlotPassedForToday ? currentDhakaDate : undefined
       });
       totalSlots++;
     }
@@ -2208,7 +2414,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         }
 
         // --- STEP 0E.2: Handle Medicine Course Reminder ("নাপা সকাল দুপুর রাত ৭ দিন", "সেক্লো সকাল রাত খাবারের আগে ৭ দিন") ---
-        const medParseResult = parseMedicinePrescriptionText(cleanText);
+        const medParseResult = await parseMedicinePrescriptionText(cleanText);
         if (medParseResult && medParseResult.medicines.length > 0) {
           if (medParseResult.hasStartDate && medParseResult.startDate) {
             const result = await createMedicineRemindersFromPending(user._id, medParseResult.medicines, medParseResult.startDate);
