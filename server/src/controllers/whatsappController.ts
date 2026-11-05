@@ -14,7 +14,7 @@ import AITrainingRule from '../models/AITrainingRule';
 import UserDocument from '../models/UserDocument';
 import SystemSettings from '../models/SystemSettings';
 import { getMaintenanceStatus, updateMaintenanceCache } from '../services/maintenanceService';
-import { analyzeMessage, analyzeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache, getLastUserTurn } from '../services/aiWhatsAppService';
+import { analyzeMessage, analyzeAudioMessage, transcribeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache, getLastUserTurn } from '../services/aiWhatsAppService';
 import { searchReminders, formatReminderMatchMessage, formatMultipleRemindersMessage } from '../services/memoryRetrievalService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
@@ -1807,6 +1807,35 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
+        // --- STEP 0.5: Audio / Voice Note Real-Time Speech-to-Text ---
+        let isVoiceNote = false;
+        let voiceTranscribedText = '';
+
+        if (isAudio && audioMediaId) {
+          isVoiceNote = true;
+          console.log(`🎤 Received WhatsApp Voice Note from ${fromNumber}. Downloading audio bytes...`);
+          const audioData = await downloadMetaAudio(audioMediaId);
+          if (audioData && audioData.buffer && audioData.buffer.length > 0) {
+            try {
+              voiceTranscribedText = await transcribeAudioMessage(audioData.buffer, audioData.mimeType);
+              if (voiceTranscribedText) {
+                userMessage = voiceTranscribedText;
+                console.log(`🎤 Successfully Transcribed Voice Note from ${fromNumber}: "${userMessage}"`);
+              }
+            } catch (err: any) {
+              console.warn(`Voice transcription error for ${fromNumber}:`, err.message || err);
+            }
+          }
+
+          if (!userMessage) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              'দুঃখিত, আপনার ভয়েস মেসেজটি পরিষ্কারভাবে বুঝতে পারিনি। দয়া করে একটু স্পষ্ট করে আবার বলুন অথবা লিখে পাঠান।'
+            );
+            return;
+          }
+        }
+
         const cleanText = (userMessage || '').trim();
 
         // If user had uploaded a document earlier and was asked for a title:
@@ -3296,7 +3325,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     result.monthTotal,
                     dateLabel
                   );
-                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                   return;
                 } else {
                   await sendMetaWhatsAppMessage(
@@ -3333,7 +3365,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     result.monthTotal,
                     expContext?.dateLabelBn || 'আজকের'
                   );
-                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                   return;
                 }
               }
@@ -3351,7 +3386,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                       result.monthTotal,
                       expContext.dateLabelBn
                     );
-                    await sendMetaWhatsAppMessage(fromNumber, reply);
+                    await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                     return;
                   }
                 } else if (expContext.expenses.length > 1) {
@@ -3372,7 +3410,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     result.monthTotal,
                     'আজকের'
                   );
-                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                   return;
                 } else {
                   await sendMetaWhatsAppMessage(fromNumber, 'আপনার কোনো খরচের এন্ট্রি পাওয়া যায়নি।');
@@ -3400,7 +3441,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     mSummary.categoryBreakdown,
                     mSummary.monthLabelBn
                   );
-                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                 } else {
                   const summary = await getExpenseSummary(user._id);
                   const reply = buildMonthlyExpenseQueryMessage(
@@ -3409,7 +3453,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     summary.categoryBreakdown,
                     'চলতি মাসের'
                   );
-                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                 }
               } else {
                 // Daily query (Today, Yesterday, Day before yesterday, Specific Date like 10 Oct)
@@ -3432,7 +3479,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   dSummary.monthTotal,
                   dSummary.dateLabelBn
                 );
-                await sendMetaWhatsAppMessage(fromNumber, reply);
+                await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
               }
               return;
             } else if (parsedExpense.title && parsedExpense.amount) {
@@ -3455,7 +3505,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 dSummary.monthTotal,
                 parsedExpense.dateLabelBn
               );
-              await sendMetaWhatsAppMessage(fromNumber, reply);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
               return;
             }
           }
@@ -3470,7 +3523,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 const personSummary = await getPersonDebtSummary(user._id, parsedDebt.personName);
                 if (personSummary) {
                   const reply = buildPersonDebtMessage(personSummary);
-                  await sendMetaWhatsAppMessage(fromNumber, reply);
+                  await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                 } else {
                   await sendMetaWhatsAppMessage(
                     fromNumber,
@@ -3481,7 +3537,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 // Overall summary
                 const overallSummary = await getDebtSummary(user._id);
                 const reply = buildDebtSummaryMessage(overallSummary);
-                await sendMetaWhatsAppMessage(fromNumber, reply);
+                await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
               }
               return;
             } else if (parsedDebt.isSettlement && parsedDebt.personName && parsedDebt.amount) {
@@ -3498,7 +3557,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 parsedDebt.settlementType || 'received',
                 settlementResult.remainingForPerson
               );
-              await sendMetaWhatsAppMessage(fromNumber, reply);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
               return;
             } else if (parsedDebt.type && parsedDebt.personName && parsedDebt.amount) {
               // New debt entry (lent or borrowed)
@@ -3521,7 +3583,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 savedDebt.type,
                 remaining
               );
-              await sendMetaWhatsAppMessage(fromNumber, reply);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
               return;
             }
           }
@@ -3530,8 +3595,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         // --- STEP 3: Regular AI Message & Audio Analysis ---
         let aiResponse: any;
 
-        if (isAudio && audioMediaId) {
-          console.log(`🎤 Received WhatsApp Voice Note from ${fromNumber}. Downloading audio...`);
+        if (isAudio && audioMediaId && !userMessage) {
+          console.log(`🎤 Received WhatsApp Voice Note from ${fromNumber}. Downloading audio fallback...`);
           const audioData = await downloadMetaAudio(audioMediaId);
           if (audioData) {
             aiResponse = await analyzeAudioMessage(fromNumber, audioData.buffer, audioData.mimeType, user.honorific);
@@ -3540,8 +3605,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             return;
           }
         } else {
-          console.log(`📩 Received WhatsApp Message from ${fromNumber}: "${userMessage}"`);
+          console.log(`📩 Processing ${isVoiceNote ? 'Transcribed Voice' : 'Text'} Message from ${fromNumber}: "${userMessage}"`);
           aiResponse = await analyzeMessage(fromNumber, userMessage, user.honorific);
+        }
+
+        if (aiResponse && aiResponse.replyText && isVoiceNote && voiceTranscribedText && !aiResponse.replyText.startsWith('🎤')) {
+          aiResponse.replyText = `🎤 _"${voiceTranscribedText}"_\n\n${aiResponse.replyText}`;
         }
 
         switch (aiResponse.action) {
@@ -3649,7 +3718,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 const reply = isFollowupReminderCheck
                   ? `🎂 পেয়েছি! আপনার রিমাইন্ডারে তথ্যটি সংরক্ষিত আছে:\n\n${formatReminderMatchMessage(remResult.topReminder, user.honorific)}`
                   : formatReminderMatchMessage(remResult.topReminder, user.honorific);
-                await sendMetaWhatsAppMessage(fromNumber, reply);
+                await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                 break;
               }
             }
@@ -3846,7 +3918,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                       result.monthTotal,
                       expContext.dateLabelBn
                     );
-                    await sendMetaWhatsAppMessage(fromNumber, reply);
+                    await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                     break;
                   }
                 } else {
@@ -3883,7 +3958,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 console.log(`[SafetyGuard] Redirecting misclassified expense query away from create_reminder: "${userMessage}"`);
                 const summary = await getExpenseSummaryForDate(user._id, new Date(), 'আজকের');
                 const reply = buildDailyExpenseQueryMessage(summary.dateExpenses, summary.dateTotal, summary.monthTotal, 'আজকের');
-                await sendMetaWhatsAppMessage(fromNumber, reply);
+                await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                 break;
               }
 
@@ -4238,7 +4316,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার *"${finalTitle}"* ${repeatStr}সময় *${formattedTime}*-এ সফলভাবে সেট করা হয়েছে!${dateInfo}`;
                 }
 
-                await sendMetaWhatsAppMessage(fromNumber, reply);
+                await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
               }
             }
             break;
@@ -4307,7 +4388,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                       result.monthTotal,
                       expContext.dateLabelBn
                     );
-                    await sendMetaWhatsAppMessage(fromNumber, reply);
+                    await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                     break;
                   }
                 }
@@ -4401,7 +4485,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   expResult.monthTotal,
                   'আজকের'
                 );
-                await sendMetaWhatsAppMessage(fromNumber, reply);
+                await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+              );
                 break;
               }
 

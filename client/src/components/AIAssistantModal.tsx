@@ -1,13 +1,20 @@
-import { useState, useEffect } from 'react';
-import { X, Mic, MessageSquare, Calendar, Clock, BellRing, Edit, Loader2, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Mic, MessageSquare, Calendar, Clock, BellRing, Edit, Loader2, Trash2, Send, MicOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [mode, setMode] = useState<'idle' | 'listening' | 'processing' | 'parsed'>('idle');
   const [isEditing, setIsEditing] = useState(false);
   const [parsedText, setParsedText] = useState('');
   const [liveTranscript, setLiveTranscript] = useState('');
   const [parsedData, setParsedData] = useState<any>(null);
+  const [manualText, setManualText] = useState('');
+
+  const recognitionRef = useRef<any>(null);
+  const latestTranscriptRef = useRef<string>('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const isUsingMediaRecorderRef = useRef<boolean>(false);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -17,95 +24,242 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
       setParsedText('');
       setLiveTranscript('');
       setParsedData(null);
+      setManualText('');
+      latestTranscriptRef.current = '';
+    } else {
+      stopAllRecording();
     }
   }, [isOpen]);
 
+  const stopAllRecording = () => {
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort?.();
+        recognitionRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current = null;
+      }
+    } catch (e) {
+      // Ignore cleanup error
+    }
+  };
+
   if (!isOpen) return null;
 
-  const handleMicClick = () => {
-    if (mode !== 'idle') return;
-    
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error('আপনার ব্রাউজার ভয়েস রিকগনিশন সাপোর্ট করে না!');
+  const processCommand = async (textToProcess: string) => {
+    if (!textToProcess.trim()) {
+      setMode('idle');
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'bn-BD';
-    recognition.continuous = false;
-    recognition.interimResults = true;
+    setMode('processing');
+    try {
+      const url = `${import.meta.env.VITE_API_URL}/ai/parse-command`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ command: textToProcess })
+      });
+      const data = await res.json();
 
-    recognition.onstart = () => {
-      setMode('listening');
-      setLiveTranscript('');
-    };
-
-    let finalTranscript = '';
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
+      if (data.success && data.data) {
+        if (data.data.intent === 'delete_success') {
+          toast.success(data.data.message || 'সফলভাবে ডিলিট করা হয়েছে!');
+          setMode('idle');
+          setTimeout(() => {
+            onClose();
+            window.location.reload();
+          }, 1000);
+          return;
         }
-      }
-      setLiveTranscript(finalTranscript + interimTranscript);
-    };
 
-    recognition.onend = async () => {
-      const textToProcess = liveTranscript || finalTranscript;
-      if (!textToProcess.trim()) {
+        if (data.data.intent === 'expense_logged') {
+          toast.success(data.data.message || 'খরচ সফলভাবে সংরক্ষণ করা হয়েছে!', { icon: '💸', duration: 4000 });
+          setMode('idle');
+          setTimeout(() => {
+            onClose();
+            window.location.reload();
+          }, 1200);
+          return;
+        }
+
+        setParsedData(data.data);
+        setParsedText(data.data.content || data.data.title || textToProcess);
+        setMode('parsed');
+      } else {
+        toast.error('বুঝতে সমস্যা হয়েছে, আবার চেষ্টা করুন');
         setMode('idle');
-        return;
       }
-      
-      setMode('processing');
-      try {
-        const url = `${import.meta.env.VITE_API_URL}/ai/parse-command`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({ command: textToProcess })
-        });
-        const data = await res.json();
-        
-        if (data.success) {
-          if (data.data.intent === 'delete_success') {
-            toast.success(data.data.message || 'সফলভাবে ডিলিট করা হয়েছে!');
-            setMode('idle');
-            setTimeout(() => {
-              onClose();
-              window.location.reload();
-            }, 1000);
-            return;
-          }
-          setParsedData(data.data);
-          setParsedText(data.data.content || data.data.title || textToProcess);
-          setMode('parsed');
-        } else {
-          toast.error('বুঝতে সমস্যা হয়েছে, আবার চেষ্টা করুন');
+    } catch (err) {
+      console.error(err);
+      toast.error('নেটওয়ার্ক সমস্যা, আবার চেষ্টা করুন');
+      setMode('idle');
+    }
+  };
+
+  const startMediaRecorderFallback = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      isUsingMediaRecorderRef.current = true;
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size < 500) {
+          toast('কোনো শব্দ রেকর্ড হয়নি', { icon: '🔇' });
+          setMode('idle');
+          return;
+        }
+
+        setMode('processing');
+        setLiveTranscript('এআই ভয়েস ট্রান্সক্রাইব করছে...');
+
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64Audio = (reader.result as string).split(',')[1];
+            const transRes = await fetch(`${import.meta.env.VITE_API_URL}/ai/transcribe-voice`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({ audioBase64: base64Audio, mimeType })
+            });
+
+            const transData = await transRes.json();
+            if (transData.success && transData.text) {
+              setLiveTranscript(transData.text);
+              await processCommand(transData.text);
+            } else {
+              toast.error('ভয়েস পরিষ্কারভাবে বোঝা যায়নি, অনুগ্রহ করে আবার বলুন');
+              setMode('idle');
+            }
+          };
+        } catch (uploadErr) {
+          console.error(uploadErr);
+          toast.error('ভয়েস প্রসেস করতে ব্যর্থ হয়েছে');
           setMode('idle');
         }
-      } catch (err) {
-        console.error(err);
-        toast.error('নেটওয়ার্ক সমস্যা, আবার চেষ্টা করুন');
-        setMode('idle');
-      }
-    };
+      };
 
-    recognition.onerror = (event: any) => {
-      console.error(event.error);
-      toast.error('ভয়েস শুনতে সমস্যা হয়েছে');
+      recorder.start();
+      setMode('listening');
+      setLiveTranscript('');
+      toast('রেকর্ডিং শুরু হয়েছে... বলা শেষ হলে আবার চাপ দিন', { icon: '🎙️' });
+    } catch (micErr: any) {
+      console.error('MediaRecorder error:', micErr);
+      toast.error('মাইক্রোফোন পারমিশন প্রয়োজন। দয়া করে ব্রাউজারে পারমিশন দিন।');
       setMode('idle');
-    };
+    }
+  };
 
-    recognition.start();
+  const handleMicClick = () => {
+    // If currently listening, clicking again immediately STOPS and processes!
+    if (mode === 'listening') {
+      if (isUsingMediaRecorderRef.current && mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        return;
+      }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        return;
+      }
+    }
+
+    if (mode !== 'idle') return;
+
+    latestTranscriptRef.current = '';
+    setLiveTranscript('');
+    isUsingMediaRecorderRef.current = false;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    // If SpeechRecognition is missing or on browsers with poor Web Speech API, use MediaRecorder fallback
+    if (!SpeechRecognition) {
+      startMediaRecorderFallback();
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'bn-BD';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setMode('listening');
+        setLiveTranscript('');
+        latestTranscriptRef.current = '';
+      };
+
+      recognition.onresult = (event: any) => {
+        let fullTranscript = '';
+        for (let i = 0; i < event.results.length; ++i) {
+          fullTranscript += event.results[i][0].transcript;
+        }
+        latestTranscriptRef.current = fullTranscript;
+        setLiveTranscript(fullTranscript);
+      };
+
+      recognition.onend = async () => {
+        const textToProcess = (latestTranscriptRef.current || '').trim();
+        if (!textToProcess) {
+          setMode('idle');
+          toast('কোনো কথা শোনা যায়নি, আবার চেষ্টা করুন', { icon: '🎙️' });
+          return;
+        }
+        await processCommand(textToProcess);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('SpeechRecognition error:', event.error);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          toast.error('মাইক্রোফোনের পারমিশন নেই। ব্রাউজার সেটিংসে অনুমতি দিন।');
+          setMode('idle');
+        } else if (event.error === 'no-speech') {
+          toast('কোনো কথা শোনা যায়নি', { icon: '🔇' });
+          setMode('idle');
+        } else if (event.error === 'network') {
+          // Network error in Web Speech API -> fallback to MediaRecorder + Gemini
+          console.log('Web Speech API network error, switching to MediaRecorder fallback...');
+          startMediaRecorderFallback();
+        } else {
+          toast.error('ভয়েস শনাক্তে সমস্যা হয়েছে, আবার চেষ্টা করুন');
+          setMode('idle');
+        }
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn('SpeechRecognition start failed, trying fallback:', err);
+      startMediaRecorderFallback();
+    }
+  };
+
+  const handleManualSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!manualText.trim()) return;
+    processCommand(manualText.trim());
+    setManualText('');
   };
 
   const handleSetReminder = async () => {
@@ -115,23 +269,23 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
       onClose();
       return;
     }
-    
+
     toast.loading('সংরক্ষণ করা হচ্ছে...', { id: 'save' });
     try {
       let url = `${import.meta.env.VITE_API_URL}/reminders`;
       const isWakeup = /ঘুম|wake|alarm|অ্যালার্ম|উঠা|উঠবো|উঠব|তুলে|ডেকে|ঘুম ভাঙা|ঘুম ভাঙ্গানি|nap|বিশ্রাম|rest/i.test(parsedText) || parsedData.category === 'wakeup' || parsedData.isAlarm;
-      let body: any = { 
-        title: parsedText, 
-        date: parsedData.date || new Date().toISOString(), 
+      let body: any = {
+        title: parsedText,
+        date: parsedData.date || new Date().toISOString(),
         time: parsedData.time || "10:00",
         category: isWakeup ? 'wakeup' : (parsedData.category || 'General'),
         isAlarm: isWakeup
       };
-      
+
       if (parsedData.intent === 'create_note') {
         url = `${import.meta.env.VITE_API_URL}/notes`;
         const noteTitle = parsedData.title && parsedData.title !== 'Quick Note' && parsedData.title !== 'নোট'
-          ? parsedData.title 
+          ? parsedData.title
           : (parsedText.length > 25 ? parsedText.slice(0, 25).trim() + '...' : parsedText);
         body = { title: noteTitle, content: parsedData.content || parsedText, category: 'Personal' } as any;
       } else if (parsedData.intent === 'document_vault') {
@@ -147,7 +301,7 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
 
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
@@ -173,7 +327,6 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-[#f0fcf5] font-sans animate-in slide-in-from-bottom-full duration-300">
-      
       {/* Background Decorative Blobs */}
       <div className="absolute top-10 -left-10 w-40 h-40 bg-emerald-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
       <div className="absolute top-40 -right-10 w-40 h-40 bg-green-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
@@ -184,7 +337,7 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
           <h1 className="text-xl font-bold text-slate-800">Smriti <span className="text-[#0A7756]">Life</span></h1>
         </div>
         <div className="flex space-x-3">
-          <button onClick={onClose} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-600 hover:bg-slate-50 transition">
+          <button onClick={onClose} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-600 hover:bg-slate-50 transition cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -192,7 +345,6 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto px-5 pb-5 relative z-10 flex flex-col items-center">
-        
         {/* Giant Mic Button */}
         <div className="relative mt-4 mb-4">
           {mode === 'listening' && (
@@ -202,35 +354,52 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
               <div className="absolute inset-[-30px] bg-emerald-100 rounded-full opacity-40 animate-pulse"></div>
             </>
           )}
-          
-          <button 
+
+          <button
             onClick={handleMicClick}
-            disabled={mode !== 'idle'}
-            className={`relative w-24 h-24 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 ${
-              mode === 'idle' ? 'bg-gradient-to-b from-emerald-400 to-emerald-600 shadow-emerald-500/30' : 
-              mode === 'listening' ? 'bg-gradient-to-b from-red-400 to-red-600 shadow-red-500/30' :
-              'bg-emerald-200 cursor-not-allowed'
+            disabled={mode === 'processing'}
+            title={mode === 'listening' ? 'রেকর্ডিং শেষ করতে ক্লিক করুন' : 'কথা বলতে ক্লিক করুন'}
+            className={`relative w-24 h-24 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer ${
+              mode === 'idle'
+                ? 'bg-gradient-to-b from-emerald-400 to-emerald-600 shadow-emerald-500/30'
+                : mode === 'listening'
+                ? 'bg-gradient-to-b from-red-500 to-rose-600 shadow-red-500/30 animate-pulse'
+                : 'bg-emerald-200 cursor-not-allowed'
             }`}
           >
-            {mode === 'processing' ? <Loader2 className="w-10 h-10 animate-spin" /> : <Mic className="w-10 h-10" />}
+            {mode === 'processing' ? (
+              <Loader2 className="w-10 h-10 animate-spin" />
+            ) : mode === 'listening' ? (
+              <MicOff className="w-10 h-10" />
+            ) : (
+              <Mic className="w-10 h-10" />
+            )}
           </button>
         </div>
 
         <h2 className="text-xl font-bold text-slate-800 mb-1">
-          {mode === 'idle' ? 'বলুন...' : 
-           mode === 'listening' ? 'শুনছি...' : 
-           mode === 'processing' ? 'প্রসেস করছি...' : 'ফলাফল'}
+          {mode === 'idle'
+            ? 'বলুন...'
+            : mode === 'listening'
+            ? 'শুনছি... (থামাতে চাপুন)'
+            : mode === 'processing'
+            ? 'প্রসেস করছি...'
+            : 'ফলাফল'}
         </h2>
-        <p className="text-xs text-slate-500 font-medium mb-6 text-center">
-          {mode === 'idle' ? 'ভয়েস আইকনে ক্লিক করে কথা বলুন' : 
-           mode === 'listening' ? 'আপনার রিমাইন্ডারটি বলুন' : 
-           mode === 'processing' ? 'দয়া করে অপেক্ষা করুন' : 'আপনার ভয়েস থেকে তৈরি রিমাইন্ডার'}
+        <p className="text-xs text-slate-500 font-medium mb-4 text-center">
+          {mode === 'idle'
+            ? 'ভয়েস আইকনে ক্লিক করে কথা বলুন'
+            : mode === 'listening'
+            ? 'কথা শেষ হলে লাল বাটনে আবার চাপ দিন'
+            : mode === 'processing'
+            ? 'দয়া করে অপেক্ষা করুন'
+            : 'আপনার ভয়েস থেকে তৈরি অ্যাকশন'}
         </p>
 
         {/* Audio Wave (Simulated) */}
         {mode === 'listening' && (
-          <div className="flex flex-col items-center w-full max-w-sm mb-6 animate-in fade-in duration-300">
-            <div className="flex items-center space-x-1 h-8 mb-4">
+          <div className="flex flex-col items-center w-full max-w-sm mb-4 animate-in fade-in duration-300">
+            <div className="flex items-center space-x-1 h-8 mb-3">
               <div className="w-1 h-2 bg-red-200 rounded-full animate-pulse"></div>
               <div className="w-1 h-3 bg-red-300 rounded-full animate-bounce"></div>
               <div className="w-1 h-5 bg-red-400 rounded-full animate-pulse"></div>
@@ -243,42 +412,64 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
               <div className="w-1 h-3 bg-red-300 rounded-full animate-bounce"></div>
               <div className="w-1 h-2 bg-red-200 rounded-full animate-pulse"></div>
             </div>
-            
+
             {/* Live Preview Text */}
-            <div className="bg-white/60 px-4 py-3 rounded-2xl border border-emerald-100 shadow-sm w-full min-h-[60px] flex items-center justify-center">
+            <div className="bg-white/70 px-4 py-3 rounded-2xl border border-emerald-100 shadow-sm w-full min-h-[50px] flex items-center justify-center">
               <p className="text-sm font-medium text-slate-700 italic text-center">
-                {liveTranscript || "..."}
+                {liveTranscript || "কথা বলুন..."}
               </p>
             </div>
           </div>
         )}
 
+        {/* Text Input Fallback (Allows typing on any device or noisy environment) */}
+        {mode === 'idle' && (
+          <form onSubmit={handleManualSubmit} className="w-full max-w-sm mb-5 flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                placeholder="অথবা লিখে জানান (যেমন: কাল সকাল ৮টায় মিটিং)..."
+                className="w-full bg-white px-4 py-2.5 rounded-full text-xs text-slate-700 border border-slate-200 shadow-xs focus:outline-none focus:ring-2 focus:ring-[#0A7756]/30 pr-10"
+              />
+              <button
+                type="submit"
+                disabled={!manualText.trim()}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-[#0A7756] text-white rounded-full flex items-center justify-center hover:bg-emerald-700 disabled:opacity-40 transition cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </form>
+        )}
+
         {/* Parsed Result Card */}
         {mode === 'parsed' && (
-          <div className="w-full bg-white rounded-3xl p-4 shadow-sm border border-emerald-50 mb-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="w-full max-w-md bg-white rounded-3xl p-4 shadow-sm border border-emerald-50 mb-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center font-bold text-emerald-700 text-xs">
                 <MessageSquare className="w-4 h-4 mr-1.5" />
                 আপনার কথা
               </div>
               <div className="flex space-x-2">
-                <button 
+                <button
                   onClick={() => setMode('idle')}
-                  className="flex items-center text-[10px] font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 transition"
+                  className="flex items-center text-[10px] font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 transition cursor-pointer"
                 >
                   <Trash2 className="w-3 h-3 mr-1" /> মুছে ফেলুন
                 </button>
-                <button 
+                <button
                   onClick={() => setIsEditing(!isEditing)}
-                  className="flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full hover:bg-emerald-100 transition"
+                  className="flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full hover:bg-emerald-100 transition cursor-pointer"
                 >
                   <Edit className="w-3 h-3 mr-1" /> {isEditing ? 'সেভ করুন' : 'সম্পাদনা'}
                 </button>
               </div>
             </div>
-            
+
             {isEditing ? (
-              <textarea 
+              <textarea
                 value={parsedText}
                 onChange={(e) => setParsedText(e.target.value)}
                 className="w-full bg-white p-3 rounded-2xl mb-3 text-slate-700 font-medium text-xs leading-relaxed border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none min-h-[80px]"
@@ -291,36 +482,36 @@ export default function AIAssistantModal({ isOpen, onClose }: { isOpen: boolean,
             )}
 
             {parsedData && parsedData.intent !== 'create_note' && parsedData.intent !== 'medicine_inquiry' && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <div className="flex items-center text-slate-600 font-medium text-xs">
-                  <Calendar className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                  <span className="w-12">তারিখ</span>
-                  <span className="text-slate-800">
-                    {parsedData.date ? new Date(parsedData.date).toLocaleDateString() : new Date().toLocaleDateString()}
-                  </span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center text-slate-600 font-medium text-xs">
+                    <Calendar className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                    <span className="w-12">তারিখ</span>
+                    <span className="text-slate-800">
+                      {parsedData.date ? new Date(parsedData.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('bn-BD')}
+                    </span>
+                  </div>
                 </div>
+
+                {parsedData.intent === 'create_reminder' && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center text-slate-600 font-medium text-xs">
+                      <Clock className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                      <span className="w-12">সময়</span>
+                      <span className="text-slate-800">{parsedData.time || "10:00"}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              
-              {parsedData.intent === 'create_reminder' && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center text-slate-600 font-medium text-xs">
-                  <Clock className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                  <span className="w-12">সময়</span>
-                  <span className="text-slate-800">{parsedData.time || "10:00"}</span>
-                </div>
-              </div>
-              )}
-            </div>
             )}
           </div>
         )}
 
         {/* Action Button */}
         {mode === 'parsed' && (
-          <button 
+          <button
             onClick={handleSetReminder}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold text-sm py-3.5 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-95 transition-transform animate-in fade-in zoom-in duration-500"
+            className="w-full max-w-md bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold text-sm py-3.5 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-95 transition-transform animate-in fade-in zoom-in duration-500 cursor-pointer"
           >
             {parsedData?.intent === 'medicine_inquiry' ? (
               <>

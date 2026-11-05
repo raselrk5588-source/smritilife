@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { matchRelativeDuration } from '../services/aiWhatsAppService';
+import { matchRelativeDuration, parseBengaliTime, parseRelativeDate, transcribeAudioMessage } from '../services/aiWhatsAppService';
 import { handleMedicineInquiry } from './whatsappController';
+import { parseExpenseInput, recordExpense, detectExpenseCategory } from '../services/expenseService';
 import Reminder from '../models/Reminder';
 import Note from '../models/Note';
 import UserDocument from '../models/UserDocument';
@@ -121,6 +122,22 @@ export const parseCommand = async (req: Request, res: Response) => {
           }
         });
       }
+
+      // Check if command is an expense tracker command
+      const parsedExp = parseExpenseInput(command);
+      if (parsedExp && parsedExp.amount && parsedExp.title && !parsedExp.isQuery && !/(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নোট|note)/i.test(command)) {
+        const expDate = parsedExp.expenseDate || new Date();
+        await recordExpense(userId, parsedExp.title, parsedExp.amount, parsedExp.paymentMethod || 'cash', expDate);
+        return res.json({
+          success: true,
+          data: {
+            intent: "expense_logged",
+            title: parsedExp.title,
+            amount: parsedExp.amount,
+            message: `💸 খরচ "${parsedExp.title}" (৳${parsedExp.amount}) সফলভাবে সংরক্ষণ করা হয়েছে!`
+          }
+        });
+      }
     }
     
     let intent = "unknown";
@@ -198,6 +215,10 @@ export const parseCommand = async (req: Request, res: Response) => {
       }
     }
 
+    const computedTime = parseBengaliTime(command) || extractTime(command);
+    const computedDateObj = parseRelativeDate(command, computedTime);
+    const computedDateStr = computedDateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+
     if (isWakeup) {
       intent = "create_reminder";
       const rawSubject = extractSubject(command);
@@ -208,14 +229,14 @@ export const parseCommand = async (req: Request, res: Response) => {
         cleanTitle = "সেহরির জন্য ঘুম থেকে ওঠা 🌙";
       }
 
-      let parsedTime = extractTime(command);
+      let parsedTime = computedTime;
       if (isSehri && (!parsedTime || parsedTime === '10:00')) {
         parsedTime = '04:00';
       }
 
       parsedData = {
         title: cleanTitle,
-        date: new Date().toISOString().split('T')[0],
+        date: computedDateStr,
         time: parsedTime,
         category: "wakeup",
         isAlarm: true,
@@ -251,8 +272,8 @@ export const parseCommand = async (req: Request, res: Response) => {
       intent = "create_reminder";
       parsedData = {
         title: extractSubject(command),
-        date: new Date().toISOString().split('T')[0],
-        time: extractTime(command),
+        date: computedDateStr,
+        time: computedTime,
         category: "General",
         timezone: "Asia/Dhaka"
       };
@@ -261,7 +282,7 @@ export const parseCommand = async (req: Request, res: Response) => {
       parsedData = {
         title: extractSubject(command),
         type: "Birthday",
-        date: "1995-09-28",
+        date: computedDateStr,
         recurring: true
       };
     } else {
@@ -269,8 +290,8 @@ export const parseCommand = async (req: Request, res: Response) => {
       intent = "create_reminder";
       parsedData = {
         title: extractSubject(command),
-        date: new Date().toISOString().split('T')[0],
-        time: extractTime(command),
+        date: computedDateStr,
+        time: computedTime,
         category: "General",
         timezone: "Asia/Dhaka"
       };
@@ -284,6 +305,21 @@ export const parseCommand = async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const transcribeVoice = async (req: Request, res: Response) => {
+  try {
+    const { audioBase64, mimeType } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({ success: false, message: 'Audio data is required' });
+    }
+    const audioBuffer = Buffer.from(audioBase64, 'base64');
+    const text = await transcribeAudioMessage(audioBuffer, mimeType || 'audio/webm');
+    res.json({ success: true, text });
+  } catch (error: any) {
+    console.error('transcribeVoice endpoint error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -2060,6 +2060,86 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
   }
 };
 
+export const transcribeAudioMessage = async (audioBuffer: Buffer, mimeType: string): Promise<string> => {
+  try {
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      try {
+        const settings = await SystemSettings.findOne();
+        apiKey = settings?.geminiApiKey;
+      } catch (dbErr) {}
+    }
+
+    if (!apiKey) {
+      console.warn("transcribeAudioMessage: No Gemini API Key configured");
+      return '';
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const candidateModels = [
+      activeFastModel,
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
+      'gemini-3.5-flash',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
+    ];
+
+    let cleanMime = (mimeType || 'audio/ogg').split(';')[0].trim().toLowerCase();
+    if (cleanMime === 'audio/opus') cleanMime = 'audio/ogg';
+
+    const prompt = `You are an expert speech-to-text transcriber for Bengali, Banglish, and English audio recordings.
+Listen carefully to this audio voice note.
+Transcribe the speech verbatim in natural Bengali script (or English if the user spoke completely in English).
+Rules:
+1. Return ONLY the transcribed text.
+2. Do NOT add greetings, intro phrases, conversational replies, or explanations.
+3. Do NOT wrap in quotes or markdown.
+4. If there is no speech or only background noise, return an empty string.`;
+
+    const audioPart = {
+      inlineData: {
+        data: audioBuffer.toString('base64'),
+        mimeType: cleanMime
+      }
+    };
+
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 500
+          }
+        });
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout transcribing audio with ${modelName}`)), 15000)
+        );
+
+        const result: any = await Promise.race([
+          model.generateContent([prompt, audioPart]),
+          timeoutPromise
+        ]);
+
+        let text = result.response.text().trim();
+        text = text.replace(/^["'“”‘`]+|["'“”‘`]+$/g, '').trim();
+        if (text && !text.toLowerCase().includes('cannot transcribe') && !text.toLowerCase().includes('sorry')) {
+          activeFastModel = modelName;
+          return text;
+        }
+      } catch (err: any) {
+        console.warn(`transcribeAudioMessage with ${modelName} failed:`, err.message || err);
+      }
+    }
+  } catch (error) {
+    console.error("AI transcribeAudioMessage Error:", error);
+  }
+  return '';
+};
+
 export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: Buffer, mimeType: string, userHonorific?: string) => {
   try {
     let apiKey = process.env.GEMINI_API_KEY;
@@ -2083,10 +2163,13 @@ export const analyzeAudioMessage = async (whatsappNumber: string, audioBuffer: B
       'gemini-3.5-flash-lite',
       'gemini-3.8-flash',
       'gemini-3.5-flash',
-      'gemini-3-flash-preview'
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
     ];
 
-    const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
+    let cleanMime = (mimeType || 'audio/ogg').split(';')[0].trim().toLowerCase();
+    if (cleanMime === 'audio/opus') cleanMime = 'audio/ogg';
     const dhakaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 
     const prompt = `Please listen to this voice message carefully (spoken in Bengali or English).
@@ -2114,12 +2197,12 @@ Remember to return ONLY the raw JSON object.`;
           model: modelName,
           systemInstruction: fullSystemInstruction,
           generationConfig: {
-            maxOutputTokens: 350,
+            maxOutputTokens: 1024,
             temperature: 0.1
           }
         });
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 7000)
+          setTimeout(() => reject(new Error(`Timeout waiting for ${modelName}`)), 15000)
         );
         const result: any = await Promise.race([
           model.generateContent([prompt, audioPart]),
@@ -2129,6 +2212,7 @@ Remember to return ONLY the raw JSON object.`;
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         const cleanJson = jsonMatch ? jsonMatch[0] : responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
         parsedResponse = JSON.parse(cleanJson);
+        activeFastModel = modelName;
         break;
       } catch (err: any) {
         console.warn(`Audio analysis model ${modelName} failed:`, err.message || err);
