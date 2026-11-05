@@ -197,6 +197,21 @@ export const cleanupAccidentalDebtExpenses = async (userId: any): Promise<number
       }
     }
 
+    // Also clean up any accidental Note created from a debt settlement sentence (e.g. "পিয়াস টাকা দিয়েছে")
+    const settleNotes = await Note.find({
+      userId,
+      title: /(?:টাকা\s*দিয়েছে|টাকা\s*দিয়ে\s*দিয়েছে|টাকা\s*দিছে|taka\s*diye\s*diche)/i
+    });
+    for (const sNote of settleNotes) {
+      const rawP = sNote.title.replace(/(?:টাকা\s*দিয়েছে|টাকা\s*দিয়ে\s*দিয়েছে|টাকা\s*দিছে|taka\s*diye\s*diche)/gi, '').trim();
+      if (/^(?:পিয়াস|পিয়াস|pias)$/i.test(rawP)) {
+        await settleDebtByPerson(userId, 'Pias', 0, 'received');
+      } else if (rawP) {
+        await settleDebtByPerson(userId, rawP, 0, 'received');
+      }
+      await Note.deleteOne({ _id: sNote._id });
+    }
+
     return res.deletedCount || 0;
   } catch (err) {
     console.error('Error cleaning accidental debt expenses:', err);
@@ -2477,8 +2492,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dau|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|lagbe|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText);
 
         const isShortQuery = cleanText.split(/\s+/).length <= 4;
+        const hasExplicitDocWord =
+          /(?:ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|প্রেস্ক্রিপশন|রিপোর্ট|রিসিপ্ট|ভল্ট|এনআইডি|সার্টিফিকেট|পাসপোর্ট|টিকিট|টোকেন|চাবি|লোগো|pic|image|photo|chobi|file|doc|document|prescription|report|receipt|vault|nid|certificate|passport|ticket|token|key|logo)\b/i.test(cleanText);
+        const isNonDocTopic =
+          /(?:টাকা|taka|tk|পাবো|পাব|pabo|দেবো|দিবো|debo|dibo|পাওনা|paona|pauna|pawna|দেনা|dena|ধার|dhar|বাকি|baki|উধার|udhar|খরচ|khoroch|হিসাব|hisab|মোট|mot|total|ওষুধ|ঔষধ|osud|osudh|medicine|রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নামাজ|namaj|সেহরি|sehri|ইফতার|iftar)/i.test(cleanText);
 
-        if (userDocsCount > 0 && !isDeleteIntent && !isDocUpdateIntent && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
+        if (userDocsCount > 0 && !isDeleteIntent && !isDocUpdateIntent && (!isNonDocTopic || hasExplicitDocWord) && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
           const docResult = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
           const isEng = isPureEnglishText(cleanText);
 
@@ -3847,7 +3866,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         // --- STEP 2.9: Udhar / Debt Tracker (AI-Powered + Fast Regex Fallback) ---
         const isReminderAction = /মনে\s*করিয়ে|ডাকবে|তুলে\s*দিও|wake\s*me|অ্যালার্ম|alarm/i.test(cleanText);
         if (!isReminderAction && looksDebtRelated(cleanText)) {
-          let parsedDebt: ParsedDebt | null = await parseDebtWithAI(cleanText);
+          let parsedDebt: ParsedDebt | null = await parseDebtWithAI(cleanText, user._id);
           if (parsedDebt && parsedDebt.notes === '__NOT_DEBT__') {
             parsedDebt = null;
           } else if (!parsedDebt) {
@@ -3906,12 +3925,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
               );
               return;
-            } else if (parsedDebt.isSettlement && parsedDebt.personName && parsedDebt.amount) {
-              // Settle repayment / refund
+            } else if (parsedDebt.isSettlement && parsedDebt.personName) {
+              // Settle repayment / refund (0 amount means full settlement of person's remaining debt)
               const settlementResult = await settleDebtByPerson(
                 user._id,
                 parsedDebt.personName,
-                parsedDebt.amount,
+                parsedDebt.amount || 0,
                 parsedDebt.settlementType || 'received'
               );
               const reply = buildDebtSettledMessage(

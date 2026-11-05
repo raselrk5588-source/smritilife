@@ -697,13 +697,29 @@ export async function findMatchingDocumentWithVersion(
     'cholche', 'choltese', 'kinesi', 'kinesilam', 'enechi', 'enesilam', 'niesi',
     'niesilam', 'save', 'upload', 'koresi', 'koresilam', 'korsi', 'kora', 'hoyechilo',
     'hoyeche', 'rekhechi', 'rakhlam', 'when', 'did', 'was', 'how', 'many', 'days', 'long',
-    'এর', 'র', 'ar', 'er', 'saler'
+    'এর', 'র', 'ar', 'er', 'saler',
+    // Financial / Debt / General query words that must never trigger false document matches
+    'মোট', 'mot', 'total', 'টাকা', 'টাকার', 'taka', 'takar', 'tk', 'পাবো', 'পাব', 'pabo',
+    'দেবো', 'দিবো', 'debo', 'dibo', 'পাওনা', 'paona', 'pauna', 'pawna', 'দেনা', 'dena',
+    'ধার', 'dhar', 'বাকি', 'baki', 'হিসাব', 'hisab', 'খরচ', 'khoroch', 'কে', 'কার', 'kar',
+    'কাছে', 'kache', 'kase', 'আমি', 'ami', 'কি', 'কী', 'ki'
   ]);
 
   const queryWords = queryWithoutYear
     .split(/\s+/)
     .map((w) => w.replace(/[^\w\u0980-\u09FF]/g, ''))
     .filter((w) => w.length >= 2 && !stopWords.has(w));
+
+  if (queryWords.length === 0 && !/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)\b/i.test(clean)) {
+    return {
+      doc: null,
+      targetYear,
+      matchedByYear: false,
+      itemKeyword: '',
+      otherAvailableYears: [],
+      allMatchingDocs: []
+    };
+  }
 
   const itemKeyword = queryWords.join(' ') || queryWithoutYear;
 
@@ -716,7 +732,7 @@ export async function findMatchingDocumentWithVersion(
     let score = 0;
 
     // Direct substring in title
-    if (queryWithoutYear && (queryWithoutYear.includes(docTitle) || docTitle.includes(queryWithoutYear))) {
+    if (queryWithoutYear && queryWords.length > 0 && (queryWithoutYear.includes(docTitle) || docTitle.includes(queryWithoutYear))) {
       score += 100;
     }
 
@@ -724,7 +740,7 @@ export async function findMatchingDocumentWithVersion(
     for (const qWord of queryWords) {
       const qVariants = getTermVariants(qWord);
 
-      if (qVariants.some((v) => docTitle.includes(v))) {
+      if (qVariants.some((v) => v.length >= 3 && docTitle.includes(v))) {
         score += 35;
       }
 
@@ -735,13 +751,17 @@ export async function findMatchingDocumentWithVersion(
         }
       }
 
-      if (doc.tags && doc.tags.some((t: string) => qVariants.some((qv) => t.toLowerCase().includes(qv)))) {
+      if (doc.tags && doc.tags.some((t: string) => {
+        const tLower = t.toLowerCase().trim();
+        const tParts = tLower.split(/[\s/_-]+/);
+        return qVariants.some((qv) => tLower === qv || tParts.includes(qv) || (qv.length >= 5 && tLower.includes(qv)));
+      })) {
         score += 25;
       }
 
       if (doc.category) {
         const docCat = doc.category.toLowerCase().trim();
-        if (qVariants.some((qv) => docCat.includes(qv) || qv.includes(docCat))) {
+        if (qVariants.some((qv) => qv.length >= 4 && (docCat.includes(qv) || qv.includes(docCat)))) {
           score += 35;
         }
       }
@@ -749,12 +769,12 @@ export async function findMatchingDocumentWithVersion(
 
     if (doc.category) {
       const docCat = doc.category.toLowerCase().trim();
-      if (queryWithoutYear && (queryWithoutYear.includes(docCat) || docCat.includes(queryWithoutYear))) {
+      if (queryWithoutYear && queryWords.length > 0 && (queryWithoutYear.includes(docCat) || docCat.includes(queryWithoutYear))) {
         score += 50;
       }
     }
 
-    if (score > 0) {
+    if (score >= 35) {
       matchingDocsWithScores.push({ doc, score });
     }
   }

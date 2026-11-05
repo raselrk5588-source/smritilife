@@ -69,13 +69,14 @@ export const cleanPersonName = (raw: string): string => {
  * Quick pre-filter: does this text look debt related at all?
  */
 export const looksDebtRelated = (text: string): boolean =>
-  /(?:পাবো|পাব|পাবে|দেবো|দিবো|দেনা|পাওনা|ধার|বাকি|উধার|হাওলাত|করজ|ফেরত|শোধ|কাছে|kache|kase|pabo|debo|dibo|dhar|dena|baki|udhar|paona|pauna|pawna|ferot|sodh|shodh|hawlat)/i.test(text || '');
+  /(?:পাবো|পাব|পাবে|দেবো|দিবো|দেনা|পাওনা|ধার|বাকি|উধার|হাওলাত|করজ|ফেরত|শোধ|পরিশোধ|কাছে|kache|kase|pabo|debo|dibo|dhar|dena|baki|udhar|paona|pauna|pawna|ferot|sodh|shodh|porishodh|hawlat)/i.test(text || '') ||
+  /(?:টাকা|taka|tk|হিসাব|hisab)\s*(?:দিয়ে\s*(?:দিয়েছে|দিছে|দিসে|দিলো|দিলাম|দিস)|দিয়েছে|দিছে|দিসে|দিলো|পেয়ে\s*(?:গেছি|গেলাম)|পেয়েছি|পাইছি|পাওয়া\s*গেছে|মিটিয়ে|ক্লিয়ার|diye\s*(?:diyeche|diche|dise|dilo|dilam|disi)|diyeche|diche|dise|dilo|peye\s*(?:gechi|gesi|gelam)|peyechi|paichi|clear)/i.test(text || '');
 
 /**
  * Parse debt intent with Gemini (accurate person-name extraction for Bangla / Banglish).
  * Returns null if AI is unavailable or the message is not debt related.
  */
-export const parseDebtWithAI = async (text: string): Promise<ParsedDebt | null> => {
+export const parseDebtWithAI = async (text: string, userId?: any): Promise<ParsedDebt | null> => {
   try {
     let apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -84,7 +85,20 @@ export const parseDebtWithAI = async (text: string): Promise<ParsedDebt | null> 
     }
     if (!apiKey) return null;
 
-    const prompt = `You are a parser for a Bangladeshi personal debt ledger (ধার-দেনা খাতা). Input may be Bangla, Banglish or English, possibly multi-line.
+    let activeNamesHint = '';
+    if (userId) {
+      try {
+        const existingNames = await Debt.distinct('personName', {
+          userId,
+          status: { $in: ['pending', 'partial'] }
+        });
+        if (existingNames && existingNames.length > 0) {
+          activeNamesHint = `\nExisting people in user's ledger: ${JSON.stringify(existingNames)}. If the message refers to one of these people (even with Bangla/English transliteration or short name), output that exact existing personName.`;
+        }
+      } catch (e) {}
+    }
+
+    const prompt = `You are a parser for a Bangladeshi personal debt ledger (ধার-দেনা খাতা). Input may be Bangla, Banglish or English, possibly multi-line.${activeNamesHint}
 Return ONLY raw JSON, no markdown:
 {"isDebt":boolean,"action":"add"|"settle"|"query"|"delete"|"none","items":[{"personName":string,"amount":number,"type":"lent"|"borrowed"}],"settlementType":"received"|"paid"|null,"personName":string|null,"deleteScope":"all"|"person"|"lent"|"borrowed"|null}
 Rules:
@@ -92,8 +106,8 @@ Rules:
 - "borrowed" = user OWES money to the person (e.g. "karim pabe 500", "রহিমের কাছ থেকে ১০০০ ধার নিলাম", "dokane baki 300").
 - personName = ONLY the person's name; keep honorifics like vai/bhai/apa if written (e.g. "Manik vai"). NEVER include words like ar, er, kache, ami, pabo, taka, এর, কাছে, আমি, পাবো. Bangla possessive "আসাদের" => "আসাদ".
 - amount: convert Bangla digits / words to a number.
-- action "settle": someone paid back ("asad 1000 ferot dilo" => received) or user paid back ("karim ke 500 sodh korlam" => paid). Put person+amount in items.
-- action "query": asking balance/list ("pawna taka daw", "koto taka pabo", "asad er hisab"). Set personName if a specific person is asked.
+- action "settle": someone paid back ("Pias taka diye diche", "পিয়াস টাকা দিয়ে দিয়েছে", "asad 1000 ferot dilo", "pias er taka peye gechi" => settlementType: "received") or user paid back ("karim ke taka diye dilam", "karim ke 500 sodh korlam" => settlementType: "paid"). Put person+amount in items. If NO specific amount is mentioned (meaning full settlement of all remaining debt for that person), set amount to 0 in items (e.g. {"personName":"Pias","amount":0,"type":"lent"}).
+- action "query": asking balance/list ("pawna taka daw", "mot koto taka pabo?", "koto taka pabo", "asad er hisab"). Set personName if a specific person is asked.
 - action "delete": deleting ledger entries ("pawna list delete koro" => lent, "dena delete" => borrowed, "asad er hisab delete" => person, "dhar dena sob delete" => all).
 - If it is NOT about personal debts (normal expense like "bazar 500", reminder, medicine, document), return {"isDebt":false,"action":"none","items":[]}.
 Message:
@@ -120,14 +134,15 @@ Message:
     if (!parsed) return null; // AI unavailable -> caller falls back to regex
     if (!parsed.isDebt || parsed.action === 'none') return { isQuery: false, notes: '__NOT_DEBT__' };
 
-    const items: ParsedDebtItem[] = (Array.isArray(parsed.items) ? parsed.items : [])
+    const rawItems: ParsedDebtItem[] = (Array.isArray(parsed.items) ? parsed.items : [])
       .map((i: any) => ({
         personName: cleanPersonName(String(i.personName || '')),
-        amount: Number(i.amount),
+        amount: Number(i.amount) || 0,
         type: (i.type === 'borrowed' ? 'borrowed' : 'lent') as 'lent' | 'borrowed'
       }))
-      .filter((i: ParsedDebtItem) => i.personName && i.amount > 0);
+      .filter((i: ParsedDebtItem) => !!i.personName);
 
+    const items = rawItems.filter((i: ParsedDebtItem) => i.amount > 0);
     const pName = parsed.personName ? cleanPersonName(String(parsed.personName)) : undefined;
 
     switch (parsed.action) {
@@ -140,15 +155,17 @@ Message:
           deleteScope: parsed.deleteScope || (pName ? 'person' : 'all'),
           personName: pName
         };
-      case 'settle':
-        if (!items[0]) return null;
+      case 'settle': {
+        const settlePerson = rawItems[0]?.personName || pName;
+        if (!settlePerson) return null;
         return {
           isQuery: false,
           isSettlement: true,
           settlementType: parsed.settlementType === 'paid' ? 'paid' : 'received',
-          personName: items[0].personName,
-          amount: items[0].amount
+          personName: settlePerson,
+          amount: rawItems[0]?.amount || 0
         };
+      }
       case 'add':
         if (items.length === 0) return null;
         if (items.length === 1) {
@@ -401,12 +418,12 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
     }
   }
 
-  // 2. Settlement / Repayment (ফেরত / শোধ / পরিশোধ)
-  // Pattern A: Someone paid us back: "রনি ৫০০ টাকা ফেরত দিলো", "রনি ৫০০ শোধ করলো", "roni 500 tk ferot dilo"
-  const settleLentPattern = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:theke|থেকে|er\s*kach\s*theke)?\s*([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:ফেরত\s*দিলো|শোধ\s*করলো|পরিশোধ\s*করলো|ফেরত\s*পেলাম|জমা\s*দিলো|ferot\s*dilo|sodh\s*korlo|porishodh\s*korlo|ferot\s*pelam)$/i);
+  // 2. Settlement / Repayment (ফেরত / শোধ / পরিশোধ / টাকা দিয়ে দিছে)
+  // Pattern A1 (with amount): Someone paid us back: "রনি ৫০০ টাকা ফেরত দিলো", "roni 500 tk ferot dilo", "Pias 1000 taka diye diche"
+  const settleLentPattern = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:theke|থেকে|er\s*kach\s*theke)?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:ফেরত\s*দিলো|ফেরত\s*দিয়েছে|ফেরত\s*দিছে|শোধ\s*করলো|শোধ\s*করেছে|পরিশোধ\s*করলো|পরিশোধ\s*করেছে|ফেরত\s*পেলাম|জমা\s*দিলো|দিয়ে\s*দিয়েছে|দিয়ে\s*দিছে|দিয়ে\s*দিলো|দিয়েছে|দিছে|ferot\s*dilo|ferot\s*diyeche|ferot\s*diche|sodh\s*korlo|shodh\s*koreche|porishodh\s*korlo|porishodh\s*koreche|ferot\s*pelam|diye\s*diyeche|diye\s*diche|diye\s*dise|diyeche|diche|dise)$/i);
   if (settleLentPattern) {
     const person = cleanPersonName(settleLentPattern[1]);
-    const amount = parseFloat(bnToEnDigits(settleLentPattern[2]));
+    const amount = parseFloat(bnToEnDigits(settleLentPattern[2].replace(/,/g, '')));
     if (person && amount > 0) {
       return {
         isQuery: false,
@@ -418,11 +435,26 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
     }
   }
 
-  // Pattern B: We paid someone back: "করিমকে ৫০০ টাকা ফেরত দিলাম", "করিমকে ৫০০ শোধ করলাম", "korim ke 500 taka ferot dilam"
-  const settleBorrowedPattern = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?কে|-?k|-?ke)?\s*([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:ফেরত\s*দিলাম|শোধ\s*করলাম|পরিশোধ\s*করলাম|দিয়া\s*দিলাম|ferot\s*dilam|sodh\s*korlam|porishodh\s*korlam)$/i);
+  // Pattern A2 (without amount - full settlement of receivable): "Pias taka diye diche", "পিয়াস টাকা দিয়ে দিয়েছে", "Pias er taka peye gechi", "Pias sodh kore diche"
+  const settleLentFullPattern = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:সব|পুরো|বাকি|পাওনা|baki|paona|pawna|shob|sob)?\s*(?:টাকা|টাকাই|tk|taka|হিসাব|hisab)?\s*(?:দিয়ে\s*(?:দিয়েছে|দিছে|দিসে|দিলো)|দিয়েছে|দিছে|দিসে|ফেরত\s*(?:দিয়েছে|দিছে|দিলো|পেয়েছি|পেলাম)|শোধ\s*(?:করেছে|করলো|করে\s*দিয়েছে|করে\s*দিছে)|পরিশোধ\s*(?:করেছে|করলো)|পেয়ে\s*(?:গেছি|গেলাম)|পেয়েছি|পাইছি|ক্লিয়ার|diye\s*(?:diyeche|diche|dise|dilo)|diyeche|diche|dise|ferot\s*(?:diyeche|diche|dilo|peyechi|pelam)|sodh\s*(?:koreche|korlo|kore\s*diche|kore\s*diyeche)|shodh\s*(?:koreche|korlo|kore\s*diche)|porishodh\s*(?:koreche|korlo)|peye\s*(?:gechi|gesi|gelam)|peyechi|paichi|clear(?:\s*koreche|\s*korsen|\s*hoise)?)$/i);
+  if (settleLentFullPattern) {
+    const person = cleanPersonName(settleLentFullPattern[1]);
+    if (person && !/^(?:আমি|ami|আমার|amar)$/i.test(person)) {
+      return {
+        isQuery: false,
+        isSettlement: true,
+        settlementType: 'received',
+        personName: person,
+        amount: 0
+      };
+    }
+  }
+
+  // Pattern B1 (with amount): We paid someone back: "করিমকে ৫০০ টাকা ফেরত দিলাম", "করিমকে ৫০০ শোধ করলাম", "korim ke 500 taka ferot dilam"
+  const settleBorrowedPattern = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?কে|-?k|-?ke)?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:ফেরত\s*দিলাম|ফেরত\s*দিয়েছি|শোধ\s*করলাম|শোধ\s*করেছি|পরিশোধ\s*করলাম|পরিশোধ\s*করেছি|দিয়ে\s*দিলাম|দিয়ে\s*দিয়েছি|দিয়া\s*দিলাম|ferot\s*dilam|sodh\s*korlam|shodh\s*korlam|porishodh\s*korlam|diye\s*dilam|diye\s*diyechi)$/i);
   if (settleBorrowedPattern) {
     const person = cleanPersonName(settleBorrowedPattern[1]);
-    const amount = parseFloat(bnToEnDigits(settleBorrowedPattern[2]));
+    const amount = parseFloat(bnToEnDigits(settleBorrowedPattern[2].replace(/,/g, '')));
     if (person && amount > 0) {
       return {
         isQuery: false,
@@ -430,6 +462,21 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
         settlementType: 'paid',
         personName: person,
         amount
+      };
+    }
+  }
+
+  // Pattern B2 (without amount - full settlement of payable): "করিমকে টাকা দিয়ে দিলাম", "korim ke taka diye dilam"
+  const settleBorrowedFullPattern = clean.match(/^(?:আমি\s+|ami\s+)?([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?কে|-?k|-?ke|-?এর|-?er|-?ar)\s*(?:সব|পুরো|বাকি|দেনা|baki|dena)?\s*(?:টাকা|tk|taka|হিসাব|hisab)?\s*(?:ফেরত\s*দিলাম|ফেরত\s*দিয়েছি|শোধ\s*করলাম|শোধ\s*করেছি|পরিশোধ\s*করলাম|পরিশোধ\s*করেছি|দিয়ে\s*দিলাম|দিয়ে\s*দিয়েছি|দিয়ে\s*দিছি|ferot\s*dilam|sodh\s*korlam|shodh\s*korlam|porishodh\s*korlam|diye\s*dilam|diye\s*diyechi|diye\s*disi)$/i);
+  if (settleBorrowedFullPattern) {
+    const person = cleanPersonName(settleBorrowedFullPattern[1]);
+    if (person && !/^(?:আমি|ami|আমার|amar)$/i.test(person)) {
+      return {
+        isQuery: false,
+        isSettlement: true,
+        settlementType: 'paid',
+        personName: person,
+        amount: 0
       };
     }
   }
@@ -621,21 +668,36 @@ export const settleDebtByPerson = async (
   personName: string;
   debtsUpdated: IDebt[];
 }> => {
-  const cleanName = cleanPersonName(personName);
+  let cleanName = cleanPersonName(personName);
   // received = someone gave us back money for what we lent ('lent')
   // paid = we paid back someone for what we borrowed ('borrowed')
   const targetType = settlementType === 'received' ? 'lent' : 'borrowed';
 
   // Find active pending/partial debts for this person (regex match for slight spelling differences)
   const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const activeDebts = await Debt.find({
+  let activeDebts = await Debt.find({
     userId,
     personName: { $regex: new RegExp(`^${escapedName}$`, 'i') },
     type: targetType,
     status: { $in: ['pending', 'partial'] }
   }).sort({ createdAt: 1 });
 
-  let remainingSettleAmount = settleAmount;
+  // Fallback prefix/substring match (e.g. "Manik" -> "Manik vai")
+  if (activeDebts.length === 0 && cleanName.length >= 2) {
+    activeDebts = await Debt.find({
+      userId,
+      personName: { $regex: new RegExp(escapedName, 'i') },
+      type: targetType,
+      status: { $in: ['pending', 'partial'] }
+    }).sort({ createdAt: 1 });
+    if (activeDebts.length > 0) {
+      cleanName = activeDebts[0].personName;
+    }
+  }
+
+  // If settleAmount <= 0, user meant full settlement ("Pias taka diye diche")
+  const totalDue = activeDebts.reduce((sum, d) => sum + Math.max(0, d.amount - d.paidAmount), 0);
+  let remainingSettleAmount = settleAmount > 0 ? settleAmount : totalDue;
   let settledTotal = 0;
   const debtsUpdated: IDebt[] = [];
 
@@ -661,8 +723,8 @@ export const settleDebtByPerson = async (
     debtsUpdated.push(debt);
   }
 
-  // If there are no existing active debts, create a settled entry for record keeping
-  if (debtsUpdated.length === 0) {
+  // If there are no existing active debts and an explicit amount > 0 was given, create a settled entry for record keeping
+  if (debtsUpdated.length === 0 && settleAmount > 0) {
     const fallbackDebt = new Debt({
       userId,
       personName: cleanName,
@@ -686,9 +748,10 @@ export const settleDebtByPerson = async (
   }
 
   // Calculate new remaining total balance for this person
+  const finalEscaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const remainingAll = await Debt.find({
     userId,
-    personName: { $regex: new RegExp(`^${escapedName}$`, 'i') },
+    personName: { $regex: new RegExp(`^${finalEscaped}$`, 'i') },
     type: targetType,
     status: { $in: ['pending', 'partial'] }
   });
@@ -906,6 +969,9 @@ export const buildDebtSettledMessage = (
   settlementType: 'received' | 'paid',
   remainingForPerson: number
 ): string => {
+  if (settledAmount <= 0) {
+    return `ℹ️ *${personName}*-এর নামে কোনো বকেয়া পাওনা বা দেনা পাওয়া যায়নি।`;
+  }
   const isReceived = settlementType === 'received';
   const actionLabel = isReceived ? 'ফেরত পেয়েছি 🟢' : 'পরিশোধ করেছি 🔴';
   const formattedSettled = formatTaka(settledAmount);
