@@ -122,6 +122,11 @@ export async function parseMedicinePrescriptionText(text: string): Promise<{
   const raw = text.trim();
   const lower = raw.toLowerCase();
 
+  // If user has delete/cancel intent, NEVER parse as new prescription
+  if (/(?:delete|remove|del|ডিলিট|মুছে|মুছ|বাতিল|cancel|ক্যান্সেল|ফেলে|বাদ)\b/i.test(lower)) {
+    return null;
+  }
+
   const hasMedKeyword = /(?:ওষুধ|ঔষধ|মেডিসিন|tablet|medicine|capsule|ট্যাবলেট|ক্যাপসুল|ডাক্তার|প্রেসক্রিপশন|osudh|osud|ousodh|ousud|oshudh|oshud|নাপা|napa|প্যারাসিটামল|paracetamol|সেক্লো|seclo|অ্যান্টাসিড|antacid|গ্যাস্ট্রিক|গ্যাস|gas|gastric|ফ্ল্যাজিল|flagyl|অ্যামোক্সিসিলিন|amoxicillin|এজিথ্রোমাইসিন|azithromycin|ম্যাক্সপ্রো|maxpro|সারজেল|sergel|প্যানটনিক|pantonic|প্যানটোপ্রাজল|pantoprazole|অমিপ্রাজল|omeprazole|মন্টিন|montene|মোন্টাস|montas|হিস্টাসিন|histasin|ফেভেক্স|fexofenadine|ফেক্সো|ক্যালসিয়াম|calcium|ভিটামিন|vitamin|প্রেসার|ডায়াবেটিস|ইনসুলিন|সিরাপ|syrup|neofloxin|zis|enterogermina|cefixime|alastrol|ebat|ebastine|torax|ace|h\+)/i.test(lower);
   
   const hasDosagePattern = /(?:১\+১\+১|1\+1\+1|১\+০\+১|1\+0\+1|০\+১\+১|0\+1\+1|১\+০\+০|1\+0\+0|০\+০\+১|0\+0\+1|\b[১-৩1-3]\s*বেলা\b|\b[১-৩1-3]\s*bela\b|\b[১-৩1-3]\s*bar\b|\b[১-৩1-3]\s*times\b|সকাল|দুপুর|রাত|sokal|dupur|rat|shokal|raat|bikele?|সন্ধ্যা|camos|চামচ|spoon|tablets?|টা\s*kore|capsules?|ড্রপ|drops?)/i.test(lower);
@@ -902,6 +907,11 @@ export async function getAggregatedMedicines(userId: any): Promise<AggregatedMed
  */
 export async function handleMedicineInquiry(userId: any, queryText: string, userHonorific?: string): Promise<string | null> {
   const clean = queryText.toLowerCase().trim();
+
+  // If user has delete/cancel intent, do not handle as status/list inquiry
+  if (/(?:delete|remove|del|ডিলিট|মুছে|মুছ|বাতিল|cancel|ক্যান্সেল|ফেলে|বাদ)\b/i.test(clean)) {
+    return null;
+  }
 
   // Check if intent is inquiring about duration / remaining days / medicine status
   const hasDurationIntent = /(?:কয়দিন|কদ্দিন|কতদিন|কত\s*দিন|কয়\s*দিন|koi\s*din|koto\s*din|koy\s*din|koddin|how\s*many\s*days|শেষ\s*হবে|বাকি|baki|চলবে|খাব|খাবো|khabo|খেতে\s*হবে|khete\s*hobe|khete\s*hbe|খাওয়া\s*লাগবে|খাবো\s*আর|খাব\s*আর|khabo\s*ar|রিমাইন্ডার\s*কি|কখন\s*খাব|কখন\s*খাবো)/i.test(clean);
@@ -2404,6 +2414,82 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             `📁${salutation}, এই নামে কোনো ফাইল আপনার স্মৃতি মেমোরিতে সেভ করা নেই।\n\nআপনি ফাইলটি (ছবি বা PDF) আমাকে পাঠিয়ে ক্যাপশনে নামটি লিখলে আমি মেমোরিতে সেভ করে রাখবো এবং পরবর্তীতে চাওয়ামাত্র পাঠিয়ে দেবো!`
           );
           return;
+        }
+
+        // --- STEP 0E.0: Handle Medicine Reminder Deletion ("delete kore daw medecin reminder gula", "Neofloxin delete kore daw", "ওষুধের রিমাইন্ডার ডিলিট করো") ---
+        const isMedDeleteIntent = /(?:delete|remove|del|ডিলিট|মুছে|মুছ|বাতিল|cancel|ক্যান্সেল|ফেলে|বাদ)\b/i.test(cleanText);
+        const hasMedWord = /(?:medecin|medicine|মেডিসিন|ওষুধ|ঔষধ|osud|osudh|ousodh|ট্যাবলেট|tablet)/i.test(cleanText);
+
+        if (isMedDeleteIntent) {
+          const userMedReminders = await Reminder.find({ userId: user._id, category: 'medicine' });
+          if (userMedReminders.length > 0) {
+            // Cancel any pending medicine confirmation
+            userPendingMedicineState.delete(user._id.toString());
+
+            // Check if user specifically mentioned one of their saved medicine names
+            const aggregatedMeds = await getAggregatedMedicines(user._id);
+            const medNames = aggregatedMeds.map(m => m.name);
+            let targetMatchedMed = matchMedicineName(cleanText.toLowerCase(), medNames);
+
+            // Substring/word check if matchMedicineName didn't catch multi-word raw titles like "Neofloxin 1 camos kore a"
+            if (!targetMatchedMed) {
+              const lowerQ = cleanText.toLowerCase();
+              for (const name of medNames) {
+                const words = name.toLowerCase().split(/\s+/).filter(w => w.length >= 3 && !/^(?:kore|din|camos|chobi|tablets?)$/i.test(w));
+                if (words.some(w => lowerQ.includes(w))) {
+                  targetMatchedMed = name;
+                  break;
+                }
+              }
+            }
+
+            // Case A: Specific medicine matched to delete
+            if (targetMatchedMed) {
+              let deletedCount = 0;
+              for (const rem of userMedReminders) {
+                if (rem.medicines && rem.medicines.length > 0) {
+                  const initialLen = rem.medicines.length;
+                  const targetLower = targetMatchedMed.toLowerCase();
+                  rem.medicines = rem.medicines.filter((m: any) => {
+                    const mNameLower = (m.name || '').toLowerCase();
+                    return mNameLower !== targetLower &&
+                      !mNameLower.includes(targetLower) &&
+                      !targetLower.includes(mNameLower);
+                  });
+
+                  if (rem.medicines.length < initialLen) {
+                    deletedCount += (initialLen - rem.medicines.length);
+                    if (rem.medicines.length === 0) {
+                      await Reminder.findByIdAndDelete(rem._id);
+                    } else {
+                      await rem.save();
+                    }
+                  }
+                } else if (rem.title && rem.title.toLowerCase().includes(targetMatchedMed.toLowerCase())) {
+                  await Reminder.findByIdAndDelete(rem._id);
+                  deletedCount++;
+                }
+              }
+
+              const salutation = user.honorific ? ` ${user.honorific}` : '';
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🗑️ আপনার ওষুধের রিমাইন্ডার থেকে "*${targetMatchedMed}*" সফলভাবে মুছে ফেলা হয়েছে${salutation}!`
+              );
+              return;
+            }
+
+            // Case B: General deletion of all medicine reminders ("delete kore daw medecin reminder gula", "ওষুধের রিমাইন্ডার সব ডিলিট করো")
+            if (hasMedWord || /(?:সব|সকল|সমস্ত|all|gula|গুলো|গুলা|সবগুলো|সবগুলা|রিমাইন্ডার|reminder)/i.test(cleanText)) {
+              await Reminder.deleteMany({ userId: user._id, category: 'medicine' });
+              const salutation = user.honorific ? ` ${user.honorific}` : '';
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🗑️ আপনার সব ওষুধের রিমাইন্ডার সফলভাবে ডিলিট করা হয়েছে${salutation}!`
+              );
+              return;
+            }
+          }
         }
 
         // --- STEP 0E.1: Handle Medicine Duration / Remaining Days Inquiry ("নাপা কয়দিন খাব", "pana koi din ache", "khabo r koto din") ---
