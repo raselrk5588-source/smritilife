@@ -118,6 +118,59 @@ export const userPendingReminderState = new Map<string, PendingReminderState>();
 export const lastRescheduledReminder = new Map<string, { reminderId: string; title: string; updatedAt: number }>();
 export const userExpenseContext = new Map<string, ExpenseContextState>();
 export const userReminderEditState = new Map<string, { reminderId: string; title: string; expiresAt: number }>();
+export const userReminderListContext = new Map<string, number>();
+
+/**
+ * Extract 1-based item index (or -1 for last) from Bengali, Banglish, or English text/voice commands
+ * e.g. "1 number delete koro", "এক নাম্বারটা ডিলিট করো", "দুই নম্বর বাদ দাও", "একটা ডিলিট করো", "প্রথমটা মুছে ফেলো"
+ */
+export const extractDeleteTargetIndex = (rawText: string): number | undefined => {
+  if (!rawText) return undefined;
+  let normalized = bnToEnDigits(rawText.trim())
+    // Normalize Bengali spoken number words (standalone or attached to টা/টি/নম্বর/নাম্বার/তম)
+    .replace(/(?:প্রথম|১ম|এক)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '1 ')
+    .replace(/(?:দ্বিতীয়|দ্বিতীয়|২য়|২য়|দুই|দুটো)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '2 ')
+    .replace(/(?:তৃতীয়|তৃতীয়|৩য়|৩য়|তিন|তিনটে)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '3 ')
+    .replace(/(?:চতুর্থ|৪র্থ|চার|চারটে)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '4 ')
+    .replace(/(?:পঞ্চম|৫ম|পাঁচ|পাচ)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '5 ')
+    .replace(/(?:ষষ্ঠ|৬ষ্ঠ|ছয়|ছয়)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '6 ')
+    .replace(/(?:সপ্তম|৭ম|সাত)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '7 ')
+    .replace(/(?:অষ্টম|৮ম|আট)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '8 ')
+    .replace(/(?:নবম|৯ম|নয়|নয়)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '9 ')
+    .replace(/(?:দশম|১০ম|দশ)(?=\s*(?:নম্বর|নাম্বার|নং|number|nmbr|numbr|no|টা|টি|ের|ta|ti)|\s|$)/gi, '10 ')
+    // Normalize Banglish/English spoken number words
+    .replace(/\b(?:ek|ak|one|first|1st|protom|prothom)(?:ta|ti)?\b/gi, '1 ')
+    .replace(/\b(?:dui|duto|two|second|2nd|ditiyo)(?:ta|ti)?\b/gi, '2 ')
+    .replace(/\b(?:tin|teen|three|third|3rd|tritiyo)(?:ta|ti)?\b/gi, '3 ')
+    .replace(/\b(?:char|chaar|car|four|fourth|4th)(?:ta|ti)?\b/gi, '4 ')
+    .replace(/\b(?:pach|paach|panch|five|fifth|5th)(?:ta|ti)?\b/gi, '5 ')
+    .replace(/\b(?:choy|six|sixth|6th)(?:ta|ti)?\b/gi, '6 ')
+    .replace(/\b(?:sat|shat|seven|seventh|7th)(?:ta|ti)?\b/gi, '7 ')
+    .replace(/\b(?:at|aat|eight|eighth|8th)(?:ta|ti)?\b/gi, '8 ')
+    .replace(/\b(?:noy|nine|ninth|9th)(?:ta|ti)?\b/gi, '9 ')
+    .replace(/\b(?:dosh|ten|tenth|10th)(?:ta|ti)?\b/gi, '10 ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // 1. Explicit "X number / নম্বর / নাম্বার"
+  const explicitIndexMatch = normalized.match(/(?:^|\s)(\d{1,2})\s*(?:number|nmbr|numbr|no|নম্বর|নাম্বার|নং|তম)(?:ের|er)?\s*(?:ta|ti|টা|টি)?/i);
+  if (explicitIndexMatch) {
+    return parseInt(explicitIndexMatch[1], 10);
+  }
+
+  // 2. Bare "X ta delete koro" (without currency words)
+  const bareIndexMatch = normalized.match(/^\s*(\d{1,2})\s*(?:ta|ti|টা|টি)?\s*(?:delete|dlt|del|remove|ডিলিট|মুছে|মুছ|বাদ|সরাই|সরিয়ে|সরাও|কেটে|বাতিল|ফেলে|ফেলো)/i);
+  if (bareIndexMatch && !/(?:টাকা|taka|takar|tk|৳)/i.test(rawText)) {
+    return parseInt(bareIndexMatch[1], 10);
+  }
+
+  // 3. Last / শেষেরটা
+  if (/(?:last|shesh|sesh|শেষ|শেষের|লাস্ট|লাস্টের)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি))?/i.test(rawText)) {
+    return -1;
+  }
+
+  return undefined;
+};
 
 export interface PendingMedicineItem {
   name: string;
@@ -3996,15 +4049,19 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           const hasDeleteVerb = /(?:ডিলিট|মুছে|মুছ|বাদ|ফেলে|ফেলো|ফেল|সরাই|সরায়|সরিয়ে|সরাও|কেটে|বাতিল|ক্লিয়ার|লাগবে\s*না|দরকার\s*(?:নাই|নেই)|\b(?:delete|dlt|del|remove|remv|cancel|clear|muche|mucho|muco|muce|felo|fele|fela|bad|baad|sorai|shorai|soriye|shoriye|sorao|shorao|kete|lagbe\s*na|lagbena|dorkar\s*(?:nai|nei))\b)/i.test(cleanText);
           const hasExplicitReminder = /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|সেহরি|সাহরি|রোজা)/i.test(cleanText);
           const hasExplicitNote = /(?:নোট|note|ঠিকানা|address|ডকুমেন্ট|document|ভল্ট|vault)/i.test(cleanText);
-          const hasExplicitContact = /(?:কন্ট্যাক্ট|contact|নম্বর)/i.test(cleanText);
+          const hasExplicitContact = /(?:কন্ট্যাক্ট|contact|(?:ফোন|মোবাইল|phone|mobile)\s*(?:নম্বর|নাম্বার|number))/i.test(cleanText);
           const hasExplicitTodo = /(?:টু-ডু|todo|চেকলিস্ট|checklist)/i.test(cleanText);
-          const hasExplicitExpense = /(?:খরচ|খরচের|খরচা|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses|ব্যয়|ব্যায়|খাতা)/i.test(cleanText);
+          const hasExplicitExpense = /(?:খরচ|খরচের|খরচা|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses|ব্যয়|ব্যায়|খাতা|হিসাব|hisab)/i.test(cleanText);
 
           const expContext = userExpenseContext.get(user._id.toString());
           const isExpContextActive = !!(expContext && expContext.expiresAt > Date.now() && expContext.expenses.length > 0);
+          const remListExpiresAt = userReminderListContext.get(user._id.toString()) || 0;
+          const isRemListContextActive = remListExpiresAt > Date.now();
 
           if (hasDeleteVerb && !hasExplicitReminder && !hasExplicitNote && !hasExplicitContact && !hasExplicitTodo) {
-            if (hasExplicitExpense || isExpContextActive) {
+            const targetIndex = extractDeleteTargetIndex(cleanText);
+
+            if (hasExplicitExpense || isExpContextActive || (targetIndex !== undefined && !isRemListContextActive)) {
               // 1. Delete ALL expenses for date
               if (/(?:সব|সকল|all|sob|shob)\s*(?:খরচ|খরচা|khoroch|khoroc|khoros|cost|expense)/i.test(cleanText)) {
                 const targetDate = expContext?.targetDate || new Date();
@@ -4022,21 +4079,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 return;
               }
 
-              // 2. Delete by Index (e.g. "1 number delete kore daw", "১ নম্বরটা ডিলিট করো", "শেষেরটা ডিলিট করো")
-              let targetIndex: number | undefined = undefined;
-              const enDigits = bnToEnDigits(cleanText);
-              const explicitIndexMatch = enDigits.match(/(?:^|\s)(\d{1,2})\s*(?:number|nmbr|numbr|no|নম্বর|নাম্বার|নং)\s*(?:ta|ti|টা|টি)?/i);
-              const bareIndexMatch = enDigits.match(/^\s*(\d{1,2})\s*(?:ta|ti|টা|টি)?\s*(?:delete|dlt|del|remove|ডিলিট|মুছে|বাদ|সরাই|সরিয়ে|কেটে|বাতিল)/i);
-              if (explicitIndexMatch) {
-                targetIndex = parseInt(explicitIndexMatch[1], 10);
-              } else if (bareIndexMatch && !/(?:টাকা|taka|takar|tk)/i.test(cleanText)) {
-                targetIndex = parseInt(bareIndexMatch[1], 10);
-              } else if (/(?:protom|first|প্রথম)(?:\s*(?:ta|ti|টা|টি))?/i.test(cleanText)) {
-                targetIndex = 1;
-              } else if (/(?:last|shesh|শেষ|লাস্ট)(?:\s*(?:ta|ti|er\s*ta|এর\s*টা|টা|টি))?/i.test(cleanText)) {
-                targetIndex = -1;
-              }
-
+              // 2. Delete by Index (e.g. "1 number delete kore daw", "১ নম্বরটা ডিলিট করো", "এক নাম্বারটা ডিলিট করো", "শেষেরটা ডিলিট করো")
               if (targetIndex !== undefined) {
                 const targetDate = expContext?.targetDate || new Date();
                 const dateLabel = expContext?.dateLabelBn || 'আজকের';
@@ -4065,7 +4108,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
                   );
                   return;
-                } else {
+                } else if (hasExplicitExpense || isExpContextActive) {
                   await sendMetaWhatsAppMessage(
                     fromNumber,
                     `দুঃখিত, ${targetIndex === -1 ? 'সর্বশেষ' : enToBnDigits(targetIndex) + ' নম্বরে'} কোনো খরচের এন্ট্রি পাওয়া যায়নি।`
@@ -4175,6 +4218,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           // 2.9B: Standard Expense Query & Logging
           const parsedExpense = parseExpenseInput(cleanText);
           if (parsedExpense) {
+            userReminderListContext.delete(user._id.toString());
             await Note.deleteMany({ userId: user._id, title: /(?:খরচ|khoroc|khoros|expense|cost)/i }).catch(() => {});
             if (parsedExpense.isQuery) {
               if (parsedExpense.queryType === 'monthly') {
@@ -4469,6 +4513,9 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               const headerTitle = isToday
                 ? `📋 আজ আপনার *${reminders.length}টি* পেন্ডিং রিমাইন্ডার রয়েছে:`
                 : `📋 আপনার মোট *${reminders.length}টি* পেন্ডিং রিমাইন্ডার রয়েছে:`;
+
+              userReminderListContext.set(user._id.toString(), Date.now() + 15 * 60 * 1000);
+              userExpenseContext.delete(user._id.toString());
 
               let text = `${headerTitle}\n\n`;
               reminders.forEach((r, idx) => {
@@ -5050,15 +5097,53 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           case 'cancel_reminder':
           case 'delete_reminder': {
             const data = aiResponse.data || {};
-            const itemIndex = typeof data.index === 'number' ? data.index : undefined;
+            const itemIndex = typeof data.index === 'number' ? data.index : extractDeleteTargetIndex(cleanText);
             const query = (data.searchQuery || '').trim();
             const cleanQuery = query
               .replace(/(?:আমার|amr|amar|রিমাইন্ডার(?:ের)?|reminder|এর|র|টা|টি|ক্যান্সেল|বাতিল|cancel|ডিলিট|মুছে|delete|remove|করে|দাও|করো|দিন|ফেলে)/gi, '')
               .trim();
 
+            const hasExplicitRemWord = /(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|সেহরি|সাহরি|রোজা)/i.test(cleanText);
+            const remListExpiresAt = userReminderListContext.get(user._id.toString()) || 0;
+            const isRemListActive = remListExpiresAt > Date.now();
+            const expContext = userExpenseContext.get(user._id.toString());
+            const isExpActive = !!(expContext && expContext.expiresAt > Date.now() && expContext.expenses.length > 0);
+
             let reminderToDelete: any = null;
 
             if (itemIndex !== undefined) {
+              // SAFETY PRIORITY: If user did NOT explicitly say "reminder"/"রিমাইন্ডার" and is in active Expense context (or hasn't opened reminder list), check Expense deletion FIRST!
+              if (!hasExplicitRemWord && (isExpActive || !isRemListActive)) {
+                const targetDate = expContext?.targetDate || new Date();
+                const dateLabel = expContext?.dateLabelBn || 'আজকের';
+                const expRes = await deleteExpenseByIndex(user._id, targetDate, itemIndex);
+                if (expRes) {
+                  if (expRes.remainingCount > 0) {
+                    userExpenseContext.set(user._id.toString(), {
+                      targetDate,
+                      dateLabelBn: dateLabel,
+                      expenses: expRes.remainingExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                      expiresAt: Date.now() + 15 * 60 * 1000
+                    });
+                  } else {
+                    userExpenseContext.delete(user._id.toString());
+                  }
+                  const reply = buildExpenseDeletedMessage(
+                    expRes.deletedExpense.title,
+                    expRes.deletedExpense.amount,
+                    expRes.dateTotal,
+                    expRes.monthTotal,
+                    dateLabel,
+                    expRes.remainingExpenses
+                  );
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                  );
+                  break;
+                }
+              }
+
               // 1. Try pending reminders first
               let remindersList = await Reminder.find({ userId: user._id, status: 'Pending' }).sort({ date: 1, time: 1 });
               if (remindersList.length === 0) {
@@ -5083,42 +5168,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   });
                 }
 
+                const remDelMsg = `🗑️ আপনার ${itemIndex === -1 ? 'সর্বশেষ' : enToBnDigits(itemIndex) + ' নম্বর'} রিমাইন্ডার "${reminderToDelete.title}" সফলভাবে ডিলিট করা হয়েছে!`;
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  `🗑️ আপনার ${itemIndex === -1 ? 'সর্বশেষ' : itemIndex + ' নম্বর'} রিমাইন্ডার "${reminderToDelete.title}" সফলভাবে ডিলিট করা হয়েছে!`
+                  (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${remDelMsg}` : remDelMsg
                 );
                 break;
               } else {
-                // If not found in reminders, check if user was referring to expense in active context
-                const expContext = userExpenseContext.get(user._id.toString());
-                if (expContext && expContext.expiresAt > Date.now()) {
-                  const result = await deleteExpenseByIndex(user._id, expContext.targetDate, itemIndex);
-                  if (result) {
-                    if (result.remainingCount > 0) {
-                      userExpenseContext.set(user._id.toString(), {
-                        targetDate: expContext.targetDate,
-                        dateLabelBn: expContext.dateLabelBn,
-                        expenses: result.remainingExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
-                        expiresAt: Date.now() + 15 * 60 * 1000
-                      });
-                    } else {
-                      userExpenseContext.delete(user._id.toString());
-                    }
-                    const reply = buildExpenseDeletedMessage(
-                      result.deletedExpense.title,
-                      result.deletedExpense.amount,
-                      result.dateTotal,
-                      result.monthTotal,
-                      expContext.dateLabelBn
-                    );
-                    await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-                    break;
-                  }
-                }
-
                 // Check if user was referring to document by index
                 const docToDelete = await UserDocument.findOne({ userId: user._id }).sort({ createdAt: -1 });
                 if (docToDelete && (itemIndex === 1 || itemIndex === -1)) {
@@ -5129,7 +5185,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  `দুঃখিত, ${itemIndex} নম্বরে কোনো রিমাইন্ডার বা তথ্য পাওয়া যায়নি।`
+                  `দুঃখিত, ${enToBnDigits(itemIndex)} নম্বরে কোনো রিমাইন্ডার বা তথ্য পাওয়া যায়নি।`
                 );
                 break;
               }

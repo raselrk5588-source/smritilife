@@ -534,9 +534,10 @@ const BANGLISH_WORD_TO_BANGLA: Record<string, string> = {
   // Health
   medicine: 'ওষুধ', medecin: 'ওষুধ', medecine: 'ওষুধ', medisin: 'ওষুধ', medicne: 'ওষুধ',
   osud: 'ওষুধ', oshud: 'ওষুধ', oushud: 'ওষুধ', osudh: 'ওষুধ', oshudh: 'ওষুধ',
-  daktar: 'ডাক্তার', doctor: 'ডাক্তার', dr: 'ডাক্তার', hospital: 'হাসপাতাল',
+  daktar: 'ডাক্তার', dakter: 'ডাক্তার', doctor: 'ডাক্তার', dr: 'ডাক্তার', hospital: 'হাসপাতাল',
   clinic: 'ক্লিনিক', pharmacy: 'ফার্মেসি', pharma: 'ফার্মেসি', test: 'টেস্ট',
-  saline: 'স্যালাইন', choshma: 'চশমা',
+  saline: 'স্যালাইন', choshma: 'চশমা', dekhano: 'দেখানো', dekhate: 'দেখাতে', checkup: 'চেকআপ',
+  babot: 'বাবদ', babod: 'বাবদ', jonno: 'জন্য', jonne: 'জন্য', kena: 'কেনা', vara_babot: 'ভাড়া বাবদ',
   // Food & Grocery
   bazar: 'বাজার', bazaar: 'বাজার', khabar: 'খাবার', khawar: 'খাবার', food: 'খাবার',
   nasta: 'নাস্তা', nashta: 'নাস্তা', breakfast: 'নাস্তা',
@@ -584,7 +585,7 @@ export const toBanglaExpenseTitle = (raw: string): string => {
     .trim()
     .replace(/^(?:আজকের?|আজকে?|আজ|aj|ajke|ajker|কালকের?|কালকে?|কাল|গতকালকের?|গতকালের?|গতকাল|পরশু|গত\s*পরশু|আমি|আমার|ami|amar)\s+/i, '')
     .replace(/^(?:খরচ|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|expense|cost)\s*[:=-]?\s*/i, '')
-    .replace(/\s+(?:দিয়েছি|দিয়েছে|দিলাম|দিয়া|দিয়ে|কিনেছি|কিনেছে|কিনলাম|কিনসি|কেনা\s*হয়েছে|কেনা\s*হলো|কেনা|করেছি|করলাম|হয়েছে|হইছে|হলো|হল|গেল|গেলো|বাবদ|খরচ\s*হয়েছে|খরচ\s*হলো|খরচ|খরচা|dia|dilam|diyechi|diye|kinechi|kineche|kinesi|kinlam|kena\s*hoyeche|kena|koresi|korlam|hoyeche|hoise|holo|gelo|babod|khoroch\s*hoyeche|khoros\s*hoyeche|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses)\s*$/i, '')
+    .replace(/\s+(?:দিয়েছি|দিয়েছে|দিলাম|দিয়া|দিয়ে|কিনেছি|কিনেছে|কিনলাম|কিনসি|কেনা\s*হয়েছে|কেনা\s*হলো|কেনা|করেছি|করলাম|হয়েছে|হইছে|হলো|হল|গেল|গেলো|বাবদ|খরচ\s*হয়েছে|খরচ\s*হলো|খরচ|খরচা|dia|dilam|diyechi|diye|kinechi|kineche|kinesi|kinlam|kena\s*hoyeche|kena|koresi|korlam|hoyeche|hoise|holo|gelo|babod|babot|khoroch\s*hoyeche|khoros\s*hoyeche|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses)\s*$/i, '')
     .trim();
 
   if (!text) text = raw.trim();
