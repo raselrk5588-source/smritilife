@@ -781,49 +781,68 @@ export function matchMedicineName(query: string, candidateNames: string[]): stri
   const romanQ = romanizeBengali(cleanQ);
   const words = cleanQ.split(/\s+/).filter(w => w.length >= 2);
 
+  // Stopwords to ignore when extracting medicine tokens
+  const stopWords = new Set([
+    'koi', 'koto', 'koy', 'din', 'baki', 'khabo', 'khete', 'hobe', 'hbe', 'lagbe',
+    'sokal', 'dupur', 'rat', 'rate', 'sokale', 'dupure', 'camos', 'chamoch', 'spoon',
+    'kore', 'ta', 'ti', 'ar', 'r', 'theke', 'aj', 'ajke', 'kal', 'kalke', 'reminder',
+    'osudh', 'medicine', 'tablet', 'কয়দিন', 'কতদিন', 'বাকি', 'খাব', 'খাবো', 'খেতে', 'হবে',
+    'লাগবে', 'সকাল', 'দুপুর', 'রাত', 'চামচ', 'করে', 'টা', 'টি', 'আর', 'থেকে', 'আজ', 'কাল', 'রিমাইন্ডার'
+  ]);
+
   for (const name of candidateNames) {
     const cleanName = name.toLowerCase().trim();
     if (!cleanName) continue;
     const romanName = romanizeBengali(cleanName);
 
-    // Direct substring in query or romanized query
+    // 1. Direct substring in query or romanized query
     if (cleanQ.includes(cleanName) || (romanName && romanQ.includes(romanName))) {
       return name;
     }
 
-    // Check individual words against candidate and its romanized form
-    for (const w of words) {
-      const romanW = romanizeBengali(w);
-      const queryVars = Array.from(new Set([w, romanW].filter(Boolean)));
-      const candVars = Array.from(new Set([cleanName, romanName].filter(Boolean)));
+    // 2. Extract core name of candidate (e.g. "Neofloxin 1 চামচ" -> "neofloxin", "Zis DS 1 চামচ" -> "zis ds")
+    const cleanCandWords = cleanName.split(/\s+/).filter(w => !stopWords.has(w) && !/^\d+$/.test(w));
+    const coreCandName = cleanCandWords.join(' ');
+    const romanCoreName = romanizeBengali(coreCandName);
 
-      for (const qv of queryVars) {
-        for (const cv of candVars) {
-          // Exact match
-          if (qv === cv) return name;
+    if (coreCandName && (cleanQ.includes(coreCandName) || (romanCoreName && romanQ.includes(romanCoreName)))) {
+      return name;
+    }
 
-          // Anagram match (e.g. "pana" vs "napa")
-          if (qv.length >= 3 && cv.length >= 3 && Math.abs(qv.length - cv.length) <= 1) {
-            const sortedQ = qv.split('').sort().join('');
-            const sortedC = cv.split('').sort().join('');
-            if (sortedQ === sortedC) return name;
-          }
+    // 3. Check individual words of candidate against meaningful query words
+    const queryMeaningfulWords = words.filter(w => !stopWords.has(w));
 
-          // Collapsed duplicate letters (e.g. "naapa" -> "napa", "paana" -> "pana")
-          const collapsedQ = qv.replace(/(.)\1+/g, '$1');
-          const collapsedC = cv.replace(/(.)\1+/g, '$1');
-          if (collapsedQ === collapsedC) return name;
-          if (collapsedQ.length >= 3 && collapsedC.length >= 3) {
-            if (collapsedQ.split('').sort().join('') === collapsedC.split('').sort().join('')) {
-              return name;
+    for (const cw of cleanCandWords) {
+      const romanCw = romanizeBengali(cw);
+      const candVars = Array.from(new Set([cw, romanCw].filter(Boolean)));
+
+      for (const qw of queryMeaningfulWords) {
+        const romanQw = romanizeBengali(qw);
+        const queryVars = Array.from(new Set([qw, romanQw].filter(Boolean)));
+
+        for (const qv of queryVars) {
+          for (const cv of candVars) {
+            // Exact word match (e.g. "neofloxin" === "neofloxin")
+            if (qv === cv) return name;
+
+            // Substring if word is long enough
+            if (qv.length >= 4 && cv.length >= 4) {
+              if (qv.includes(cv) || cv.includes(qv)) return name;
             }
-          }
 
-          // Levenshtein edit distance
-          if (cv.length >= 3 && qv.length >= 3 && Math.abs(cv.length - qv.length) <= 2) {
-            const dist = levenshteinDistance(qv, cv);
-            if (cv.length <= 5 && dist <= 1) return name;
-            if (cv.length > 5 && dist <= 2) return name;
+            // Anagram match (e.g. "pana" vs "napa")
+            if (qv.length >= 3 && cv.length >= 3 && Math.abs(qv.length - cv.length) <= 1) {
+              const sortedQ = qv.split('').sort().join('');
+              const sortedC = cv.split('').sort().join('');
+              if (sortedQ === sortedC) return name;
+            }
+
+            // Levenshtein edit distance
+            if (cv.length >= 4 && qv.length >= 4 && Math.abs(cv.length - qv.length) <= 2) {
+              const dist = levenshteinDistance(qv, cv);
+              if (cv.length <= 5 && dist <= 1) return name;
+              if (cv.length > 5 && dist <= 2) return name;
+            }
           }
         }
       }
@@ -953,7 +972,11 @@ export async function handleMedicineInquiry(userId: any, queryText: string, user
   // Case 1: Specific single medicine requested or only 1 medicine exists -> answer ONLY for that medicine
   if (targetMed) {
     const now = new Date();
-    const end = targetMed.endDate ? new Date(targetMed.endDate) : null;
+    let end = targetMed.endDate ? new Date(targetMed.endDate) : null;
+    if (!end && targetMed.startDate) {
+      end = new Date(targetMed.startDate);
+      end.setDate(end.getDate() + (targetMed.durationDays || 7) - 1);
+    }
     const diffDays = end ? Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
     const isEnded = (end && diffDays <= 0) || targetMed.status === 'Completed';
 
@@ -979,7 +1002,11 @@ export async function handleMedicineInquiry(userId: any, queryText: string, user
   // Case 2: General medicine query with multiple medicines (e.g. "আমার ওষুধ আর কয়দিন বাকি?", "khabo r koto din")
   const now = new Date();
   const lines = aggregated.map((m, idx) => {
-    const end = m.endDate ? new Date(m.endDate) : null;
+    let end = m.endDate ? new Date(m.endDate) : null;
+    if (!end && m.startDate) {
+      end = new Date(m.startDate);
+      end.setDate(end.getDate() + (m.durationDays || 7) - 1);
+    }
     const diffDays = end ? Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
     const isEnded = (end && diffDays <= 0) || m.status === 'Completed';
     const endBnDate = end ? end.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' }) : '';
