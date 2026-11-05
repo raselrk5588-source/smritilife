@@ -2385,17 +2385,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 ? `📦 *${doc.title}* ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *${durationLabelEn}* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}${multiYearNote}\n\n💡 Here is the original photo you saved to track this item:`
                 : `📦 *${doc.title}* ${docResult.matchedByYear ? `(${yrBn} সাল) ` : ''}এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *${durationLabel}* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}${multiYearNote}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ছবিটি দেওয়া হলো ভাই:`;
               await sendMetaWhatsAppMessage(fromNumber, msg);
-            } else {
-              const msg = isEng
-                ? `📄 Here is your ${docResult.matchedByYear ? `*${docResult.targetYear}* ` : ''}saved file: *${doc.title}* (${doc.category})\n📅 Saved: ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ Active: ${duration.durationTextEn}${multiYearNote}`
-                : `📄 এই যে আপনার ${docResult.matchedByYear ? `*${yrBn}* সালের ` : ''}সংরক্ষিত ফাইল: *${doc.title}* (${doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ সময়কাল: ${duration.durationTextBn}${multiYearNote}`;
-              await sendMetaWhatsAppMessage(fromNumber, msg);
             }
 
             if (fileBuffer) {
               const caption = isEng
-                ? `📸 ${doc.title} ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}• Saved: ${duration.savedDateEn}`
-                : `📸 ${doc.title} ${docResult.matchedByYear ? `(${yrBn}) ` : ''}• সেভ: ${duration.savedDateBn}`;
+                ? `📸 ${doc.title} ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}• Saved: ${duration.savedDateEn}${multiYearNote}`
+                : `📸 ${doc.title} ${docResult.matchedByYear ? `(${yrBn}) ` : ''}• সেভ: ${duration.savedDateBn}${multiYearNote}`;
               const sent = await sendMetaWhatsAppFile(
                 fromNumber,
                 fileBuffer,
@@ -2406,9 +2401,15 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               if (!sent && !isTrackingOrDateQuery) {
                 await sendMetaWhatsAppMessage(
                   fromNumber,
-                  `⚠️ ফাইলটি হোয়াটসঅ্যাপে সরাসরি পাঠানো সম্ভব হয়নি। অনুগ্রহ করে ওয়েব পোর্টাল থেকে ডাউনলোড করুন: ${process.env.APP_URL || 'https://smriti.life'}/app/documents`
+                  `📄 ${doc.title} (${doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn}\n\n⚠️ ফাইলটি হোয়াটসঅ্যাপে সরাসরি পাঠানো সম্ভব হয়নি। অনুগ্রহ করে ওয়েব পোর্টাল থেকে ডাউনলোড করুন: ${process.env.APP_URL || 'https://smriti.life'}/app/documents`
                 );
               }
+            } else if (!isTrackingOrDateQuery) {
+              // Fallback text message only if file binary is not on disk/storage
+              const msg = isEng
+                ? `📄 *${doc.title}* (${doc.category})\n📅 Saved: ${duration.savedDateEn} (${duration.savedTimeEn})${multiYearNote}`
+                : `📄 *${doc.title}* (${doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn} (${duration.savedTimeBn})${multiYearNote}`;
+              await sendMetaWhatsAppMessage(fromNumber, msg);
             }
             return;
           }
@@ -5632,23 +5633,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                       : `\n\n💡 তথ্য: আপনার কাছে *${otherYearsBn}* সালের ফাইলও সংরক্ষিত আছে।\nনির্দিষ্ট সালের ফাইল পেতে লিখুন: "${sampleYrBn} সালের ${doc.title} দাও"।`;
                   }
 
-                  if (isEng) {
-                    await sendMetaWhatsAppMessage(
-                      fromNumber,
-                      `📦 *${doc.title}* ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}Tracking & Memory Details:\n\n📅 *Saved Date:* ${duration.savedDateEn} (${duration.savedTimeEn})\n⏱️ *Active Duration:* ${duration.durationTextEn}\n📁 *Category:* ${doc.category}${multiYearNote}\n\n💡 Here is the original photo you saved to track this item:`
-                    );
-                  } else {
-                    const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
-                    await sendMetaWhatsAppMessage(
-                      fromNumber,
-                      `📦 *${doc.title}* ${docResult.matchedByYear ? `(${yrBn} সাল) ` : ''}এর মেমোরি ও ট্র্যাকিং তথ্য:\n\n📅 *সেভ করার তারিখ:* ${duration.savedDateBn} (${duration.savedTimeBn})\n⏱️ *কতদিন চলছে:* ${duration.durationTextBn}\n📁 *ক্যাটাগরি:* ${doc.category}${multiYearNote}\n\n💡 জিনিসটি আপনি কবে সেভ করেছিলেন তা মনে করিয়ে দিতে নিচে সংরক্ষিত ফাইলটি দেওয়া হলো${salutation}:`
-                    );
-                  }
-
                   if (fileBuffer) {
                     const caption = isEng
-                      ? `📸 ${doc.title} ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}• Saved: ${duration.savedDateEn}`
-                      : `📸 ${doc.title} ${docResult.matchedByYear ? `(${yrBn}) ` : ''}• সেভ: ${duration.savedDateBn}`;
+                      ? `📸 ${doc.title} ${docResult.matchedByYear ? `(${docResult.targetYear}) ` : ''}• Saved: ${duration.savedDateEn}${multiYearNote}`
+                      : `📸 ${doc.title} ${docResult.matchedByYear ? `(${yrBn}) ` : ''}• সেভ: ${duration.savedDateBn}${multiYearNote}`;
                     await sendMetaWhatsAppFile(
                       fromNumber,
                       fileBuffer,
@@ -5656,6 +5644,18 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                       doc.mimeType,
                       caption
                     );
+                  } else {
+                    if (isEng) {
+                      await sendMetaWhatsAppMessage(
+                        fromNumber,
+                        `📄 *${doc.title}* (${doc.category})\n📅 Saved: ${duration.savedDateEn}${multiYearNote}`
+                      );
+                    } else {
+                      await sendMetaWhatsAppMessage(
+                        fromNumber,
+                        `📄 *${doc.title}* (${doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn}${multiYearNote}`
+                      );
+                    }
                   }
                   return true;
                 }
@@ -5986,17 +5986,18 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               if (docRes.doc) {
                 const fileBuffer = await getDocumentBuffer(docRes.doc);
                 const duration = calculateItemDuration(docRes.doc.createdAt);
-                await sendMetaWhatsAppMessage(
-                  fromNumber,
-                  `📄 এই যে আপনার সংরক্ষিত ফাইল: *${docRes.doc.title}* (${docRes.doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn}`
-                );
                 if (fileBuffer) {
                   await sendMetaWhatsAppFile(
                     fromNumber,
                     fileBuffer,
                     docRes.doc.fileName,
                     docRes.doc.mimeType,
-                    `📸 ${docRes.doc.title}`
+                    `📸 ${docRes.doc.title} • সেভ: ${duration.savedDateBn}`
+                  );
+                } else {
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    `📄 এই যে আপনার সংরক্ষিত ফাইল: *${docRes.doc.title}* (${docRes.doc.category})\n📅 সেভ তারিখ: ${duration.savedDateBn}`
                   );
                 }
                 break;
