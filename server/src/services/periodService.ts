@@ -362,7 +362,7 @@ export const deletePeriodEntry = async (
 /**
  * Parse natural language date from period message (today, yesterday, "5 tarikh", "10 october")
  */
-const extractDateFromPeriodMessage = (text: string): Date => {
+export const extractDateFromPeriodMessage = (text: string): Date => {
   const today = getDhakaMidnight();
   const clean = bnToEnDigits(text.toLowerCase());
 
@@ -388,9 +388,12 @@ const extractDateFromPeriodMessage = (text: string): Date => {
     }
   }
 
-  // Check explicit day + month (e.g. "10 october", "৫ নভেম্বর")
+  // Check explicit day + month (e.g. "10 october", "October ar 14 tarik", "অক্টোবর মাসের ১৪ তারিখ", "৫ নভেম্বর")
   for (const [mName, mIdx] of Object.entries(bnMonths)) {
-    const regex = new RegExp(`(\\d{1,2})\\s*${mName}|${mName}\\s*(?:মাসের|er)?\\s*(\\d{1,2})`, 'i');
+    const regex = new RegExp(
+      `(\\d{1,2})(?:st|nd|rd|th|শে|ই|এ)?\\s*(?:তারিখ|তারিখে|tarikh|tarik|tarikhe)?\\s*(?:of\\s*)?${mName}\\b|\\b${mName}(?:ের)?\\s*(?:মাসের|মাসে|maser|mase|mas|month)?\\s*(?:এর|এ|er|ar|e|a|of)?\\s*(\\d{1,2})`,
+      'i'
+    );
     const match = clean.match(regex);
     if (match) {
       const dayNum = parseInt(match[1] || match[2], 10);
@@ -502,23 +505,28 @@ export const handleWhatsAppPeriodCommand = async (
   }
 
   // 3. Inquiry / Day count query (e.g. "পিরিয়ডের কত দিন চলছে", "পরের পিরিয়ড কবে", "period kobe", "priod day count")
-  const isQuery =
+  const isQuestion =
     /\?$/.test(clean) ||
-    /(?:কবে|কত\s*দিন|কয়\s*দিন|কততম|দিন\s*চলছে|ডেট\s*কবে|পরের|নেক্সট|বাকি\s*কত|হিসাব|স্ট্যাটাস|ট্রেকার|ট্র্যাকার|kobe|koto\s*din|koy\s*din|koi\s*din|cholche|next|date|status|count|baki|koto|kokhon)/i.test(clean);
+    /(?:কবে|কত\s*দিন|কয়\s*দিন|কততম|দিন\s*চলছে|ডেট\s*কবে|পরের|নেক্সট|বাকি\s*কত|হিসাব|স্ট্যাটাস|ট্রেকার|ট্র্যাকার|kobe|koto\s*din|koy\s*din|koi\s*din|cholche|next|status|count|baki|koto|kokhon)/i.test(clean);
+
+  const hasExplicitDateInMsg =
+    /(?:আজ|আজকে|গতকাল|কালকে|পরশু|তারিখ|তারিখে|দিন\s*আগে|aj|ajke|gotokal|kalke|porshu|yesterday|today|tarikh|tarik|tarikhe|din\s*age|days?\s*ago|জানুয়ারি|জানুয়ারি|ফেব্রুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর|january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec)/i.test(clean);
 
   const isLogIntent =
-    /(?:শুরু\s*(?:হয়েছে|হইছে|হলো|হল)?|হয়েছে|হইছে|হলো|সেভ\s*করো|লগ\s*করো|আজ\s*থেকে|কাল\s*থেকে|তারিখ\s*থেকে|started|start\s*hoyeche|start\s*hoise|suru\s*hoyeche|suru\s*hoise|shuru\s*hoyeche|shuru\s*hoise|hoise|hoyeche)/i.test(clean);
+    /(?:শুরু|সুরু|হয়েছিল|হইছিল|হয়েছে|হইছে|হলো|হল|সেভ|লগ|আজ\s*থেকে|কাল\s*থেকে|তারিখ\s*থেকে|started|start|suru|shuru|hoyechilo|hoichilo|hoisilo|hoyesilo|hoyeche|hoise|holo|save|log)/i.test(clean) ||
+    (hasExplicitDateInMsg && !isQuestion);
 
-  if (isLogIntent && !/(?:কবে\s*শুরু\s*হবে|কবে\s*হবে|kobe\s*hobe|kobe\s*suru\s*hobe)/i.test(clean)) {
+  if (isLogIntent && !/(?:কবে\s*(?:শুরু|সুরু)?\s*হবে|কবে\s*হবে|kobe\s*hobe|kobe\s*(?:suru|shuru|start)\s*hobe|next\s*(?:period|priod)\s*kobe)/i.test(clean)) {
     const startDate = extractDateFromPeriodMessage(clean);
     const updated = await logPeriodStart(userId, startDate);
     return formatPeriodStatusWhatsApp(updated, true);
   }
 
-  if (isQuery || looksPeriodRelated(clean)) {
+  if (isQuestion || looksPeriodRelated(clean)) {
     const status = await getPeriodStatus(userId);
     return formatPeriodStatusWhatsApp(status, false);
   }
 
   return null;
 };
+
