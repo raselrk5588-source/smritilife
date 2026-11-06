@@ -2637,11 +2637,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
-        // If user explicitly asked for a known document type but doesn't have it saved:
-        const isDocKeyword = /(?:প্রেসক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|বিল|bill|দলিল|পাসপোর্ট|passport|কাগজ|ডকুমেন্ট|document|টিন|tin)\b/i.test(cleanText);
-        const isExplicitDocRequest = isDocKeyword && (hasFetchIntent || cleanText.split(/\s+/).length <= 6);
-        if (isExplicitDocRequest) {
-          // Also check Note in case user saved NID, TIN or document info as a text note
+        // If user explicitly asked for a known document type or specific item but doesn't have it saved:
+        const isDocKeyword = /(?:প্রেসক্রিপশন|prescription|রিপোর্ট|report|এনআইডি|nid|সার্টিফিকেট|certificate|রিসিপ্ট|receipt|বিল|bill|দলিল|পাসপোর্ট|passport|কাগজ|ডকুমেন্ট|document|টিন|tin|লাইসেন্স|license|বোতল|bottole|bottle|botol|সিলিন্ডার|cylinder|টিস্যু|tishu|tissue|box|বক্স)\b/i.test(cleanText);
+        const isExplicitDocRequest = (isDocKeyword || hasExplicitDocWord) && (hasFetchIntent || cleanText.split(/\s+/).length <= 6);
+        if (isExplicitDocRequest || (hasFetchIntent && isShortQuery && !isNonDocTopic)) {
+          // Also check Note in case user saved info as a text note
           const cleanDocQuery = cleanText
             .replace(/(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে|dao|daw|dau|dis|diben|den|pathao|pathan|dehao|dekhaw|dekhan|chai|cay|lagbe|give|send|show|আমার|amar|amr|ta|ti|টা|টি|এর|র|er|ar)/gi, '')
             .trim();
@@ -2659,9 +2659,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
+          const searchItemName = cleanDocQuery || cleanText;
           await sendMetaWhatsAppMessage(
             fromNumber,
-            `📁${salutation}, এই নামে কোনো ফাইল আপনার স্মৃতি মেমোরিতে সেভ করা নেই।\n\nআপনি ফাইলটি (ছবি বা PDF) আমাকে পাঠিয়ে ক্যাপশনে নামটি লিখলে আমি মেমোরিতে সেভ করে রাখবো এবং পরবর্তীতে চাওয়ামাত্র পাঠিয়ে দেবো!`
+            `📁${salutation}, "*${searchItemName}*" নামে কোনো ফাইল বা তথ্য আপনার স্মৃতি মেমোরিতে সেভ করা নেই।\n\n💡 আপনার সংরক্ষিত ফাইলসমূহ দেখতে লিখুন: "আমার ফাইলগুলো দেখাও"।\nনতুন ফাইল সেভ করতে সরাসরি ছবি বা PDF পাঠিয়ে ক্যাপশনে নামটি লিখে দিন!`
           );
           return;
         }

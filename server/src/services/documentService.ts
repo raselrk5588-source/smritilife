@@ -188,7 +188,23 @@ export function detectDocumentCategory(text: string, isImage?: boolean): {
     lower.includes('কার্ড') ||
     lower.includes('card')
   ) {
-    tags.push('nid', 'এনআইডি', 'card', 'passport', 'পাসপোর্ট');
+    if (lower.includes('পাসপোর্ট') || lower.includes('passport')) {
+      tags.push('passport', 'পাসপোর্ট');
+    }
+    if (lower.includes('লাইসেন্স') || lower.includes('license')) {
+      tags.push('license', 'লাইসেন্স');
+    }
+    if (
+      lower.includes('এনআইডি') ||
+      lower.includes('nid') ||
+      lower.includes('পরিচয়পত্র') ||
+      lower.includes('পরিচয়পত্র') ||
+      lower.includes('স্মার্ট কার্ড') ||
+      lower.includes('smart card')
+    ) {
+      tags.push('nid', 'এনআইডি', 'smart card');
+    }
+    tags.push('card');
     return { category: 'NID/Card', tags };
   }
 
@@ -508,10 +524,18 @@ const synonymMap: Record<string, string[]> = {
   'বক্স': ['box', 'baksho', 'বাক্স'],
   'বাক্স': ['box', 'baksho', 'বক্স'],
   'box': ['বক্স', 'বাক্স', 'baksho'],
-  'বোতল': ['bottol', 'botol', 'bottle'],
-  'bottol': ['বোতল', 'botol', 'bottle'],
-  'botol': ['বোতল', 'bottol', 'bottle'],
-  'bottle': ['বোতল', 'bottol', 'botol'],
+  'বোতল': ['bottol', 'botol', 'bottle', 'bottole'],
+  'bottol': ['বোতল', 'botol', 'bottle', 'bottole'],
+  'botol': ['বোতল', 'bottol', 'bottle', 'bottole'],
+  'bottle': ['বোতল', 'bottol', 'botol', 'bottole'],
+  'bottole': ['বোতল', 'bottol', 'botol', 'bottle'],
+  'পাসপোর্ট': ['passport', 'passpost'],
+  'passport': ['পাসপোর্ট', 'passpost'],
+  'লাইসেন্স': ['license', 'licence', 'bike license', 'বাইক লাইসেন্স', 'ড্রাইভিং লাইসেন্স'],
+  'license': ['লাইসেন্স', 'licence', 'bike license', 'বাইক লাইসেন্স', 'driving license'],
+  'licence': ['লাইসেন্স', 'license'],
+  'বাইক': ['bike', 'motorcycle', 'মোটরসাইকেল'],
+  'bike': ['বাইক', 'motorcycle', 'মোটরসাইকেল'],
   'সিলিন্ডার': ['cylinder', 'silindar', 'silinder', 'selinder'],
   'cylinder': ['সিলিন্ডার', 'silindar', 'silinder', 'selinder'],
   'silindar': ['সিলিন্ডার', 'cylinder', 'silinder'],
@@ -708,6 +732,7 @@ export async function findMatchingDocumentWithVersion(
   const queryWords = queryWithoutYear
     .split(/\s+/)
     .map((w) => w.replace(/[^\w\u0980-\u09FF]/g, ''))
+    .map((w) => w.replace(/(?:-?এর|-?er|-?ar|র|ের)$/i, ''))
     .filter((w) => w.length >= 2 && !stopWords.has(w));
 
   if (queryWords.length === 0 && !/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)\b/i.test(clean)) {
@@ -753,6 +778,13 @@ export async function findMatchingDocumentWithVersion(
 
       if (doc.tags && doc.tags.some((t: string) => {
         const tLower = t.toLowerCase().trim();
+        // Prevent generic card/nid/passport tags from falsely matching documents whose title doesn't relate to them
+        if (/^(?:card|nid|passport|পাসপোর্ট|এনআইডি|কার্ড)$/i.test(tLower)) {
+          const titleLower = docTitle.toLowerCase();
+          if (!qVariants.some(qv => titleLower.includes(qv))) {
+            return false;
+          }
+        }
         const tParts = tLower.split(/[\s/_-]+/);
         return qVariants.some((qv) => tLower === qv || tParts.includes(qv) || (qv.length >= 5 && tLower.includes(qv)));
       })) {
@@ -762,15 +794,8 @@ export async function findMatchingDocumentWithVersion(
       if (doc.category) {
         const docCat = doc.category.toLowerCase().trim();
         if (qVariants.some((qv) => qv.length >= 4 && (docCat.includes(qv) || qv.includes(docCat)))) {
-          score += 35;
+          score += 15;
         }
-      }
-    }
-
-    if (doc.category) {
-      const docCat = doc.category.toLowerCase().trim();
-      if (queryWithoutYear && queryWords.length > 0 && (queryWithoutYear.includes(docCat) || docCat.includes(queryWithoutYear))) {
-        score += 50;
       }
     }
 
@@ -783,8 +808,13 @@ export async function findMatchingDocumentWithVersion(
   matchingDocsWithScores.sort((a, b) => b.score - a.score || new Date(b.doc.createdAt).getTime() - new Date(a.doc.createdAt).getTime());
   let allMatchingDocs = matchingDocsWithScores.map((m) => m.doc);
 
-  // If no direct keyword score match, try category detection
-  if (allMatchingDocs.length === 0) {
+  // If no direct keyword score match, try category detection ONLY if query was a broad category request
+  // (e.g. "আমার সব ফাইল দেখাও", "সব সার্টিফিকেট দাও", "সব প্রেসক্রিপশন দাও", "ডকুমেন্টগুলো দেখাও")
+  const isBroadCategoryRequest =
+    /(?:সব|সকল|all|list|লিস্ট|গুলো|গুলা|gula|gulo)\s*(?:ফাইল|ডকুমেন্ট|কাগজ|রশিদ|বিল|সার্টিফিকেট|প্রেসক্রিপশন|file|doc|document|bill|prescription|certificate|report)/i.test(clean) ||
+    /^(?:ফাইল|ডকুমেন্ট|কাগজ|file|doc|document|documents|files)$/i.test(queryWithoutYear);
+
+  if (allMatchingDocs.length === 0 && isBroadCategoryRequest) {
     const { category, tags } = detectDocumentCategory(queryWithoutYear || clean);
     if (category !== 'Other') {
       const catMatches = userDocs.filter(
@@ -794,11 +824,9 @@ export async function findMatchingDocumentWithVersion(
     }
   }
 
-  // If still no matches and user asked for "last" or only has 1 document
+  // If still no matches and user asked for "last"
   if (allMatchingDocs.length === 0) {
-    if (/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)\b/i.test(clean)) {
-      allMatchingDocs.push(userDocs[0]);
-    } else if (userDocs.length === 1 && queryWords.length === 0) {
+    if (/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)/i.test(clean)) {
       allMatchingDocs.push(userDocs[0]);
     }
   }
