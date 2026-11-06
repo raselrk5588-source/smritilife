@@ -5022,48 +5022,101 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   break;
                 }
 
+                const isWish = /(?:wish|শুভেচ্ছা|birthday|জন্মদিন|anniversary|বিবাহবার্ষিকী|ঈদ|eid|congrat|অভিনন্দন)/i.test(combinedText);
+                let occasion = 'birthday';
+                if (/বিবাহ|বার্ষিকী|anniversary/i.test(combinedText)) occasion = 'anniversary';
+                else if (/ঈদ|eid/i.test(combinedText)) occasion = 'eid';
+                else if (/নতুন\s*বছর|new\s*year/i.test(combinedText)) occasion = 'newyear';
+                else if (/অভিনন্দন|congrat/i.test(combinedText)) occasion = 'congratulations';
+                else if (/ভালোবাসা|love|valentine/i.test(combinedText)) occasion = 'love';
+                const occasionTitle = getOccasionTitle(occasion);
+
+                let firstSmartCardId = '';
+
                 for (const target of allowedRecipients) {
-                  // If sendNow is true, dispatch message immediately via WhatsApp
-                  if (sendNow && customMsg) {
-                    let promoSection = '';
-                    if (!target.isRegistered) {
-                      promoSection = `\n\n✨ আপনিও কি স্মৃতি লাইফ (Smriti Life) ব্যবহার করে স্বয়ংক্রিয় রিমাইন্ডার ও বার্তা পাঠাতে চান?\nরেজিস্ট্রেশন করুন: https://smritilife.com/auth`;
+                  if (isWish) {
+                    const smartCardId = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+                    if (!firstSmartCardId) firstSmartCardId = smartCardId;
+
+                    let scheduledAt = new Date();
+                    if (!sendNow) {
+                      const bdIso = `${reminderDate.toISOString().split('T')[0]}T${reminderTime}:00+06:00`;
+                      const parsedDate = new Date(bdIso);
+                      if (!isNaN(parsedDate.getTime())) scheduledAt = parsedDate;
                     }
-                    const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${customMsg}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
-                    await sendMetaWhatsAppMessage(target.phone, thirdPartyAlert);
+
+                    const newWish = await Wish.create({
+                      userId: user._id,
+                      recipientName: target.name,
+                      recipientContact: target.phone,
+                      occasion,
+                      message: customMsg || `শুভ জন্মদিন ${target.name}! আপনার জীবন আনন্দময় হোক।`,
+                      isSmartCard: true,
+                      smartCardId,
+                      cardData: {
+                        image: getOccasionImageUrl(occasion),
+                        title: occasionTitle,
+                        senderName: user.name || 'আপনার শুভাকাঙ্ক্ষী',
+                        animation: 'envelope'
+                      },
+                      scheduledAt,
+                      deliveryMethod: ['WhatsApp'],
+                      status: sendNow ? 'Sent' : 'Scheduled'
+                    });
+
+                    if (sendNow) {
+                      await deliverWishCard(newWish, user.name || 'আপনার শুভাকাঙ্ক্ষী', user.whatsapp || user.mobile);
+                    }
+                  } else {
+                    // Regular contact message (meeting / notification)
+                    if (sendNow && customMsg) {
+                      let promoSection = '';
+                      if (!target.isRegistered) {
+                        promoSection = `\n\n✨ আপনিও কি স্মৃতি লাইফ (Smriti Life) ব্যবহার করে স্বয়ংক্রিয় রিমাইন্ডার ও বার্তা পাঠাতে চান?\nরেজিস্ট্রেশন করুন: https://smritilife.com/auth`;
+                      }
+                      const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${customMsg}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
+                      await sendMetaWhatsAppMessage(target.phone, thirdPartyAlert);
+                    }
+
+                    await Reminder.create({
+                      userId: user._id,
+                      title: `মেসেজ পাঠানো (${target.name})`,
+                      description: customMsg,
+                      recipientPhone: target.phone,
+                      date: reminderDate,
+                      time: reminderTime,
+                      priority: 'Medium',
+                      category: isAllowedForUnregistered ? 'meeting' : 'message',
+                      repeat: 'Once',
+                      status: sendNow ? 'Completed' : 'Pending'
+                    });
                   }
-
-                  // Record in Reminder collection
-                  const isWish = /(?:wish|শুভেচ্ছা|birthday|জন্মদিন|anniversary|বিবাহবার্ষিকী|ঈদ|eid)/i.test(combinedText);
-                  const scheduledTitle = isWish ? `জন্মদিনের শুভেচ্ছা বার্তা (${target.name})` : `মেসেজ পাঠানো (${target.name})`;
-
-                  await Reminder.create({
-                    userId: user._id,
-                    title: scheduledTitle,
-                    description: customMsg,
-                    recipientPhone: target.phone,
-                    date: reminderDate,
-                    time: reminderTime,
-                    priority: 'Medium',
-                    category: isWish ? 'wish' : (isAllowedForUnregistered ? 'meeting' : 'message'),
-                    repeat: 'Once',
-                    status: sendNow ? 'Completed' : 'Pending'
-                  });
                 }
 
                 // Compose confirmation message to sender
                 const count = allowedRecipients.length;
                 let replyMsg = '';
-                if (sendNow) {
-                  replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে এখনই বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n\n`;
+                if (isWish) {
+                  if (sendNow) {
+                    replyMsg = `🎉 আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে এখনই ${occasionTitle} কার্ড ও বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n\n`;
+                  } else {
+                    replyMsg = `🎉 আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে সময় ${formattedTime}-এ ${occasionTitle} কার্ড পাঠানোর শিডিউল সেট করা হয়েছে:\n\n`;
+                  }
                 } else {
-                  replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে সময় ${formattedTime}-এ বার্তা পাঠানোর শিডিউল সেট করা হয়েছে:\n\n`;
+                  if (sendNow) {
+                    replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে এখনই বার্তাটি সফলভাবে পাঠিয়ে দেওয়া হয়েছে:\n\n`;
+                  } else {
+                    replyMsg = `✅ আপনার কনট্যাক্ট লিস্ট থেকে ${count} জনকে সময় ${formattedTime}-এ বার্তা পাঠানোর শিডিউল সেট করা হয়েছে:\n\n`;
+                  }
                 }
 
                 allowedRecipients.forEach((r, idx) => {
                   replyMsg += `${idx + 1}. 👤 *${r.name}* (${r.phone})${r.isRegistered ? ' [স্মৃতি ইউজার]' : ''}\n`;
                 });
 
+                if (isWish && firstSmartCardId) {
+                  replyMsg += `\n💌 স্মার্ট কার্ড লিংক: https://smritilife.com/w/${firstSmartCardId}`;
+                }
                 if (customMsg) {
                   replyMsg += `\n💬 বার্তা: "${customMsg}"`;
                 }

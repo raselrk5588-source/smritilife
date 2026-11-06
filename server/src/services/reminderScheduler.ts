@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import Reminder from '../models/Reminder';
 import Wish from '../models/Wish';
 import User from '../models/User';
-import { deliverWishCard, sendMetaWhatsAppTemplate } from './wishDeliveryService';
+import { deliverWishCard, sendMetaWhatsAppTemplate, getOccasionImageUrl, getOccasionTitle } from './wishDeliveryService';
 import { formatTime12Hour } from './aiWhatsAppService';
 import { sendMetaWhatsAppButtons, userReminderState } from '../controllers/whatsappController';
 import { getRamadanTimes, RAMADAN_DUAS } from './ramadanService';
@@ -165,9 +165,48 @@ export const startReminderScheduler = () => {
               `${reminder.title || ''} ${messageBody} ${reminder.category || ''}`
             );
 
-            const thirdPartyAlert = isWish
-              ? `🎉 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি শুভেচ্ছা বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে প্রেরিত)${promoSection}`
-              : `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
+            if (isWish) {
+              let wishDoc = await Wish.findOne({
+                userId: reminder.userId,
+                recipientContact: reminder.recipientPhone,
+                status: { $in: ['Scheduled', 'Pending'] }
+              });
+
+              if (!wishDoc) {
+                const smartCardId = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+                let occ = 'birthday';
+                if (/বিবাহ|বার্ষিকী|anniversary/i.test(`${reminder.title} ${messageBody}`)) occ = 'anniversary';
+                else if (/ঈদ|eid/i.test(`${reminder.title} ${messageBody}`)) occ = 'eid';
+                else if (/নতুন\s*বছর|new\s*year/i.test(`${reminder.title} ${messageBody}`)) occ = 'newyear';
+                else if (/অভিনন্দন|congrat/i.test(`${reminder.title} ${messageBody}`)) occ = 'congratulations';
+                else if (/ভালোবাসা|love|valentine/i.test(`${reminder.title} ${messageBody}`)) occ = 'love';
+
+                wishDoc = await Wish.create({
+                  userId: reminder.userId,
+                  recipientContact: reminder.recipientPhone,
+                  occasion: occ,
+                  message: messageBody,
+                  isSmartCard: true,
+                  smartCardId,
+                  cardData: {
+                    image: getOccasionImageUrl(occ),
+                    title: getOccasionTitle(occ),
+                    senderName: senderName || 'আপনার শুভাকাঙ্ক্ষী',
+                    animation: 'envelope'
+                  },
+                  scheduledAt: new Date(),
+                  deliveryMethod: ['WhatsApp'],
+                  status: 'Sending'
+                });
+              }
+
+              const wishSent = await deliverWishCard(wishDoc, senderName, senderNumber);
+              await Wish.findByIdAndUpdate(wishDoc._id, { status: wishSent ? 'Sent' : 'Failed' });
+              console.log(`[ReminderScheduler] Dispatched Wish Card to ${reminder.recipientPhone} (Sent: ${wishSent})`);
+              continue;
+            }
+
+            const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
 
             // Try template first to bypass Meta 24-hour customer window for third-party numbers
             const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE_NAME || 'smriti_schedule_reminder';
@@ -176,7 +215,7 @@ export const startReminderScheduler = () => {
             const dStr = reminder.date ? new Date(reminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' }) : 'আজ';
             const formattedTimeDate = `${displayTime} (${dStr})`;
             const senderDisplay = senderNumber ? `${senderName} (${senderNumber})` : senderName;
-            const topicDisplay = isWish ? 'জন্মদিনের শুভেচ্ছা' : (reminder.title || 'বার্তা');
+            const topicDisplay = reminder.title || 'বার্তা';
 
             let deliveredViaTemplate = false;
             if (process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) {
