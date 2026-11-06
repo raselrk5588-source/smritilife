@@ -531,9 +531,15 @@ const synonymMap: Record<string, string[]> = {
   'bottole': ['বোতল', 'bottol', 'botol', 'bottle'],
   'পাসপোর্ট': ['passport', 'passpost'],
   'passport': ['পাসপোর্ট', 'passpost'],
-  'লাইসেন্স': ['license', 'licence', 'bike license', 'বাইক লাইসেন্স', 'ড্রাইভিং লাইসেন্স'],
-  'license': ['লাইসেন্স', 'licence', 'bike license', 'বাইক লাইসেন্স', 'driving license'],
-  'licence': ['লাইসেন্স', 'license'],
+  'লাইসেন্স': ['license', 'licence', 'licenses', 'licences', 'bike license', 'বাইক লাইসেন্স', 'ড্রাইভিং লাইসেন্স'],
+  'license': ['লাইসেন্স', 'licence', 'licenses', 'licences', 'bike license', 'বাইক লাইসেন্স', 'driving license'],
+  'licence': ['লাইসেন্স', 'license', 'licenses', 'licences'],
+  'licenses': ['লাইসেন্স', 'license', 'licence', 'licences'],
+  'licences': ['লাইসেন্স', 'license', 'licence', 'licenses'],
+  'চাবি': ['key', 'chabi', 'keys'],
+  'chabi': ['চাবি', 'key', 'keys'],
+  'key': ['chabi', 'চাবি', 'keys'],
+  'keys': ['chabi', 'চাবি', 'key'],
   'বাইক': ['bike', 'motorcycle', 'মোটরসাইকেল'],
   'bike': ['বাইক', 'motorcycle', 'মোটরসাইকেল'],
   'সিলিন্ডার': ['cylinder', 'silindar', 'silinder', 'selinder'],
@@ -700,7 +706,20 @@ export const SPECIFIC_DOC_TYPES: SpecificDocType[] = [
     pattern: /(?:বাইক\s*লাইসেন্স|মোটরসাইকেল\s*লাইসেন্স|\bbike\s*licen[sc]es?\b|\bvehicle\s*licen[sc]es?\b|\bregistration\s*certificate\b)/i,
     docMatches: (doc: any) => {
       const text = [doc.title, ...(doc.tags || [])].join(' ');
-      return /(?:বাইক|মোটরসাইকেল|\bbike\b|\bmotorcycle\b|\bvehicle\b|\bregistration\b)/i.test(text);
+      const hasVehicle = /(?:বাইক|মোটরসাইকেল|\bbike\b|\bmotorcycle\b|\bvehicle\b)/i.test(text);
+      const hasLicense = /(?:লাইসেন্স|\blicen[sc]es?\b|রেজিস্ট্রেশন|registration|কাগজ|দলিল|certificate|ব্লুবুক|blue\s*book)/i.test(text);
+      const isKey = /(?:চাবি|\bkeys?\b)/i.test(text);
+      return (hasVehicle && hasLicense && !isKey) || (/(?:bike\s*licen[sc]es?|বাইক\s*লাইসেন্স)/i.test(text) && !isKey);
+    }
+  },
+  {
+    id: 'key',
+    nameBn: 'চাবি',
+    nameEn: 'Key',
+    pattern: /(?:চাবি|চাবিটা|চাবিগুলো|\bkeys?\b|\bchabi\b|\bchabita\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:চাবি|\bkeys?\b|\bchabi\b)/i.test(text);
     }
   },
   {
@@ -710,7 +729,8 @@ export const SPECIFIC_DOC_TYPES: SpecificDocType[] = [
     pattern: /(?:ড্রাইভিং\s*লাইসেন্স|\bdriving\s*licen[sc]es?\b)/i,
     docMatches: (doc: any) => {
       const text = [doc.title, ...(doc.tags || [])].join(' ');
-      return /(?:ড্রাইভিং|\bdriving\b)/i.test(text);
+      const isKey = /(?:চাবি|\bkeys?\b)/i.test(text);
+      return /(?:ড্রাইভিং|\bdriving\b)/i.test(text) && /(?:লাইসেন্স|\blicen[sc]es?\b)/i.test(text) && !isKey;
     }
   },
   {
@@ -720,7 +740,8 @@ export const SPECIFIC_DOC_TYPES: SpecificDocType[] = [
     pattern: /(?:লাইসেন্স|\blicen[sc]es?\b)/i,
     docMatches: (doc: any) => {
       const text = [doc.title, ...(doc.tags || [])].join(' ');
-      return /(?:লাইসেন্স|\blicen[sc]es?\b)/i.test(text);
+      const isKey = /(?:চাবি|\bkeys?\b)/i.test(text);
+      return /(?:লাইসেন্স|\blicen[sc]es?\b)/i.test(text) && !isKey;
     }
   },
   {
