@@ -241,10 +241,7 @@ export const cleanupAccidentalDebtExpenses = async (userId: any): Promise<number
       ]
     });
 
-    const dirtyDebts = await Debt.find({
-      userId,
-      personName: /(?:kache|কাছে|\bami\b|আমি|\bar\s+kache|\ber\s+kache)/i
-    });
+    const dirtyDebts = await Debt.find({ userId });
     for (const d of dirtyDebts) {
       const cleaned = cleanDebtPersonName(d.personName);
       if (cleaned && cleaned !== d.personName) {

@@ -101,6 +101,36 @@ export const cleanPersonName = (raw: string): string => {
 };
 
 /**
+ * Match person names robustly across Bengali and Banglish spellings and with/without honorifics (ভাই, আপু, etc.)
+ */
+export const isPersonMatch = (nameInDb: string, targetName: string): boolean => {
+  if (!nameInDb || !targetName) return false;
+  const n1 = cleanPersonName(nameInDb).trim().toLowerCase();
+  const n2 = cleanPersonName(targetName).trim().toLowerCase();
+  if (n1 === n2) return true;
+
+  const raw1 = nameInDb.trim().toLowerCase();
+  const raw2 = targetName.trim().toLowerCase();
+  if (raw1 === raw2) return true;
+
+  // Split into tokens excluding common honorifics
+  const filterHonorifics = (tokens: string[]) =>
+    tokens.filter(t => !/^(?:ভাই|আপু|আপা|আঙ্কেল|মামা|চাচা|vai|bhai|apu|apa|uncle|mama)$/i.test(t));
+  const t1 = filterHonorifics(n1.split(/\s+/));
+  const t2 = filterHonorifics(n2.split(/\s+/));
+
+  if (t1.length > 0 && t2.length > 0) {
+    if (t1.every(t => n2.includes(t)) || t2.every(t => n1.includes(t))) {
+      return true;
+    }
+    if (t1.every(t => raw2.includes(t)) || t2.every(t => raw1.includes(t))) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
  * Normalize shorthand amount multipliers like "3 k", "3k", "4.5 k", "৩ হাজার", "4 hajar" into full digits ("3000", "4500")
  */
 export const normalizeDebtAmounts = (text: string): string => {
@@ -783,42 +813,27 @@ export const settleDebtByPerson = async (
   }
 
   let cleanName = cleanPersonName(resolvedPersonName);
-  const rawStripped = resolvedPersonName
-    .trim()
-    .replace(/^(?:mr|md|মুহা|জনাব)\s+/i, '')
-    .replace(/\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:কাছে|kache|kase)\s*(?:আমি|ami)?\s*$/i, '')
-    .replace(/\s+(?:আমি|ami)$/i, '')
-    .replace(/\s+(?:-?কে|-?k|-?ke|-?er|এর|-?theke|থেকে|-?ar)$/i, '')
-    .trim();
 
-  // Find active pending/partial debts for this person (match both Bangla and Banglish spellings)
-  const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const escapedRaw = rawStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const exactRegex = escapedRaw && escapedRaw !== escapedName
-    ? new RegExp(`^(?:${escapedName}|${escapedRaw})$`, 'i')
-    : new RegExp(`^${escapedName}$`, 'i');
-
-  let activeDebts = await Debt.find({
+  // Retrieve all active debts for this user and match via robust cross-language isPersonMatch
+  const allUserDebts = await Debt.find({
     userId,
-    personName: { $regex: exactRegex },
-    type: targetType,
     status: { $in: ['pending', 'partial'] }
   }).sort({ createdAt: 1 });
 
-  // Fallback prefix/substring match (e.g. "Manik" -> "Manik vai" / "মানিক ভাই")
-  if (activeDebts.length === 0 && cleanName.length >= 2) {
-    const partialRegex = escapedRaw && escapedRaw !== escapedName
-      ? new RegExp(`(?:${escapedName}|${escapedRaw})`, 'i')
-      : new RegExp(escapedName, 'i');
-    activeDebts = await Debt.find({
-      userId,
-      personName: { $regex: partialRegex },
-      type: targetType,
-      status: { $in: ['pending', 'partial'] }
-    }).sort({ createdAt: 1 });
-    if (activeDebts.length > 0) {
-      cleanName = cleanPersonName(activeDebts[0].personName);
-    }
+  // Filter matching person name
+  let matchedPersonDebts = allUserDebts.filter(
+    d => isPersonMatch(d.personName, cleanName) || isPersonMatch(d.personName, resolvedPersonName)
+  );
+
+  // Prefer targetType (lent for received, borrowed for paid)
+  let activeDebts = matchedPersonDebts.filter(d => d.type === targetType);
+  if (activeDebts.length === 0 && matchedPersonDebts.length > 0) {
+    // If not found in targetType, check other type
+    activeDebts = matchedPersonDebts;
+  }
+
+  if (activeDebts.length > 0) {
+    cleanName = cleanPersonName(activeDebts[0].personName) || cleanName;
   }
 
   // Special case: User explicitly stated both initial owed amount and settled amount (e.g. "pias ar kache 4 k taka petam o 3 k back diche")
@@ -935,15 +950,14 @@ export const settleDebtByPerson = async (
   }
 
   // Calculate new remaining total balance for this person
-  const finalEscaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const remainingAll = await Debt.find({
     userId,
-    personName: { $regex: new RegExp(`^${finalEscaped}$`, 'i') },
-    type: targetType,
     status: { $in: ['pending', 'partial'] }
   });
 
-  const remainingForPerson = remainingAll.reduce((sum, d) => sum + (d.amount - d.paidAmount), 0);
+  const remainingForPerson = remainingAll
+    .filter(d => isPersonMatch(d.personName, cleanName))
+    .reduce((sum, d) => sum + (d.amount - d.paidAmount), 0);
 
   return {
     settledTotal,
@@ -961,25 +975,26 @@ export const deleteDebts = async (
   scope: 'all' | 'person' | 'lent' | 'borrowed',
   personName?: string
 ): Promise<{ deletedCount: number; scope: 'all' | 'person' | 'lent' | 'borrowed'; personName?: string }> => {
-  let filter: any = { userId };
   if (scope === 'person' && personName) {
     const cleanName = cleanPersonName(personName);
-    const rawStripped = personName.trim();
-    const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const escapedRaw = rawStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.personName = {
-      $regex: escapedRaw && escapedRaw !== escaped
-        ? new RegExp(`^(?:${escaped}|${escapedRaw})$`, 'i')
-        : new RegExp(`^${escaped}$`, 'i')
-    };
+    const allDebts = await Debt.find({ userId });
+    const toDelete = allDebts.filter(d => isPersonMatch(d.personName, cleanName) || isPersonMatch(d.personName, personName));
+    if (toDelete.length > 0) {
+      const ids = toDelete.map(d => d._id);
+      const res = await Debt.deleteMany({ _id: { $in: ids } });
+      return { deletedCount: res.deletedCount || 0, scope, personName: cleanName };
+    }
+    return { deletedCount: 0, scope, personName: cleanName };
   } else if (scope === 'lent') {
-    filter.type = 'lent';
+    const result = await Debt.deleteMany({ userId, type: 'lent' });
+    return { deletedCount: result.deletedCount || 0, scope };
   } else if (scope === 'borrowed') {
-    filter.type = 'borrowed';
+    const result = await Debt.deleteMany({ userId, type: 'borrowed' });
+    return { deletedCount: result.deletedCount || 0, scope };
   }
 
-  const result = await Debt.deleteMany(filter);
-  return { deletedCount: result.deletedCount || 0, scope, personName: personName ? cleanPersonName(personName) : undefined };
+  const result = await Debt.deleteMany({ userId });
+  return { deletedCount: result.deletedCount || 0, scope };
 };
 
 /**
@@ -1056,17 +1071,8 @@ export const getPersonDebtSummary = async (
   personName: string
 ): Promise<DebtPersonSummary | null> => {
   const cleanName = cleanPersonName(personName);
-  const rawStripped = personName.trim();
-  const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const escapedRaw = rawStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const matchRegex = escapedRaw && escapedRaw !== escapedName
-    ? new RegExp(`^(?:${escapedName}|${escapedRaw})$`, 'i')
-    : new RegExp(`^${escapedName}$`, 'i');
-
-  const debts = await Debt.find({
-    userId,
-    personName: { $regex: matchRegex }
-  }).sort({ createdAt: -1 });
+  const allDebts = await Debt.find({ userId }).sort({ createdAt: -1 });
+  const debts = allDebts.filter(d => isPersonMatch(d.personName, cleanName) || isPersonMatch(d.personName, personName));
 
   if (debts.length === 0) return null;
 
