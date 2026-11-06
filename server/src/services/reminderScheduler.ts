@@ -161,7 +161,13 @@ export const startReminderScheduler = () => {
               promoSection = `\n\n✨ আপনার স্মৃতি লাইফ (Smriti Life) অ্যাকাউন্টটি সক্রিয় রাখতে সাবস্ক্রাইব করুন:\nhttps://smritilife.com/paywall`;
             }
 
-            const thirdPartyAlert = `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
+            const isWish = /(?:শুভেচ্ছা|wish|birthday|জন্মদিন|anniversary|বিবাহবার্ষিকী|ঈদ|eid)/i.test(
+              `${reminder.title || ''} ${messageBody} ${reminder.category || ''}`
+            );
+
+            const thirdPartyAlert = isWish
+              ? `🎉 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি শুভেচ্ছা বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে প্রেরিত)${promoSection}`
+              : `🔔 আসসালামু আলাইকুম!\n\n${senderName} (${senderNumber || ''}) আপনাকে একটি বার্তা পাঠিয়েছেন:\n\n💬 "${messageBody}"\n\n(বার্তাটি স্মৃতি লাইফ প্ল্যাটফর্মের মাধ্যমে স্বয়ংক্রিয়ভাবে প্রেরিত)${promoSection}`;
 
             // Try template first to bypass Meta 24-hour customer window for third-party numbers
             const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE_NAME || 'smriti_schedule_reminder';
@@ -170,6 +176,7 @@ export const startReminderScheduler = () => {
             const dStr = reminder.date ? new Date(reminder.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', timeZone: 'Asia/Dhaka' }) : 'আজ';
             const formattedTimeDate = `${displayTime} (${dStr})`;
             const senderDisplay = senderNumber ? `${senderName} (${senderNumber})` : senderName;
+            const topicDisplay = isWish ? 'জন্মদিনের শুভেচ্ছা' : (reminder.title || 'বার্তা');
 
             let deliveredViaTemplate = false;
             if (process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) {
@@ -177,7 +184,7 @@ export const startReminderScheduler = () => {
               deliveredViaTemplate = await sendMetaWhatsAppTemplate(
                 reminder.recipientPhone,
                 templateName,
-                [senderDisplay, reminder.title || 'রিমাইন্ডার', formattedTimeDate, messageBody],
+                [senderDisplay, topicDisplay, formattedTimeDate, messageBody],
                 templateLang
               );
             }

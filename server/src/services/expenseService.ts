@@ -631,14 +631,26 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
     return null;
   }
 
+  // Exclude complaints, feedback, or inquiries about reminders, wishes, messages, or bots
+  const isNonExpenseTopic = /(?:wish|শুভেচ্ছা|birthday|জন্মদিন|reminder|রিমাইন্ডার|message|বার্তা|gadha|গাধা|keno\s*reminder|reminder\s*(?:hisabe|hisebe)|কেন\s*রিমাইন্ডার|রিমাইন্ডার\s*(?:হিসেবে|হিসাবে)|pathano\s*holo|পাঠানো\s*হলো|wish\s*kore|wish\s*patha)/i.test(clean);
+  if (isNonExpenseTopic) {
+    return null;
+  }
+
   // Extract any specific, past or relative date from the text
   const dateInfo = parseExpenseDate(clean, referenceDate);
   const textWithoutDate = dateInfo?.cleanedText !== undefined ? dateInfo.cleanedText : clean;
 
   // Check if text is an expense query
-  const hasExpenseWord = /(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khorosh|khoroj|khoroa|khorca|khorcha|koroch|koroc|koros|korosh|khroch|cost|costs|spending|spent|expense|expenses|হিসাব|hisab)/i.test(clean);
-  const hasQueryWord = /(?:কত|koto|koro|মোট|mot|total|হয়েছে|হলো|holo|hoyeche|hoise|ছিল|chilo|দেখা|দেখাও|dekha|dekhao|দেখতে|dekte|dekhte|চাই|cai|chai|লিস্ট|list|দাও|দেও|daw|dao|dew|বলো|bolo|summary|কী\s*কী|কি\s*কি|ki\s*ki)/i.test(clean);
-  const isDirectExpensePhrase = /^(?:আজকের|আজকে|আজ|aj|ajke|ajker|গতকাল|গতকালের|কালকের|gotokal|gotokalker|gotokaler|এই\s*মাসের|মাসের|চলতি\s*মাসের|ay\s*mas(?:\s*ar|\s*er)?|ei\s*mas(?:\s*ar|\s*er)?|ai\s*mas(?:\s*ar|\s*er)?|maser|masher|last\s*month|this\s*month)?\s*(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)(?:\s*(?:দাও|দেও|দেখাও|কত|daw|dao|dekhao|koto|list|লিস্ট))?\s*\??$/i.test(clean);
+  const hasExpenseWord = (
+    /(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khorosh|khoroj|khoroa|khorca|khorcha|koroch|koroc|koros|korosh|khroch|cost|costs|spending|spent|expense|expenses|হিসাবের?|\b(?:hisab|hishab)\b)/i.test(clean) &&
+    !/\b(?:hisabe|hisebe)\b/i.test(clean) &&
+    !/(?:হিসাবে|হিসেবে)/.test(clean)
+  );
+  const hasQueryWord = /(?:কত|koto|মোট|mot|total|কতো|হয়েছে|কত\s*হলো|koto\s*holo|hoyeche|hoise|ছিল|chilo|দেখা|দেখাও|dekha|dekhao|দেখতে|dekte|dekhte|চাই|cai|chai|লিস্ট|list|দাও|দেও|daw|dao|dew|বলো|bolo|summary|কী\s*কী|কি\s*কি|ki\s*ki)/i.test(clean);
+  const isDirectExpensePhrase = /^(?:আজকের|আজকে|আজ|aj|ajke|ajker|গতকাল|গতকালের|কালকের|gotokal|gotokalker|gotokaler|এই\s*মাসের|মাসের|চলতি\s*মাসের|ay\s*mas(?:\s*ar|\s*er)?|ei\s*mas(?:\s*ar|\s*er)?|ai\s*mas(?:\s*ar|\s*er)?|maser|masher|last\s*month|this\s*month)?\s*(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|\b(?:hisab|hishab)\b|expense|expenses)(?:\s*(?:দাও|দেও|দেখাও|কত|daw|dao|dekhao|koto|list|লিস্ট))?\s*\??$/i.test(clean)
+    && !/\b(?:hisabe|hisebe)\b/i.test(clean)
+    && !/(?:হিসাবে|হিসেবে)/.test(clean);
 
   const isQuery = (hasExpenseWord && (hasQueryWord || clean.endsWith('?'))) || isDirectExpensePhrase;
 

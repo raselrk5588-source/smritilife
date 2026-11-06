@@ -2557,7 +2557,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         const hasExplicitDocWord =
           /(?:ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|প্রেস্ক্রিপশন|রিপোর্ট|রিসিপ্ট|ভল্ট|এনআইডি|সার্টিফিকেট|পাসপোর্ট|টিকিট|টোকেন|চাবি|লোগো|pic|image|photo|chobi|file|doc|document|prescription|report|receipt|vault|nid|certificate|passport|ticket|token|key|logo)\b/i.test(cleanText);
         const isNonDocTopic =
-          /(?:টাকা|taka|tk|পাবো|পাব|pabo|দেবো|দিবো|debo|dibo|পাওনা|paona|pauna|pawna|দেনা|dena|ধার|dhar|বাকি|baki|উধার|udhar|খরচ|khoroch|হিসাব|hisab|মোট|mot|total|ওষুধ|ঔষধ|osud|osudh|medicine|রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নামাজ|namaj|সেহরি|sehri|ইফতার|iftar|পিরিয়ড|পিরিয়ড|মাসিক|period|priod|masik|mashik|menstrual)/i.test(cleanText);
+          /(?:টাকা|taka|tk|পাবো|পাব|pabo|দেবো|দিবো|debo|dibo|পাওনা|paona|pauna|pawna|দেনা|dena|ধার|dhar|বাকি|baki|উধার|udhar|খরচ|khoroch|হিসাব|\\bhisab\\b|মোট|mot|total|ওষুধ|ঔষধ|osud|osudh|medicine|রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নামাজ|namaj|সেহরি|sehri|ইফতার|iftar|পিরিয়ড|পিরিয়ড|মাসিক|period|priod|masik|mashik|menstrual)/i.test(cleanText);
 
         if (userDocsCount > 0 && !isDeleteIntent && !isDocUpdateIntent && (!isNonDocTopic || hasExplicitDocWord) && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
           const docResult = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
@@ -4177,7 +4177,9 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           const hasExplicitNote = /(?:নোট|note|ঠিকানা|address|ডকুমেন্ট|document|ভল্ট|vault)/i.test(cleanText);
           const hasExplicitContact = /(?:কন্ট্যাক্ট|contact|(?:ফোন|মোবাইল|phone|mobile)\s*(?:নম্বর|নাম্বার|number))/i.test(cleanText);
           const hasExplicitTodo = /(?:টু-ডু|todo|চেকলিস্ট|checklist)/i.test(cleanText);
-          const hasExplicitExpense = /(?:খরচ|খরচের|খরচা|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses|ব্যয়|ব্যায়|খাতা|হিসাব|hisab)/i.test(cleanText);
+          const hasExplicitExpense = /(?:খরচ|খরচের|খরচা|khoroch|khoroc|khoros|khoroa|cost|costs|expense|expenses|ব্যয়|ব্যায়|খাতা|হিসাবের?|\b(?:hisab|hishab)\b)/i.test(cleanText)
+            && !/\b(?:hisabe|hisebe)\b/i.test(cleanText)
+            && !/(?:হিসাবে|হিসেবে)/.test(cleanText);
 
           const expContext = userExpenseContext.get(user._id.toString());
           const isExpContextActive = !!(expContext && expContext.expiresAt > Date.now() && expContext.expenses.length > 0);
@@ -5032,15 +5034,18 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   }
 
                   // Record in Reminder collection
+                  const isWish = /(?:wish|শুভেচ্ছা|birthday|জন্মদিন|anniversary|বিবাহবার্ষিকী|ঈদ|eid)/i.test(combinedText);
+                  const scheduledTitle = isWish ? `জন্মদিনের শুভেচ্ছা বার্তা (${target.name})` : `মেসেজ পাঠানো (${target.name})`;
+
                   await Reminder.create({
                     userId: user._id,
-                    title: `মেসেজ পাঠানো (${target.name})`,
+                    title: scheduledTitle,
                     description: customMsg,
                     recipientPhone: target.phone,
                     date: reminderDate,
                     time: reminderTime,
                     priority: 'Medium',
-                    category: isAllowedForUnregistered ? 'meeting' : 'message',
+                    category: isWish ? 'wish' : (isAllowedForUnregistered ? 'meeting' : 'message'),
                     repeat: 'Once',
                     status: sendNow ? 'Completed' : 'Pending'
                   });
