@@ -379,8 +379,8 @@ export const startReminderScheduler = () => {
               nextDate.setFullYear(nextDate.getFullYear() + 1);
             }
 
-            // Check if medicine course has finished
-            let isMedicineCourseEnded = false;
+            // Check if reminder duration / course has finished
+            let isCourseEnded = false;
             if (reminder.category === 'medicine') {
               if (reminder.medicines && reminder.medicines.length > 0) {
                 const hasAnyActiveMed = reminder.medicines.some(m => {
@@ -389,17 +389,23 @@ export const startReminderScheduler = () => {
                   end.setHours(23, 59, 59, 999);
                   return nextDate <= end;
                 });
-                isMedicineCourseEnded = !hasAnyActiveMed;
+                isCourseEnded = !hasAnyActiveMed;
               } else if (reminder.endDate) {
-                isMedicineCourseEnded = nextDate > new Date(reminder.endDate);
+                const end = new Date(reminder.endDate);
+                end.setHours(23, 59, 59, 999);
+                isCourseEnded = nextDate > end;
               }
+            } else if (reminder.endDate) {
+              const end = new Date(reminder.endDate);
+              end.setHours(23, 59, 59, 999);
+              isCourseEnded = nextDate > end;
             }
 
-            if (isMedicineCourseEnded) {
+            if (isCourseEnded) {
               await Reminder.findByIdAndUpdate(reminder._id, {
                 status: 'Completed'
               });
-              console.log(`💊✅ [ReminderScheduler] Medicine course completed for "${reminder.title}"`);
+              console.log(`✅ [ReminderScheduler] Reminder course/duration completed for "${reminder.title}"`);
             } else {
               await Reminder.findByIdAndUpdate(reminder._id, {
                 date: nextDate,

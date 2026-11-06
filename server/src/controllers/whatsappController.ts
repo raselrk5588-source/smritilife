@@ -3719,8 +3719,34 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
         if (!hasCancelIntent && hasReminderIntent && (mentionsSehri || mentionsIftar || mentionsPrayer)) {
           const userDist = user.district || 'Dhaka';
-          const isDaily = /(?:প্রতিদিন|প্রতি\s*দিন|daily|roj|protidin|shob\s*din|সব\s*দিন)/i.test(cleanText);
-          const isTomorrow = /(?:কাল|কালকে|আগামীকাল|tomorrow|agamikal)/i.test(cleanText);
+
+          // Duration detection: e.g. "aj", "আজকে", "1 din", "7 din", "১০ দিন", "3 days", "১ সপ্তাহ", "10 din", "১০ দিনের জন্য"
+          let durationDays: number | null = null;
+          const isTodayOnly = /(?:^|[\s,!?\-।])(?:আজ(?:কে|কের)?(?:\s*জন্য)?|aj(?:ke|ker)?(?:\s*jonno)?|1\s*দিন|১\s*দিন|1\s*din|1\s*day|only\s*today)(?:$|[\s,!?\-।])/i.test(cleanText);
+          const isTomorrow = /(?:^|[\s,!?\-।])(?:কাল(?:কে|কের)?(?:\s*জন্য)?|আগামীকাল|tomorrow|agamikal|kal(?:ke|ker)?(?:\s*jonno)?)(?:$|[\s,!?\-।])/i.test(cleanText);
+
+          const multiDayMatch = cleanText.match(
+            /(?:(\d+|[০-৯]+)\s*(?:দিন(?:ের)?|din(?:er)?|days?))|(?:(\d+|[০-৯]+)\s*(?:সপ্তাহ(?:ের)?|weeks?))|(?:(\d+|[০-৯]+)\s*(?:মাস(?:ের)?|months?|mash))/i
+          );
+
+          if (multiDayMatch) {
+            if (multiDayMatch[1]) {
+              durationDays = parseInt(bnToEnDigits(multiDayMatch[1]), 10);
+            } else if (multiDayMatch[2]) {
+              durationDays = parseInt(bnToEnDigits(multiDayMatch[2]), 10) * 7;
+            } else if (multiDayMatch[3]) {
+              durationDays = parseInt(bnToEnDigits(multiDayMatch[3]), 10) * 30;
+            }
+          } else if (/(?:১\s*সপ্তাহ|এক\s*সপ্তাহ|1\s*week)/i.test(cleanText)) {
+            durationDays = 7;
+          } else if (/(?:১\s*মাস|এক\s*মাস|1\s*month)/i.test(cleanText)) {
+            durationDays = 30;
+          } else if (isTodayOnly || isTomorrow) {
+            durationDays = 1;
+          }
+
+          const isExplicitDaily = /(?:প্রতিদিন|প্রতি\s*দিন|daily|roj|protidin|shob\s*din|সব\s*দিন|সবসময়|সবসময়|always)/i.test(cleanText);
+          const isRecurring = (durationDays !== null && durationDays > 1) || isExplicitDaily || (!durationDays && !isTodayOnly && !isTomorrow);
 
           // Bangladesh current time
           const nowDhaka = new Date();
@@ -3739,6 +3765,13 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
           const times = getRamadanTimes(userDist, targetDateObj);
 
+          let endDateObj: Date | undefined = undefined;
+          if (durationDays && durationDays > 1) {
+            endDateObj = new Date(targetDateObj);
+            endDateObj.setDate(endDateObj.getDate() + (durationDays - 1));
+            endDateObj.setHours(23, 59, 59, 999);
+          }
+
           // Helper: subtract minutes from "HH:mm"
           const subMinutes = (timeStr: string, mins: number): string => {
             const [h, m] = timeStr.split(':').map(Number);
@@ -3754,11 +3787,16 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             const sehriMinsBefore = user.ramadanAlerts?.sehriMinutesBefore || 40;
             const sehriAlarmTime = subMinutes(times.sehriEnd, sehriMinsBefore);
 
-            // If time already passed today and not explicitly tomorrow, advance to tomorrow
             const sehriDate = new Date(targetDateObj);
             if (!isTomorrow && sehriAlarmTime <= dhakaTimeStr) {
               sehriDate.setDate(sehriDate.getDate() + 1);
             }
+
+            await Reminder.deleteMany({
+              userId: user._id,
+              category: 'wakeup',
+              title: { $regex: /সেহরি|সাহরি|sehri/i }
+            });
 
             await Reminder.create({
               userId: user._id,
@@ -3768,7 +3806,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               time: sehriAlarmTime,
               priority: 'Urgent',
               category: 'wakeup',
-              repeat: isDaily ? 'Daily' : 'Once',
+              repeat: isRecurring ? 'Daily' : 'Once',
+              startDate: targetDateObj,
+              endDate: (durationDays && durationDays > 1) ? endDateObj : undefined,
+              durationDays: durationDays || undefined,
               status: 'Pending',
               isAlarm: true
             });
@@ -3783,6 +3824,12 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               iftarDate.setDate(iftarDate.getDate() + 1);
             }
 
+            await Reminder.deleteMany({
+              userId: user._id,
+              category: 'event',
+              title: { $regex: /ইফতার|iftar/i }
+            });
+
             await Reminder.create({
               userId: user._id,
               title: `ইফতারের রিমাইন্ডার (${times.districtBn} জেলা)`,
@@ -3791,7 +3838,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               time: times.iftar,
               priority: 'High',
               category: 'event',
-              repeat: isDaily ? 'Daily' : 'Once',
+              repeat: isRecurring ? 'Daily' : 'Once',
+              startDate: targetDateObj,
+              endDate: (durationDays && durationDays > 1) ? endDateObj : undefined,
+              durationDays: durationDays || undefined,
               status: 'Pending',
               isAlarm: false
             });
@@ -3799,31 +3849,37 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             createdSummary.push(`🍽️ *ইফতারের রিমাইন্ডার:* ${times.iftarFormatted}`);
           }
 
-          // C. Prayer Reminders (5 Waqt / Specific)
+          // C. Prayer Reminders (5 Waqt / Specific Prayer)
           if (mentionsPrayer) {
-            const isAllPrayers = /(?:সব\s*ওয়াক্ত|সকল\s*ওয়াক্ত|৫\s*ওয়াক্ত|পাঁচ\s*ওয়াক্ত|সবগুলো\s*ওয়াক্ত|সব\s*নামাজ|আজকের\s*নামাজ|নামাজের\s*রিমাইন্ডার|namaj\s*reminder|namaz\s*reminder)/i.test(cleanText) ||
-                                 (!/(?:ফজর|জোহর|যোহর|আসর|মাগরিব|এশা)/i.test(cleanText) && /(?:নামাজ|namaj|namaz|ওয়াক্ত)/i.test(cleanText));
+            const isAllPrayersExplicit = /(?:সব\s*ওয়াক্ত|সকল\s*ওয়াক্ত|৫\s*ওয়াক্ত|পাঁচ\s*ওয়াক্ত|সবগুলো\s*ওয়াক্ত|সব\s*নামাজ|shob\s*namaj|sob\s*namaj|all\s*namaz|all\s*prayer|all\s*namaj|shob\s*namaz|সব\s*নামাজের|5\s*oakt|5\s*waqt)/i.test(cleanText);
 
             const candidatePrayers = [
-              { key: 'fajr', nameBn: 'ফজর', time: times.prayers.fajr, formatted: times.prayers.fajrFormatted, pattern: /(?:ফজর|fajr|fazr|fojor)/i },
-              { key: 'dhuhr', nameBn: 'জোহর', time: times.prayers.dhuhr, formatted: times.prayers.dhuhrFormatted, pattern: /(?:জোহর|যোহর|dhuhr|zuhr|zohar|johor)/i },
-              { key: 'asr', nameBn: 'আসর', time: times.prayers.asr, formatted: times.prayers.asrFormatted, pattern: /(?:আসর|asr|asor)/i },
-              { key: 'maghrib', nameBn: 'মাগরিব', time: times.prayers.maghrib, formatted: times.prayers.maghribFormatted, pattern: /(?:মাগরিব|maghrib|magrib)/i },
-              { key: 'isha', nameBn: 'এশা', time: times.prayers.isha, formatted: times.prayers.ishaFormatted, pattern: /(?:এশা|এশার|isha|eshar|isha'a)/i },
+              { key: 'fajr', nameBn: 'ফজর', time: times.prayers.fajr, formatted: times.prayers.fajrFormatted, pattern: /(?:ফজর|fajr|fazr|fojor)(?:-?এর|-?er|-?ar|র|ের)?(?:\b|[\s,!?\-।]|$)/i },
+              { key: 'dhuhr', nameBn: 'জোহর', time: times.prayers.dhuhr, formatted: times.prayers.dhuhrFormatted, pattern: /(?:জোহর|যোহর|dhuhr|zuhr|zohar|johor|জুমা|জুম্মা|juma|jummah)(?:-?এর|-?er|-?ar|র|ের)?(?:\b|[\s,!?\-।]|$)/i },
+              { key: 'asr', nameBn: 'আসর', time: times.prayers.asr, formatted: times.prayers.asrFormatted, pattern: /(?:আসর|asr|asor)(?:-?এর|-?er|-?ar|র|ের)?(?:\b|[\s,!?\-।]|$)/i },
+              { key: 'maghrib', nameBn: 'মাগরিব', time: times.prayers.maghrib, formatted: times.prayers.maghribFormatted, pattern: /(?:মাগরিব|maghrib|magrib)(?:-?এর|-?er|-?ar|র|ের)?(?:\b|[\s,!?\-।]|$)/i },
+              { key: 'isha', nameBn: 'এশা', time: times.prayers.isha, formatted: times.prayers.ishaFormatted, pattern: /(?:এশা|ইশা|isha|esha)(?:-?এর|-?er|-?ar|র|ের)?(?:\b|[\s,!?\-।]|$)/i },
             ];
 
-            const selectedPrayers = isAllPrayers
-              ? candidatePrayers
-              : candidatePrayers.filter(p => p.pattern.test(cleanText));
+            const matchedSpecificPrayers = candidatePrayers.filter(p => p.pattern.test(cleanText));
+
+            const selectedPrayers = (!isAllPrayersExplicit && matchedSpecificPrayers.length > 0)
+              ? matchedSpecificPrayers
+              : candidatePrayers;
+
+            // Clear existing active prayer reminders for the selected waqts so they don't duplicate
+            for (const p of selectedPrayers) {
+              await Reminder.deleteMany({
+                userId: user._id,
+                category: 'prayer',
+                title: { $regex: new RegExp(`${p.nameBn}\\s*নামাজ`, 'i') }
+              });
+            }
 
             for (const p of selectedPrayers) {
               const pDate = new Date(targetDateObj);
               const isPassed = !isTomorrow && p.time <= dhakaTimeStr;
-              if (isDaily) {
-                if (isPassed) {
-                  pDate.setDate(pDate.getDate() + 1);
-                }
-              } else if (isPassed) {
+              if (isPassed) {
                 pDate.setDate(pDate.getDate() + 1);
               }
 
@@ -3835,21 +3891,55 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 time: p.time,
                 priority: 'High',
                 category: 'prayer',
-                repeat: isDaily ? 'Daily' : 'Once',
+                repeat: isRecurring ? 'Daily' : 'Once',
+                startDate: targetDateObj,
+                endDate: (durationDays && durationDays > 1) ? endDateObj : undefined,
+                durationDays: durationDays || undefined,
                 status: 'Pending',
                 isAlarm: false
               });
 
-              createdSummary.push(`🕌 *${p.nameBn} নামাজ:* ${p.formatted}`);
+              const passedNote = (isPassed && isTodayOnly) ? ' (আজকের ওয়াক্ত পার হয়ে গেছে, কাল থেকে চালু)' : '';
+              createdSummary.push(`🕌 *${p.nameBn} নামাজ:* ${p.formatted}${passedNote}`);
             }
           }
 
           if (createdSummary.length > 0) {
-            const repeatLabel = isDaily ? 'প্রতিদিনের ' : (isTomorrow ? 'আগামীকালের ' : 'আজকের ');
-            const confirmMsg = `🤲 আলহামদুলিল্লাহ! আপনার ${repeatLabel}রিমাইন্ডার সফলভাবে সেট করা হয়েছে:\n📍 জেলা: *${times.districtBn}*\n\n` +
+            let durationSummary = '';
+            if (durationDays === 1) {
+              durationSummary = isTomorrow ? 'আগামীকালের জন্য' : 'আজকের জন্য';
+            } else if (durationDays && durationDays > 1 && endDateObj) {
+              const endFormatted = endDateObj.toLocaleDateString('bn-BD', {
+                day: 'numeric',
+                month: 'long',
+                timeZone: 'Asia/Dhaka'
+              });
+              durationSummary = `পরবর্তী ${convertEnglishDigitsToBengali(durationDays)} দিনের জন্য (মেয়াদ শেষ: ${endFormatted})`;
+            } else {
+              durationSummary = 'প্রতিদিন চলমান (যতদিন না বন্ধ করবেন)';
+            }
+
+            const isOnlySpecificPrayer = mentionsPrayer && !mentionsSehri && !mentionsIftar;
+            let prayerWaqtName = '';
+            if (isOnlySpecificPrayer) {
+              const candidatePrayers = [
+                { nameBn: 'ফজর', pattern: /(?:ফজর|fajr|fazr|fojor)/i },
+                { nameBn: 'জোহর', pattern: /(?:জোহর|যোহর|dhuhr|zuhr|zohar|johor|জুমা|জুম্মা|juma|jummah)/i },
+                { nameBn: 'আসর', pattern: /(?:আসর|asr|asor)/i },
+                { nameBn: 'মাগরিব', pattern: /(?:মাগরিব|maghrib|magrib)/i },
+                { nameBn: 'এশা', pattern: /(?:এশা|এশার|isha|eshar)/i },
+              ];
+              const matched = candidatePrayers.filter(p => p.pattern.test(cleanText));
+              const isAll = /(?:সব|সকল|৫|পাঁচ|shob|sob|all)/i.test(cleanText) || matched.length === 0;
+              prayerWaqtName = isAll ? '৫ ওয়াক্ত নামাজের ' : `${matched.map(m => m.nameBn).join(' ও ')} নামাজের `;
+            }
+
+            const confirmMsg = `🤲 আলহামদুলিল্লাহ! আপনার ${prayerWaqtName}রিমাইন্ডার সফলভাবে সেট করা হয়েছে:\n` +
+              `📍 জেলা: *${times.districtBn}*\n` +
+              `⏱️ সময়সীমা: *${durationSummary}*\n\n` +
               createdSummary.map(s => `• ${s}`).join('\n') +
-              `\n\n${isDaily ? 'প্রতিদিন' : 'নির্ধারিত'} ওয়াক্ত ও সময়ে আপনাকে WhatsApp-এ স্বয়ংক্রিয়ভাবে স্মরণ করিয়ে দেওয়া হবে।` +
-              `\n\n💡 রিমাইন্ডার বন্ধ করতে চাইলে যেকোনো সময় লিখুন: "নামাজের রিমাইন্ডার বন্ধ করো" বা "সেহরি রিমাইন্ডার বাতিল করো"`;
+              `\n\nনির্ধারিত ওয়াক্ত ও সময়ে আপনাকে WhatsApp-এ স্বয়ংক্রিয়ভাবে স্মরণ করিয়ে দেওয়া হবে।` +
+              `\n\n💡 রিমাইন্ডার বন্ধ করতে চাইলে লিখুন: "${prayerWaqtName ? prayerWaqtName : 'নামাজের '}রিমাইন্ডার বন্ধ করো"`;
 
             await sendMetaWhatsAppMessage(fromNumber, confirmMsg);
             return;
