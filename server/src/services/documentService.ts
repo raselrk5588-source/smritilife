@@ -654,6 +654,167 @@ function getTermVariants(term: string): string[] {
   return Array.from(variants);
 }
 
+export interface SpecificDocType {
+  id: string;
+  nameBn: string;
+  nameEn: string;
+  pattern: RegExp;
+  docMatches: (doc: any) => boolean;
+}
+
+export const SPECIFIC_DOC_TYPES: SpecificDocType[] = [
+  {
+    id: 'nid',
+    nameBn: 'এনআইডি (NID) কার্ড',
+    nameEn: 'NID Card',
+    pattern: /(?:এনআইডি|জাতীয়\s*পরিচয়পত্র|জাতীয়\s*পরিচয়পত্র|ভোটার\s*আইডি|ভোটার\s*কার্ড|স্মার্ট\s*কার্ড|স্মার্টকার্ড|\bnid\b|\bvoter\s*id\b|\bsmart\s*card\b|\bnational\s*id\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || []).filter((t: string) => t !== 'card' && t !== 'NID/Card')].join(' ');
+      return /(?:এনআইডি|জাতীয়\s*পরিচয়পত্র|জাতীয়\s*পরিচয়পত্র|ভোটার\s*আইডি|ভোটার\s*কার্ড|স্মার্ট\s*কার্ড|স্মার্টকার্ড|\bnid\b|\bvoter\s*id\b|\bsmart\s*card\b|\bnational\s*id\b)/i.test(text);
+    }
+  },
+  {
+    id: 'passport',
+    nameBn: 'পাসপোর্ট',
+    nameEn: 'Passport',
+    pattern: /(?:পাসপোর্ট|\bpassports?\b|\bpassposts?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:পাসপোর্ট|\bpassports?\b|\bpassposts?\b)/i.test(text);
+    }
+  },
+  {
+    id: 'trade_license',
+    nameBn: 'ট্রেড লাইসেন্স',
+    nameEn: 'Trade License',
+    pattern: /(?:ট্রেড\s*লাইসেন্স|\btrade\s*licen[sc]es?\b|\btread\s*licen[sc]es?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:ট্রেড|\btrade\b)/i.test(text) && /(?:লাইসেন্স|\blicen[sc]es?\b)/i.test(text);
+    }
+  },
+  {
+    id: 'bike_license',
+    nameBn: 'বাইক লাইসেন্স / গাড়ির কাগজ',
+    nameEn: 'Bike / Vehicle License',
+    pattern: /(?:বাইক\s*লাইসেন্স|মোটরসাইকেল\s*লাইসেন্স|\bbike\s*licen[sc]es?\b|\bvehicle\s*licen[sc]es?\b|\bregistration\s*certificate\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:বাইক|মোটরসাইকেল|\bbike\b|\bmotorcycle\b|\bvehicle\b|\bregistration\b)/i.test(text);
+    }
+  },
+  {
+    id: 'driving_license',
+    nameBn: 'ড্রাইভিং লাইসেন্স',
+    nameEn: 'Driving License',
+    pattern: /(?:ড্রাইভিং\s*লাইসেন্স|\bdriving\s*licen[sc]es?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:ড্রাইভিং|\bdriving\b)/i.test(text);
+    }
+  },
+  {
+    id: 'license_general',
+    nameBn: 'লাইসেন্স',
+    nameEn: 'License',
+    pattern: /(?:লাইসেন্স|\blicen[sc]es?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:লাইসেন্স|\blicen[sc]es?\b)/i.test(text);
+    }
+  },
+  {
+    id: 'prescription',
+    nameBn: 'প্রেসক্রিপশন',
+    nameEn: 'Prescription',
+    pattern: /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|ডাক্তারের\s*(?:কাগজ|পরামর্শ|ফাইল)|\bprescriptions?\b|\brx\b|\bprescrips?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, doc.category, ...(doc.tags || [])].join(' ');
+      return /(?:প্রেসক্রিপশন|প্রেস্ক্রিপশন|ডাক্তার|\bprescription\b|\brx\b|\bdoctor\b)/i.test(text);
+    }
+  },
+  {
+    id: 'medical_report',
+    nameBn: 'মেডিকেল টেস্ট রিপোর্ট',
+    nameEn: 'Medical Test Report',
+    pattern: /(?:মেডিকেল\s*রিপোর্ট|টেস্ট\s*রিপোর্ট|ব্লাড\s*টেস্ট|এক্সরে|আল্ট্রা|\bmedical\s*reports?\b|\blab\s*reports?\b|\btest\s*reports?\b|\bx-?rays?\b|\bultrasounds?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, doc.category, ...(doc.tags || [])].join(' ');
+      return /(?:রিপোর্ট|\breports?\b|টেস্ট|\btests?\b|lab|ল্যাব|x-ray|এক্সরে)/i.test(text);
+    }
+  },
+  {
+    id: 'birth_certificate',
+    nameBn: 'জন্ম নিবন্ধন',
+    nameEn: 'Birth Certificate',
+    pattern: /(?:জন্ম\s*নিবন্ধন|জন্ম\s*সনদ|\bbirth\s*cert(?:ificates?)?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:জন্ম|\bbirth\b)/i.test(text);
+    }
+  },
+  {
+    id: 'certificate',
+    nameBn: 'সার্টিফিকেট / সনদ',
+    nameEn: 'Certificate',
+    pattern: /(?:সার্টিফিকেট|সনদ|\bcertificates?\b|\bdiplomas?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, doc.category, ...(doc.tags || [])].join(' ');
+      return /(?:সার্টিফিকেট|সনদ|\bcertificates?\b|\bdiplomas?\b)/i.test(text);
+    }
+  },
+  {
+    id: 'marksheet',
+    nameBn: 'মার্কশিট / ট্রান্সক্রিপ্ট',
+    nameEn: 'Marksheet / Transcript',
+    pattern: /(?:মার্কশিট|ট্রান্সক্রিপ্ট|\bmarksheets?\b|\btranscripts?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, doc.category, ...(doc.tags || [])].join(' ');
+      return /(?:মার্কশিট|ট্রান্সক্রিপ্ট|\bmarksheets?\b|\btranscripts?\b)/i.test(text);
+    }
+  },
+  {
+    id: 'tin_tax',
+    nameBn: 'টিন / ট্যাক্স সার্টিফিকেট',
+    nameEn: 'TIN / Tax Certificate',
+    pattern: /(?:টিন\s*(?:সার্টিফিকেট)?|ট্যাক্স\s*(?:ফাইল|সার্টিফিকেট)?|আয়কর|\btin\s*(?:certificates?)?\b|\btax\s*(?:file|certificates?)?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:টিন|\btin\b|ট্যাক্স|\btax\b|আয়কর)/i.test(text);
+    }
+  },
+  {
+    id: 'utility_bill',
+    nameBn: 'ইউটিলিটি বিল',
+    nameEn: 'Utility Bill',
+    pattern: /(?:বিদ্যুৎ\s*বিল|কারেন্ট\s*বিল|গ্যাস\s*বিল|পানি\s*বিল|ওয়াইফাই\s*বিল|\belectricity\s*bills?\b|\bgas\s*bills?\b|\bwater\s*bills?\b|\bwifi\s*bills?\b|\butility\s*bills?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, doc.category, ...(doc.tags || [])].join(' ');
+      return /(?:বিদ্যুৎ|কারেন্ট|গ্যাস|পানি|ওয়াইফাই|electricity|gas|water|wifi|utility)/i.test(text) && /(?:বিল|\bbills?\b)/i.test(text);
+    }
+  },
+  {
+    id: 'bill_receipt',
+    nameBn: 'বিল / মানি রিসিট / ইনভয়েস',
+    nameEn: 'Bill / Receipt / Invoice',
+    pattern: /(?:রিসিপ্ট|রশিদ|ভাউচার|চালান|ইনভয়েস|মেমো|\breceipts?\b|\binvoices?\b|\bvouchers?\b|\bmemos?\b|\bbills?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, doc.category, ...(doc.tags || [])].join(' ');
+      return /(?:রিসিপ্ট|রশিদ|ভাউচার|চালান|ইনভয়েস|মেমো|\breceipts?\b|\binvoices?\b|\bvouchers?\b|\bmemos?\b|\bbills?\b)/i.test(text);
+    }
+  },
+  {
+    id: 'deed',
+    nameBn: 'দলিল / খতিয়ান / পর্চা',
+    nameEn: 'Deed / Land Record',
+    pattern: /(?:দলিল|খতিয়ান|খতিয়ান|পর্চা|\bdeeds?\b|\bland\s*records?\b)/i,
+    docMatches: (doc: any) => {
+      const text = [doc.title, ...(doc.tags || [])].join(' ');
+      return /(?:দলিল|খতিয়ান|খতিয়ান|পর্চা|\bdeeds?\b|\bland\b)/i.test(text);
+    }
+  }
+];
+
 export interface DocumentMatchResult {
   doc: IUserDocument | null;
   targetYear: number | null;
@@ -662,6 +823,9 @@ export interface DocumentMatchResult {
   otherAvailableYears: number[];
   allMatchingDocs: IUserDocument[];
   yearNotFound?: boolean;
+  docTypeMismatch?: boolean;
+  requestedDocType?: SpecificDocType | null;
+  suggestedAlternativeDoc?: IUserDocument | null;
 }
 
 /**
@@ -713,7 +877,7 @@ export async function findMatchingDocumentWithVersion(
     'দিন', 'তারিখ', 'তারিখে', 'হলো', 'গেছে', 'চলছে', 'চলতেছে', 'কিনেছি', 'কিনেছিলাম',
     'এনেছি', 'এনেছিলাম', 'নিয়েছি', 'নিয়েছিলাম', 'সেভ', 'আপলোড', 'করেছি', 'করেছিলাম',
     'করছি', 'করা', 'হয়েছিল', 'হয়েছে', 'রাখলাম', 'রেখেছি', 'ছবি', 'ফাইল', 'কাগজ', 'ডকুমেন্ট',
-    'dao', 'daw', 'dis', 'diben', 'den', 'pathao', 'pathan', 'pathaba', 'dehao',
+    'dao', 'daw', 'dau', 'dew', 'de', 'dis', 'diben', 'den', 'pathao', 'pathan', 'pathaba', 'dehao',
     'dekhaw', 'dekhan', 'chai', 'cay', 'lagbe', 'khojo', 'khujo', 'khuje', 'kothay',
     'ase', 'ache', 'amar', 'amr', 'bhai', 'ekto', 'ta', 'ti', 'send', 'give', 'show',
     'fetch', 'file', 'doc', 'document', 'pic', 'image', 'photo', 'chobi', 'kobe',
@@ -721,7 +885,7 @@ export async function findMatchingDocumentWithVersion(
     'cholche', 'choltese', 'kinesi', 'kinesilam', 'enechi', 'enesilam', 'niesi',
     'niesilam', 'save', 'upload', 'koresi', 'koresilam', 'korsi', 'kora', 'hoyechilo',
     'hoyeche', 'rekhechi', 'rakhlam', 'when', 'did', 'was', 'how', 'many', 'days', 'long',
-    'এর', 'র', 'ar', 'er', 'saler',
+    'এর', 'র', 'ar', 'er', 'saler', 'e',
     // Financial / Debt / General query words that must never trigger false document matches
     'মোট', 'mot', 'total', 'টাকা', 'টাকার', 'taka', 'takar', 'tk', 'পাবো', 'পাব', 'pabo',
     'দেবো', 'দিবো', 'debo', 'dibo', 'পাওনা', 'paona', 'pauna', 'pawna', 'দেনা', 'dena',
@@ -735,7 +899,19 @@ export async function findMatchingDocumentWithVersion(
     .map((w) => w.replace(/(?:-?এর|-?er|-?ar|র|ের)$/i, ''))
     .filter((w) => w.length >= 2 && !stopWords.has(w));
 
-  if (queryWords.length === 0 && !/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)\b/i.test(clean)) {
+  // Detect any specific document types in the query
+  let requestedDocTypes = SPECIFIC_DOC_TYPES.filter(t => t.pattern.test(queryWithoutYear || clean));
+  if (requestedDocTypes.some(t => t.id === 'trade_license' || t.id === 'bike_license' || t.id === 'driving_license')) {
+    requestedDocTypes = requestedDocTypes.filter(t => t.id !== 'license_general');
+  }
+  if (requestedDocTypes.some(t => t.id === 'utility_bill')) {
+    requestedDocTypes = requestedDocTypes.filter(t => t.id !== 'bill_receipt');
+  }
+  if (requestedDocTypes.some(t => t.id === 'birth_certificate')) {
+    requestedDocTypes = requestedDocTypes.filter(t => t.id !== 'certificate');
+  }
+
+  if (queryWords.length === 0 && requestedDocTypes.length === 0 && !/^(?:last|latest|sesh|shesh|শেষ|শেষের|নতুন|সবশেষ|আগের|recent)\b/i.test(clean)) {
     return {
       doc: null,
       targetYear,
@@ -750,11 +926,15 @@ export async function findMatchingDocumentWithVersion(
 
   // 2. Score and group matching documents for this item
   const matchingDocsWithScores: Array<{ doc: IUserDocument; score: number }> = [];
+  let suggestedAlternativeDoc: IUserDocument | null = null;
+  let highestAltScore = 0;
 
   for (const doc of userDocs) {
     const docTitle = doc.title.toLowerCase().trim();
     const docTokens = docTitle.split(/\s+/).filter((t: string) => t.length >= 2);
     let score = 0;
+
+    const matchesRequestedType = requestedDocTypes.length === 0 || requestedDocTypes.some(t => t.docMatches(doc));
 
     // Direct substring in title
     if (queryWithoutYear && queryWords.length > 0 && (queryWithoutYear.includes(docTitle) || docTitle.includes(queryWithoutYear))) {
@@ -799,8 +979,21 @@ export async function findMatchingDocumentWithVersion(
       }
     }
 
+    if (requestedDocTypes.length > 0 && matchesRequestedType) {
+      score += 50;
+    }
+
     if (score >= 35) {
-      matchingDocsWithScores.push({ doc, score });
+      if (matchesRequestedType) {
+        matchingDocsWithScores.push({ doc, score });
+      } else {
+        // Document matched entity/keyword tokens (e.g. "Roni Sikder") but does not match requested document type (e.g. NID)
+        // Never return this as a false match! Save it as a suggested alternative to ask the user.
+        if (score > highestAltScore) {
+          highestAltScore = score;
+          suggestedAlternativeDoc = doc;
+        }
+      }
     }
   }
 
@@ -838,7 +1031,10 @@ export async function findMatchingDocumentWithVersion(
       matchedByYear: false,
       itemKeyword,
       otherAvailableYears: [],
-      allMatchingDocs: []
+      allMatchingDocs: [],
+      docTypeMismatch: requestedDocTypes.length > 0,
+      requestedDocType: requestedDocTypes[0] || null,
+      suggestedAlternativeDoc
     };
   }
 

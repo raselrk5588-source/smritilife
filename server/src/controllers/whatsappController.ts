@@ -2579,6 +2579,34 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             return;
           }
 
+          // If docResult indicates a specific requested doc type that wasn't found
+          if (!docResult.doc && docResult.docTypeMismatch && docResult.requestedDocType) {
+            const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
+            let entityName = docResult.itemKeyword;
+            if (docResult.requestedDocType.pattern) {
+              entityName = entityName.replace(docResult.requestedDocType.pattern, '').trim();
+            }
+
+            if (docResult.suggestedAlternativeDoc) {
+              const altDoc = docResult.suggestedAlternativeDoc;
+              const altDuration = calculateItemDuration(altDoc.createdAt);
+
+              const msg = isEng
+                ? `📁 Sorry${salutation}, no *${docResult.requestedDocType.nameEn}* was found in your memory${entityName ? ` for "${entityName}"` : ''}.\n\n💡 However, you have *${altDoc.title}* saved (saved on ${altDuration.savedDateEn}).\nWould you like to see that instead? Reply with: "Show ${altDoc.title}".`
+                : `📁 দুঃখিত${salutation}, আপনার মেমোরিতে${entityName ? ` "${entityName}"-এর` : ''} কোনো *${docResult.requestedDocType.nameBn}* খুঁজে পাওয়া যায়নি।\n\n💡 তবে আপনার মেমোরিতে *${altDoc.title}* সংরক্ষিত আছে (সেভ তারিখ: ${altDuration.savedDateBn})।\nআপনি কি এটি দেখতে চান? দেখতে চাইলে লিখুন: "${altDoc.title} দেখাও"।`;
+
+              await sendMetaWhatsAppMessage(fromNumber, msg);
+              return;
+            } else {
+              const msg = isEng
+                ? `📁 Sorry${salutation}, no *${docResult.requestedDocType.nameEn}* was found in your memory${entityName ? ` for "${entityName}"` : ''}.\n\n💡 To save a new file, simply send the photo or PDF with a caption!`
+                : `📁 দুঃখিত${salutation}, আপনার মেমোরিতে${entityName ? ` "${entityName}"-এর` : ''} কোনো *${docResult.requestedDocType.nameBn}* খুঁজে পাওয়া যায়নি।\n\n💡 নতুন ফাইল সেভ করতে সরাসরি ছবি বা PDF পাঠিয়ে ক্যাপশনে নামটি লিখে দিন!`;
+
+              await sendMetaWhatsAppMessage(fromNumber, msg);
+              return;
+            }
+          }
+
           const doc = docResult.doc;
           if (doc) {
             console.log(`[WhatsAppDoc] Found matching document "${doc.title}" for query: "${cleanText}" (isTracking: ${isTrackingOrDateQuery}, matchedYear: ${docResult.targetYear})`);
@@ -6188,6 +6216,33 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
                   await sendMetaWhatsAppMessage(fromNumber, msg);
                   return true;
+                }
+
+                if (!docResult.doc && docResult.docTypeMismatch && docResult.requestedDocType) {
+                  const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
+                  let entityName = docResult.itemKeyword;
+                  if (docResult.requestedDocType.pattern) {
+                    entityName = entityName.replace(docResult.requestedDocType.pattern, '').trim();
+                  }
+
+                  if (docResult.suggestedAlternativeDoc) {
+                    const altDoc = docResult.suggestedAlternativeDoc;
+                    const altDuration = calculateItemDuration(altDoc.createdAt);
+
+                    const msg = isEng
+                      ? `📁 Sorry${salutation}, no *${docResult.requestedDocType.nameEn}* was found in your memory${entityName ? ` for "${entityName}"` : ''}.\n\n💡 However, you have *${altDoc.title}* saved (saved on ${altDuration.savedDateEn}).\nWould you like to see that instead? Reply with: "Show ${altDoc.title}".`
+                      : `📁 দুঃখিত${salutation}, আপনার মেমোরিতে${entityName ? ` "${entityName}"-এর` : ''} কোনো *${docResult.requestedDocType.nameBn}* খুঁজে পাওয়া যায়নি।\n\n💡 তবে আপনার মেমোরিতে *${altDoc.title}* সংরক্ষিত আছে (সেভ তারিখ: ${altDuration.savedDateBn})।\nআপনি কি এটি দেখতে চান? দেখতে চাইলে লিখুন: "${altDoc.title} দেখাও"।`;
+
+                    await sendMetaWhatsAppMessage(fromNumber, msg);
+                    return true;
+                  } else {
+                    const msg = isEng
+                      ? `📁 Sorry${salutation}, no *${docResult.requestedDocType.nameEn}* was found in your memory${entityName ? ` for "${entityName}"` : ''}.\n\n💡 To save a new file, simply send the photo or PDF with a caption!`
+                      : `📁 দুঃখিত${salutation}, আপনার মেমোরিতে${entityName ? ` "${entityName}"-এর` : ''} কোনো *${docResult.requestedDocType.nameBn}* খুঁজে পাওয়া যায়নি।\n\n💡 নতুন ফাইল সেভ করতে সরাসরি ছবি বা PDF পাঠিয়ে ক্যাপশনে নামটি লিখে দিন!`;
+
+                    await sendMetaWhatsAppMessage(fromNumber, msg);
+                    return true;
+                  }
                 }
 
                 const doc = docResult.doc;
