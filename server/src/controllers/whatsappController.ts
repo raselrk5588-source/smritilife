@@ -3967,7 +3967,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               } else {
                 // Overall summary
                 const overallSummary = await getDebtSummary(user._id);
-                const reply = buildDebtSummaryMessage(overallSummary);
+                const reply = buildDebtSummaryMessage(overallSummary, parsedDebt.queryScope);
                 await sendMetaWhatsAppMessage(
                 fromNumber,
                 (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
@@ -6164,6 +6164,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               // 1.5. Check if user is asking for Debts / Udhar / Baki Khata / Paona / Dena
               const isDebtWordInQ = /(?:পাওনা|দেনা|ধার|বাকি|উধার|paona|pauna|dena|dhar|baki|udhar|pabo|debo|দিতে\s*বলছি)/i.test(`${query} ${cleanText}`);
               if (isDebtWordInQ) {
+                await cleanupAccidentalDebtExpenses(user._id);
                 await ensureLegacyDebtNotesMigrated(user._id);
                 const parsedDebt = parseDebtInput(cleanText) || parseDebtInput(query);
                 if (parsedDebt && parsedDebt.isQuery) {
@@ -6175,7 +6176,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     }
                   } else {
                     const overallSummary = await getDebtSummary(user._id);
-                    await sendMetaWhatsAppMessage(fromNumber, buildDebtSummaryMessage(overallSummary));
+                    await sendMetaWhatsAppMessage(fromNumber, buildDebtSummaryMessage(overallSummary, parsedDebt.queryScope));
                     break;
                   }
                 }

@@ -14,6 +14,7 @@ export interface ParsedDebtItem {
 export interface ParsedDebt {
   isQuery: boolean;
   queryType?: 'all' | 'person';
+  queryScope?: 'all' | 'receivable' | 'payable';
   isSettlement?: boolean;
   settlementType?: 'received' | 'paid'; // received = পাওনা উসুল/ফেরত পেয়েছি, paid = দেনা শোধ করেছি
   isDelete?: boolean;
@@ -90,9 +91,9 @@ export const cleanPersonName = (raw: string): string => {
   const cleaned = raw
     .trim()
     .replace(/^(?:mr|md|মুহা|জনাব)\s+/i, '')
-    // Strip trailing helper phrases like "ar kache ami", "এর কাছে আমি", "ami"
-    .replace(/\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:কাছে|kache|kase)\s*(?:আমি|ami)?\s*$/i, '')
-    .replace(/\s+(?:আমি|ami)$/i, '')
+    // Strip trailing helper phrases like "ar kache ami", "amar kache", "আমার কাছে", "এর কাছে আমি", "ami", "amar"
+    .replace(/\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:আমার|amar|amr)?\s*(?:কাছে|kache|kase|কাছ\s*থেকে|থেকে|theke)\s*(?:আমি|ami)?\s*$/i, '')
+    .replace(/\s+(?:আমার|amar|amr|আমি|ami)$/i, '')
     .replace(/\s+(?:-?কে|-?k|-?ke|-?er|এর|-?theke|থেকে|-?ar)$/i, '')
     // Bengali possessive suffix only (never strip Latin letters from names like Omar/Peter)
     .replace(/(?:\u09DF\u09C7\u09B0|\u09C7\u09B0)$/i, '')
@@ -372,15 +373,18 @@ export const parseSingleDebtLine = (line: string): ParsedDebtItem | null => {
     }
   }
 
-  // Pattern 7 (borrowed): "করিমের কাছে ৫০০ দেনা" / "করিম পাবে ৫০০" / "korim pabe 500"
+  // Pattern 7 (borrowed): "রনি আমার কাছে ৭০০০ টাকা পাবে" / "করিমের কাছে ৫০০ দেনা" / "করিম পাবে ৫০০" / "korim pabe 500" / "roni amar kache 7000 taka pabe"
   const borrowedPatternC = cleanLine.match(
-    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর\s*কাছে|-?কাছে|kache)?\s*(?:দেনা|পাবে|pabe)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:দেনা|বাকি|ধার|dena|baki|পাবে|pabe)$/i
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর\s*কাছে|-?কাছে|kache|-?এর\s*কাছ\s*থেকে|theke|থেকে|আমার\s*কাছে|আমার\s*থেকে|amar\s*kache|amar\s*theke|amr\s*kache|amar\s*kase)?\s*(?:দেনা|পাবে|pabe)?\s*[:=]?\s*([০-৯0-9,]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:দেনা|বাকি|ধার|dena|baki|পাবে|pabe)$/i
   );
   if (borrowedPatternC) {
-    const person = cleanPersonName(borrowedPatternC[1]);
-    const amount = parseFloat(bnToEnDigits(borrowedPatternC[2].replace(/,/g, '')));
-    if (person && amount > 0) {
-      return { type: 'borrowed', personName: person, amount };
+    const rawPerson = borrowedPatternC[1].trim();
+    if (!/^(?:ধার|দেনা|বাকি|উধার|টাকা|হিসাব|dhar|dena|baki|udhar|taka|hisab)$/i.test(rawPerson)) {
+      const person = cleanPersonName(rawPerson);
+      const amount = parseFloat(bnToEnDigits(borrowedPatternC[2].replace(/,/g, '')));
+      if (person && amount > 0) {
+        return { type: 'borrowed', personName: person, amount };
+      }
     }
   }
 
@@ -511,10 +515,59 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
     /^(?:dhar\s*dena|baki\s*khata|paona|pauna|pawna|dena)$/i.test(lower);
 
   if (isGeneralDebtQuery) {
-    // Check if query is about a specific person (e.g. "রনির ধার দেনার হিসাব", "asad ar hisab", "আসাদের কাছে কত পাবো")
-    const specificPersonMatch = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:এর|-?er|-?ar|র)?\s*(?:হিসাব|কাছে\s*কত\s*পাবো|কাছে\s*পাওনা|hisab|kache\s*koto\s*pabo)\s*(?:কত|koto|bolo|বলো|কি)?\??$/i);
-    if (specificPersonMatch && !/ধার|দেনা|বাকি|পাওনা|মোট|আজ|কাল|টাকা|হিসাব|dhar|dena|baki|paona|pauna|taka|hisab|ami|আমি/i.test(specificPersonMatch[1].trim())) {
-      const pName = cleanPersonName(specificPersonMatch[1]);
+    // Check if query is about a specific person (e.g. "রনির ধার দেনার হিসাব", "asad ar hisab", "আসাদের কাছে কত পাবো", "tarek ar kache koto taka pabo?")
+    const specificPersonMatch = clean.match(
+      /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:কাছে|থেকে|kache|kase|theke)?\s*(?:হিসাব|hisab|পাওনা|paona|pauna|pawna|দেনা|dena)?\s*(?:কত\s*টাকা\s*পাবো|কত\s*টাকা\s*পাব|কত\s*টাকা\s*পাবে|কত\s*টাকা|কত\s*পাবো|কত\s*পাব|কত\s*পাবে|কত|koto\s*taka\s*pabo|koto\s*taka\s*pabe|koto\s*taka|koto\s*pabo|koto\s*pabe|koto|হিসাব|hisab)\s*(?:কত|koto|bolo|বলো|কি|দাও|দিন|daw|baki|shodh)?\??$/i
+    );
+    if (specificPersonMatch) {
+      const candidate = specificPersonMatch[1].trim();
+      const isReserved =
+        /^(?:ধার|দেনা|বাকি|পাওনা|মোট|আজ|কাল|টাকা|হিসাব|dhar|dena|baki|paona|pauna|pawna|taka|hisab|ami|আমি|আমার|amar|amr|কার|kar|karo|কারো|akhon|এখন|shob|sob|সব|সকল|all)$/i.test(candidate) ||
+        /\b(?:ami|আমি|amar|আমার|amr|কার|kar|karo|কারো)\b/i.test(candidate);
+      if (!isReserved) {
+        const pName = cleanPersonName(candidate);
+        if (pName && pName.length >= 2) {
+          return {
+            isQuery: true,
+            queryType: 'person',
+            personName: pName
+          };
+        }
+      }
+    }
+
+    let queryScope: 'all' | 'receivable' | 'payable' = 'all';
+    const isPayableOnly =
+      /(?:দেনা|দেবো|দিতে\s*হবে|dena|debo|dite\s*hobe)/i.test(clean) &&
+      !/(?:পাওনা|পাবো|পাব|paona|pauna|pawna|pabo)/i.test(clean);
+    const isReceivableOnly =
+      /(?:পাওনা|পাবো|পাব|paona|pauna|pawna|pabo)/i.test(clean) &&
+      !/(?:দেনা|দেবো|dena|debo)/i.test(clean);
+
+    if (isPayableOnly) {
+      queryScope = 'payable';
+    } else if (isReceivableOnly) {
+      queryScope = 'receivable';
+    }
+
+    return {
+      isQuery: true,
+      queryType: 'all',
+      queryScope
+    };
+  }
+
+  // Specific person query like "রনির কাছে কত পাবো" or "রনির হিসাব কত" or "roni er hisab koto" or "asad ar kache koto pabo"
+  const pQuery = clean.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর|-?er|-?ar|র|ের)?\s*(?:কাছে|থেকে|kache|kase|theke)?\s*(?:হিসাব|hisab|পাওনা|paona|pauna|pawna|দেনা|dena)?\s*(?:কত\s*টাকা\s*পাবো|কত\s*টাকা\s*পাব|কত\s*টাকা\s*পাবে|কত\s*টাকা|কত\s*পাবো|কত\s*পাব|কত\s*পাবে|কত|koto\s*taka\s*pabo|koto\s*taka\s*pabe|koto\s*taka|koto\s*pabo|koto\s*pabe|koto|হিসাব|hisab)\s*(?:কত|koto|bolo|বলো|কি|দাও|দিন|daw|baki|shodh)?\??$/i
+  );
+  if (pQuery) {
+    const candidate = pQuery[1].trim();
+    const isReserved =
+      /^(?:ধার|দেনা|বাকি|পাওনা|মোট|আজ|কাল|টাকা|হিসাব|dhar|dena|baki|paona|pauna|pawna|taka|hisab|ami|আমি|আমার|amar|amr|কার|kar|karo|কারো|akhon|এখন|shob|sob|সব|সকল|all)$/i.test(candidate) ||
+      /\b(?:ami|আমি|amar|আমার|amr|কার|kar|karo|কারো)\b/i.test(candidate);
+    if (!isReserved) {
+      const pName = cleanPersonName(candidate);
       if (pName && pName.length >= 2) {
         return {
           isQuery: true,
@@ -522,24 +575,6 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
           personName: pName
         };
       }
-    }
-
-    return {
-      isQuery: true,
-      queryType: 'all'
-    };
-  }
-
-  // Specific person query like "রনির কাছে কত পাবো" or "রনির হিসাব কত" or "roni er hisab koto" or "asad ar kache koto pabo"
-  const pQuery = clean.match(/^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:এর|-?er|-?ar|র)?\s*(?:কাছে\s*কত\s*পাবো|এর\s*হিসাব\s*কত|এর\s*হিসাব|er\s*hisab\s*koto|ar\s*hisab\s*koto|kache\s*koto\s*pabo)\??$/i);
-  if (pQuery) {
-    const pName = cleanPersonName(pQuery[1]);
-    if (pName && pName.length >= 2 && !/ধার|দেনা|বাকি|মোট|আজ|কাল|টাকা|পাওনা|dhar|dena|baki|paona|pauna|taka|hisab|ami|আমি/i.test(pName)) {
-      return {
-        isQuery: true,
-        queryType: 'person',
-        personName: pName
-      };
     }
   }
 
@@ -704,6 +739,27 @@ export const parseDebtInput = (text: string): ParsedDebt | null => {
         personName: person,
         amount
       };
+    }
+  }
+
+  // Pattern D: "রনি আমার কাছে ৭০০০ টাকা পাবে" / "রনি পাবে ৭০০০" / "roni amar kache 7000 taka pabe" / "roni 7000 pabe"
+  const borrowedPatternD = clean.match(
+    /^([a-zA-Z\u0980-\u09FF\s]+?)\s*(?:-?এর\s*কাছে|-?কাছে|kache|-?এর\s*কাছ\s*থেকে|theke|থেকে|আমার\s*কাছে|আমার\s*থেকে|amar\s*kache|amar\s*theke|amr\s*kache|amar\s*kase)?\s*(?:দেনা|পাবে|pabe)?\s*[:=]?\s*([০-৯0-9]+(?:\.[০-৯0-9]+)?)\s*(?:টাকা|টাকার|tk|taka)?\s*(?:দেনা|বাকি|ধার|dena|baki|পাবে|pabe)$/i
+  );
+  if (borrowedPatternD) {
+    const rawPerson = borrowedPatternD[1].trim();
+    if (!/^(?:ধার|দেনা|বাকি|উধার|টাকা|হিসাব|dhar|dena|baki|udhar|taka|hisab)$/i.test(rawPerson)) {
+      const person = cleanPersonName(rawPerson);
+      const amount = parseFloat(bnToEnDigits(borrowedPatternD[2]));
+      if (person && amount > 0) {
+        return {
+          isQuery: false,
+          isSettlement: false,
+          type: 'borrowed',
+          personName: person,
+          amount
+        };
+      }
     }
   }
 
@@ -1219,9 +1275,44 @@ export const buildDebtDeletedMessage = (
 /**
  * Build WhatsApp Response: Overall Debt Summary (Concise)
  */
-export const buildDebtSummaryMessage = (summary: OverallDebtSummary): string => {
+export const buildDebtSummaryMessage = (
+  summary: OverallDebtSummary,
+  queryScope: 'all' | 'receivable' | 'payable' = 'all'
+): string => {
   const formattedReceivable = formatTaka(summary.totalReceivable);
   const formattedPayable = formatTaka(summary.totalPayable);
+
+  if (queryScope === 'payable') {
+    const lines: string[] = [
+      '🏪 *দেনার হিসাব*',
+      `🔴 মোট দেনা: *${formattedPayable}*`
+    ];
+    if (summary.topPayables.length > 0) {
+      lines.push('\n🏪 *দেনা তালিকা:*');
+      summary.topPayables.slice(0, 10).forEach(p => {
+        lines.push(`• ${p.personName}: *${formatTaka(p.amount)}*`);
+      });
+    } else {
+      lines.push('\n✨ বর্তমানে আপনার কোনো দেনা নেই!');
+    }
+    return lines.join('\n');
+  }
+
+  if (queryScope === 'receivable') {
+    const lines: string[] = [
+      '👥 *পাওনার হিসাব*',
+      `🟢 মোট পাওনা: *${formattedReceivable}*`
+    ];
+    if (summary.topReceivables.length > 0) {
+      lines.push('\n👥 *পাওনা তালিকা:*');
+      summary.topReceivables.slice(0, 10).forEach(r => {
+        lines.push(`• ${r.personName}: *${formatTaka(r.amount)}*`);
+      });
+    } else {
+      lines.push('\n✨ বর্তমানে আপনার কোনো পাওনা নেই!');
+    }
+    return lines.join('\n');
+  }
 
   const lines: string[] = [
     `🤝 *ধার-দেনা ও বাকি খাতা*`,
