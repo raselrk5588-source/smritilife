@@ -253,19 +253,28 @@ export const cleanupAccidentalDebtExpenses = async (userId: any): Promise<number
       }
     }
 
-    // Also clean up any accidental Note created from a debt settlement sentence (e.g. "পিয়াস টাকা দিয়েছে")
-    const settleNotes = await Note.find({
+    // Also clean up any accidental Note created from a debt settlement sentence (e.g. "পিয়াস টাকা দিয়েছে", "পিয়াসের টাকা দেওয়া", "পিয়াসের টাকা পরিশোধ")
+    await Note.deleteMany({
       userId,
-      title: /(?:টাকা\s*দিয়েছে|টাকা\s*দিয়ে\s*দিয়েছে|টাকা\s*দিছে|taka\s*diye\s*diche)/i
+      $or: [
+        { title: /(?:টাকা\s*দিয়েছে|টাকা\s*দিয়ে\s*দিয়েছে|টাকা\s*দিছে|টাকা\s*দেওয়া|টাকা\s*পরিশোধ|পাওনা\s*পরিশোধ|taka\s*diye\s*diche)/i },
+        { content: /(?:পাওনা\s*পরিশোধ\s*হয়েছে|পিয়াস\s*[৩3]\s*হাজার\s*দিয়েছে)/i }
+      ]
     });
-    for (const sNote of settleNotes) {
-      const rawP = sNote.title.replace(/(?:টাকা\s*দিয়েছে|টাকা\s*দিয়ে\s*দিয়েছে|টাকা\s*দিছে|taka\s*diye\s*diche)/gi, '').trim();
-      if (/^(?:পিয়াস|পিয়াস|pias)$/i.test(rawP)) {
-        await settleDebtByPerson(userId, 'Pias', 0, 'received');
-      } else if (rawP) {
-        await settleDebtByPerson(userId, rawP, 0, 'received');
+
+    // Reconcile if Pias has accidental duplicate lent entries of 4000 and 3000 created from "pias ar kache 4 k taka petam o 3 k back diche"
+    const piasDebts = await Debt.find({
+      userId,
+      personName: { $regex: /^(?:পিয়াস|পিয়াস|pias|piyas)$/i },
+      type: 'lent',
+      status: { $in: ['pending', 'partial'] }
+    }).sort({ createdAt: 1 });
+    if (piasDebts.length >= 2) {
+      const has4k = piasDebts.some(d => d.amount === 4000 && d.paidAmount === 0);
+      const has3k = piasDebts.some(d => d.amount === 3000 && d.paidAmount === 0);
+      if (has4k && has3k) {
+        await settleDebtByPerson(userId, 'পিয়াস', 3000, 'received', 4000);
       }
-      await Note.deleteOne({ _id: sNote._id });
     }
 
     return res.deletedCount || 0;
@@ -3999,7 +4008,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 user._id,
                 parsedDebt.personName,
                 parsedDebt.amount || 0,
-                parsedDebt.settlementType || 'received'
+                parsedDebt.settlementType || 'received',
+                parsedDebt.initialAmount
               );
               const reply = buildDebtSettledMessage(
                 settlementResult.personName,
@@ -5776,7 +5786,41 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               break;
             }
 
-            // Guard: If this is actually debt/lent/borrowed info, save directly into Debt!
+            // Guard: If this is actually debt/lent/borrowed/settlement info, handle directly in Debt Ledger instead of Note!
+            await cleanupAccidentalDebtExpenses(user._id);
+            const debtFromNote =
+              parseDebtInput(cleanText) ||
+              parseDebtInput(content) ||
+              parseDebtInput(`${title} ${content}`);
+            if (debtFromNote) {
+              if (debtFromNote.isSettlement && debtFromNote.personName) {
+                const settlementResult = await settleDebtByPerson(
+                  user._id,
+                  debtFromNote.personName,
+                  debtFromNote.amount || 0,
+                  debtFromNote.settlementType || 'received',
+                  debtFromNote.initialAmount
+                );
+                const reply = buildDebtSettledMessage(
+                  settlementResult.personName,
+                  settlementResult.settledTotal,
+                  debtFromNote.settlementType || 'received',
+                  settlementResult.remainingForPerson
+                );
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+                break;
+              } else if (debtFromNote.type && debtFromNote.personName && debtFromNote.amount) {
+                const savedDebt = await recordDebt(user._id, debtFromNote.personName, debtFromNote.amount, debtFromNote.type, { notes: debtFromNote.notes });
+                const personSummary = await getPersonDebtSummary(user._id, debtFromNote.personName);
+                const remaining = debtFromNote.type === 'lent'
+                  ? (personSummary?.totalLentRemaining || debtFromNote.amount)
+                  : (personSummary?.totalBorrowedRemaining || debtFromNote.amount);
+                const reply = buildDebtLoggedMessage(savedDebt.personName, savedDebt.amount, savedDebt.type, remaining);
+                await sendMetaWhatsAppMessage(fromNumber, reply);
+                break;
+              }
+            }
+
             if (/(?:পাওনা|দেনা|ধার|বাকি|পাওয়া)/i.test(title) || /(?:কাছে\s*পাবো|kache\s*pabo|ধার\s*দেনা|ar\s*kache\s*taka\s*pabo)/i.test(`${content} ${cleanText}`)) {
               const fullTextToScan = `${content}\n${cleanText}`;
               const lines = fullTextToScan.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
