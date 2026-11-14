@@ -2584,15 +2584,23 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           /(?:কবে|কবেকার|কত\s*দিন|কয়\s*দিন|কদ্দিন|তারিখ|তারিখে|দিন\s*হলো|দিন\s*গেছে|চলছে|চলতেছে|কিনেছি|কিনেছিলাম|এনেছি|এনেছিলাম|নিয়েছি|নিয়েছিলাম|সেভ\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|আপলোড\s*(?:করেছি|করেছিলাম|করছি|করা|হয়েছিল|হয়েছে)|রাখলাম|রেখেছি|kobe|kobekar|koto\s*din|koy\s*din|koddin|tarikh|tarikhe|din\s*holo|din\s*geche|cholche|choltese|kinesi|kinesilam|enechi|enesilam|niesi|niesilam|save\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|upload\s*(?:koresi|koresilam|korsi|kora|hoyechilo|hoyeche)|rekhechi|rakhlam|when\s*(?:was|did)|how\s*(?:many\s*days|long))\b/i.test(cleanText);
 
         const hasFetchIntent =
-          /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dau|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|lagbe|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText);
+          /(?:দাও|দিবেন|দিস|দেন|পাঠাও|পাঠান|দেখাও|দেখান|চাই|খুঁজো|খুঁজে\s*দাও|কোথায়|আছে\s*কিনা|ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|dao|daw|dau|dis|diben|den|pathao|pathan|pathaba|dehao|dekhaw|dekhan|chai|cay|khojo|khujo|khuje\s*dao|kothay|ase|ache|pic|image|photo|chobi|file|doc|document|prescription|report)\b/i.test(cleanText) ||
+          /(?:ফাইল|ডকুমেন্ট|কাগজ|রশিদ|রিসিপ্ট|প্রেসক্রিপশন|ছবি|file|doc|document|prescription|report)\s*(?:টা|টি|ta|ti)?\s*lagbe/i.test(cleanText);
 
         const isShortQuery = cleanText.split(/\s+/).length <= 4;
         const hasExplicitDocWord =
           /(?:ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|প্রেস্ক্রিপশন|রিপোর্ট|রিসিপ্ট|ভল্ট|এনআইডি|সার্টিফিকেট|পাসপোর্ট|টিকিট|টোকেন|চাবি|লোগো|pic|image|photo|chobi|file|doc|document|prescription|report|receipt|vault|nid|certificate|passport|ticket|token|key|logo)\b/i.test(cleanText);
-        const isNonDocTopic =
-          /(?:টাকা|taka|tk|পাবো|পাব|pabo|দেবো|দিবো|debo|dibo|পাওনা|paona|pauna|pawna|দেনা|dena|ধার|dhar|বাকি|baki|উধার|udhar|খরচ|khoroch|হিসাব|\\bhisab\\b|মোট|mot|total|ওষুধ|ঔষধ|osud|osudh|medicine|রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নামাজ|namaj|সেহরি|sehri|ইফতার|iftar|পিরিয়ড|পিরিয়ড|মাসিক|period|priod|masik|mashik|menstrual)/i.test(cleanText);
 
-        if (userDocsCount > 0 && !isDeleteIntent && !isDocUpdateIntent && (!isNonDocTopic || hasExplicitDocWord) && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery)) {
+        const isReminderOrTaskIntent =
+          /(?:mone\s*(?:korai|koriye|koraia|rekho|rakho|rakhba)\s*(?:diow|diyo|dio|diba|dao|den|diben|koro)?|মনে\s*(?:করাই|করিয়ে|রেখো|রাখবেন)\s*(?:দিও|দাও|দিন|করো)?|reminder|রিমাইন্ডার|alarm|অ্যালার্ম|alert|call\s*(?:deya|dite|kora|korba|dio|diow|korte)|কল\s*(?:দেওয়া|দিতে|করতে|দিও)|phone\s*(?:deya|dite)|ফোন\s*(?:দেওয়া|দিতে)|(?:আজ|কাল|আগামীকাল|পরশু|aj|ajke|kal|kalke|agami|poroshu)\s*(?:সকাল|দুপুর|বিকাল|সন্ধ্যা|রাত|ভোর|sokal|dupur|bikal|rat|vhor)?\s*\d{1,2}(?::\d{2})?\s*(?:টায়|টা|ta|tar|am|pm|somoi|somoy)|(?:\b|^)(?:সকাল|দুপুর|বিকাল|রাত|ভোর|sokal|dupur|bikal|rat|vhor)\s*\d{1,2}(?::\d{2})?\s*(?:টায়|টা|ta|tar|am|pm|somoi|somoy)|(?:করতে|যেতে|দিতে|বলা|পাঠাতে)\s*(?:হবে|লাগবে)|(?:korte|jete|dite|deya|pathate)\s*(?:hobe|lagbe))/i.test(cleanText);
+
+        const isExplicitDocFetch =
+          /(?:ছবি|ফাইল|কাগজ|ডকুমেন্ট|রশিদ|প্রেসক্রিপশন|রিপোর্ট|রিসিপ্ট|file|doc|document|prescription|report|receipt|pic|image|photo)\s*(?:দাও|পাঠাও|দেখাও|খুঁজো|dao|daw|dehao|dekhaw|pathao|send|show)/i.test(cleanText);
+
+        const isNonDocTopic =
+          /(?:টাকা|taka|tk|পাবো|পাব|pabo|দেবো|দিবো|debo|dibo|পাওনা|paona|pauna|pawna|দেনা|dena|ধার|dhar|বাকি|baki|উধার|udhar|খরচ|khoroch|হিসাব|\\bhisab\\b|মোট|mot|total|ওষুধ|ঔষধ|osud|osudh|medicine|রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নামাজ|namaj|সেহরি|sehri|ইফতার|iftar|পিরিয়ড|পিরিয়ড|মাসিক|period|priod|masik|mashik|menstrual|mone\s*(?:korai|koriye|koraia|rekho|rakho|rakhba)|মনে\s*(?:করাই|করিয়ে|রেখো|রাখবেন)|call\s*(?:deya|dite|kora|korba|dio|diow|korte)|কল\s*(?:দেওয়া|দিতে|করতে|দিও)|phone\s*(?:deya|dite)|ফোন\s*(?:দেওয়া|দিতে)|(?:সকাল|দুপুর|বিকাল|রাত|ভোর|sokal|dupur|bikal|rat|vhor)\s*\d{1,2}|somoi|somoy|সময়|সময়ে)/i.test(cleanText);
+
+        if (userDocsCount > 0 && !isDeleteIntent && !isDocUpdateIntent && (!isNonDocTopic || hasExplicitDocWord) && (hasFetchIntent || isTrackingOrDateQuery || isShortQuery) && (!isReminderOrTaskIntent || isExplicitDocFetch)) {
           const docResult = await findMatchingDocumentWithVersion(user._id.toString(), cleanText);
           const isEng = isPureEnglishText(cleanText);
 
@@ -2613,7 +2621,8 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           // If docResult indicates a specific requested doc type that wasn't found
-          if (!docResult.doc && docResult.docTypeMismatch && docResult.requestedDocType) {
+          // ONLY trigger not-found/alternative message if user explicitly wanted a document
+          if (!docResult.doc && docResult.docTypeMismatch && docResult.requestedDocType && (hasExplicitDocWord || isExplicitDocFetch)) {
             const salutation = user.honorific ? ` ${user.honorific}` : ' ভাই';
             let entityName = docResult.itemKeyword;
             if (docResult.requestedDocType.pattern) {
