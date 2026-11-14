@@ -4,24 +4,11 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import OtpToken from '../models/OtpToken';
 import { sendMetaWhatsAppMessage, sendMetaWhatsAppButtons } from './whatsappController';
+import { checkUserAccess, normalizeMobile } from '../utils/subscriptionHelper';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'smriti_secret_key_2026';
 
-/**
- * Helper to normalize Bangladeshi phone number to 01XXXXXXXXX
- */
-function normalizeMobile(mobile: string): string {
-  let cleaned = (mobile || '').trim().replace(/[^\d]/g, '');
-  if (cleaned.startsWith('880')) {
-    cleaned = cleaned.substring(2);
-  } else if (cleaned.startsWith('88')) {
-    cleaned = cleaned.substring(2);
-  }
-  if (!cleaned.startsWith('0') && cleaned.length === 10) {
-    cleaned = '0' + cleaned;
-  }
-  return cleaned;
-}
+
 
 // Prevent sending duplicate welcome messages to the same mobile within 5 minutes
 const lastWelcomeSentMap = new Map<string, number>();
@@ -66,8 +53,9 @@ export const checkMobile = async (req: Request, res: Response) => {
     const cleanMobile = normalizeMobile(mobile);
     const user = await User.findOne({ mobile: cleanMobile });
 
-    // If user is subscribed and this device is already in authorized devices (max 2)
-    if (user && user.isSubscribed && user.deviceIds && user.deviceIds.includes(deviceId)) {
+    // If user has active access (Paid Pro or Active 3-Day Trial) and this device is already authorized (max 2)
+    const access = checkUserAccess(user);
+    if (user && access.hasAccess && user.deviceIds && user.deviceIds.includes(deviceId)) {
       const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
       return res.json({
         requireOtp: false,
@@ -76,7 +64,12 @@ export const checkMobile = async (req: Request, res: Response) => {
           id: user._id,
           name: user.name,
           mobile: user.mobile,
-          isSubscribed: user.isSubscribed
+          isSubscribed: user.isSubscribed,
+          trialStartDate: user.trialStartDate,
+          trialEndDate: user.trialEndDate,
+          isTrialActive: access.isTrial,
+          hasAccess: access.hasAccess,
+          status: access.status
         }
       });
     }
@@ -219,6 +212,7 @@ export const loginWithOtp = async (req: Request, res: Response) => {
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
+    const access = checkUserAccess(user);
 
     res.json({
       token,
@@ -226,7 +220,14 @@ export const loginWithOtp = async (req: Request, res: Response) => {
         id: user._id,
         name: user.name,
         mobile: user.mobile,
-        isSubscribed: user.isSubscribed
+        isSubscribed: user.isSubscribed,
+        trialStartDate: user.trialStartDate,
+        trialEndDate: user.trialEndDate,
+        isTrialActive: access.isTrial,
+        isTrialExpired: access.isExpired,
+        hasAccess: access.hasAccess,
+        status: access.status,
+        isProfileCompleted: user.isProfileCompleted || false
       }
     });
   } catch (error: any) {

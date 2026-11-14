@@ -16,6 +16,7 @@ import UserDocument from '../models/UserDocument';
 import SystemSettings from '../models/SystemSettings';
 import Debt from '../models/Debt';
 import Expense from '../models/Expense';
+import { checkUserAccess } from '../utils/subscriptionHelper';
 import { getMaintenanceStatus, updateMaintenanceCache } from '../services/maintenanceService';
 import { analyzeMessage, analyzeAudioMessage, transcribeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache, getLastUserTurn } from '../services/aiWhatsAppService';
 import { searchReminders, formatReminderMatchMessage, formatMultipleRemindersMessage } from '../services/memoryRetrievalService';
@@ -1986,11 +1987,17 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
               session.verified = true;
               session.verifiedToken = token;
+              const authAccess = checkUserAccess(authUser);
               session.verifiedUser = {
                 id: authUser._id,
                 name: authUser.name || 'ব্যবহারকারী',
                 mobile: authUser.mobile || cleanFrom,
-                isSubscribed: Boolean(authUser.isSubscribed)
+                isSubscribed: Boolean(authUser.isSubscribed),
+                trialStartDate: authUser.trialStartDate,
+                trialEndDate: authUser.trialEndDate,
+                isTrialActive: authAccess.isTrial,
+                hasAccess: authAccess.hasAccess,
+                status: authAccess.status
               };
               await session.save();
 
@@ -2069,25 +2076,45 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           ]
         });
 
-        if (!user || user.isSubscribed === false) {
-          const bodyMsg = user && !user.isSubscribed
-            ? 'দুঃখিত, আপনার Smriti Life সাবস্ক্রিপশনটি বর্তমানে সক্রিয় নয়। AI রিমাইন্ডার ও অ্যাসিস্ট্যান্টের সকল সুবিধা উপভোগ করতে SmritiLife-এ সাবস্ক্রিপশন করুন।'
-            : 'দুঃখিত, এই নম্বরটি Smriti Life অ্যাপে নিবন্ধিত নয়। আমাদের AI রিমাইন্ডার ও অ্যাসিস্ট্যান্ট সেবা ব্যবহার করতে SmritiLife-এ সাবস্ক্রিপশন করুন।';
+        const access = checkUserAccess(user);
 
+        if (!user || !access.hasAccess) {
+          if (user && access.isExpired) {
+            // 3-Day Free Trial Expired -> Require bKash payment
+            const expiredMsg = '⚠️ *আপনার ৩ দিনের ফ্রি ট্রায়ালের মেয়াদ শেষ হয়ে গেছে!*\n\nস্মৃতি লাইফের AI রিমাইন্ডার, হিসাব খাতা ও সকল ফিচার নিরবচ্ছিন্নভাবে চালিয়ে যেতে মাত্র ১৯০ টাকায় বিকাশ দিয়ে সাবস্ক্রাইব করুন।';
+            const sent = await sendMetaWhatsAppCtaUrl(
+              fromNumber,
+              expiredMsg,
+              'বিকাশ পেমেন্ট করুন',
+              'https://smritilife.com/paywall',
+              'স্মৃতি লাইফ (SmritiLife)',
+              'bKash পেমেন্ট করে সার্ভিস চালু রাখুন'
+            );
+
+            if (!sent) {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `${expiredMsg}\n\n👉 সাবস্ক্রাইব করতে ক্লিক করুন: https://smritilife.com/paywall`
+              );
+            }
+            return;
+          }
+
+          // Unregistered or Profile not completed yet -> 3 Days Free Trial invite
+          const newMsg = 'স্বাগতম স্মৃতি লাইফে (Smriti Life)! 🤖\n\n৩ দিন সম্পূর্ণ বিনামূল্যে সকল এআই ফিচার ব্যবহার করতে নিচের বাটনে ক্লিক করে আপনার প্রোফাইল সম্পন্ন করুন:';
           const sent = await sendMetaWhatsAppCtaUrl(
             fromNumber,
-            bodyMsg,
-            'SmritiLife',
-            'https://smritilife.com',
+            newMsg,
+            '৩ দিন ফ্রি ট্রায়াল নিন',
+            'https://smritilife.com/complete-profile',
             'স্মৃতি লাইফ (SmritiLife)',
-            'ব্রাউজারে ওপেন করতে বাটনে ক্লিক করুন'
+            'প্রোফাইল পূরণ করে ফ্রি ট্রায়াল নিন'
           );
 
           if (!sent) {
-            // Fallback standard text message with direct clickable URL
             await sendMetaWhatsAppMessage(
               fromNumber,
-              `${bodyMsg}\n\n👉 https://smritilife.com\n(লিঙ্কে ক্লিক করে ব্রাউজারে ওপেন করুন)`
+              `${newMsg}\n\n👉 ৩ দিন ফ্রি ট্রায়াল শুরু করুন: https://smritilife.com/complete-profile`
             );
           }
           return;
@@ -2397,10 +2424,16 @@ export const receiveWebhook = async (req: Request, res: Response) => {
 
         if (isStartCommand) {
           const userName = user.name && user.name !== 'নতুন ব্যবহারকারী' ? user.name : '';
-          const salutation = user.honorific ? ` ${user.honorific}` : (userName ? ` ভাই` : '');
           const greetingName = userName ? ` ${userName}` : '';
+          const userAccess = checkUserAccess(user);
 
-          const startMsg = `🎉 *আসসালামু আলাইকুম${greetingName}! স্মৃতি লাইফে স্বাগতম!* 🤖\n\nআমি আপনার এআই অ্যাসিস্ট্যান্ট। রিমাইন্ডার, দৈনিক খরচ বা নোট রাখতে সরাসরি মেসেজ দিন।\n\nকথা শুরু করতে যেকোনো রিমাইন্ডার বা খরচ লিখে পাঠান! 😊`;
+          let startMsg = '';
+          if (userAccess.isTrial) {
+            const daysLeft = userAccess.trialRemainingDays || 3;
+            startMsg = `🎉 *আসসালামু আলাইকুম${greetingName}! স্মৃতি লাইফে স্বাগতম!* 🤖\n\nআপনার *৩ দিনের ফ্রি ট্রায়াল* সফলভাবে শুরু হয়েছে! আগামী ${daysLeft} দিন আপনি রিমাইন্ডার, দৈনিক খরচ ও ধার-দেনার হিসাব খাতা এবং নোটের সকল সুবিধা সম্পূর্ণ ফ্রিতে ব্যবহার করতে পারবেন।\n\n👉 *পরীক্ষা করতে এখনই বাংলায় লিখে বা মুখে বলে একটি ভয়েস মেসেজ পাঠান:*\n• *"কাল সকাল ৮টায় অফিসে যাওয়ার রিমাইন্ডার দাও"*\n• *"রিকশা ভাড়া ৫০ টাকা আর বাজার ৭০০ টাকা সেভ করো"*\n• *"আজকের খরচের হিসাব কত?"*\n\nআমি সবসময় আপনার পাশে আছি! 😊`;
+          } else {
+            startMsg = `🎉 *আসসালামু আলাইকুম${greetingName}! স্মৃতি লাইফে স্বাগতম!* 🤖\n\nআমি আপনার ব্যক্তিগত এআই অ্যাসিস্ট্যান্ট। রিমাইন্ডার, দৈনিক খরচ বা নোট রাখতে যেকোনো সময় সরাসরি মেসেজ বা ভয়েস পাঠান।\n\nকথা শুরু করতে যেকোনো কিছু লিখে বা মুখে বলে পাঠান! 😊`;
+          }
 
           await sendMetaWhatsAppMessage(fromNumber, startMsg);
           return;

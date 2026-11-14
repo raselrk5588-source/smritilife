@@ -39,19 +39,34 @@ export default function Auth() {
           clearInterval(interval);
           localStorage.setItem('token', data.token);
 
-          if (data.user?.isSubscribed) {
+          const isSub = Boolean(data.user?.isSubscribed);
+          const trialEnd = data.user?.trialEndDate;
+          const isTrialValid = Boolean(trialEnd && new Date() < new Date(trialEnd));
+
+          if (data.user?.name) localStorage.setItem('userName', data.user.name);
+          if (data.user?.mobile) localStorage.setItem('userMobile', data.user.mobile);
+          if (trialEnd) localStorage.setItem('trialEndDate', trialEnd);
+
+          if (isSub) {
             toast.success('WhatsApp ভেরিফিকেশন সফল! সরাসরি লগইন হয়েছে 🎉', { id: 'authCheck' });
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('isSubscribed', 'true');
-            if (data.user?.name) localStorage.setItem('userName', data.user.name);
-            if (data.user?.mobile) localStorage.setItem('userMobile', data.user.mobile);
             setShowSuccessChoice(true);
-          } else {
-            toast.error('আপনার সাবস্ক্রিপশন নেই! আগে সাবস্ক্রাইব করুন।', { duration: 4000, id: 'authCheck' });
+          } else if (isTrialValid) {
+            toast.success('লগইন সফল! ৩ দিনের ফ্রি ট্রায়াল সক্রিয় রয়েছে 🎉', { id: 'authCheck' });
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('isSubscribed', 'false');
-            if (data.user?.name) localStorage.setItem('userName', data.user.name);
-            if (data.user?.mobile) localStorage.setItem('userMobile', data.user.mobile);
+            localStorage.setItem('isTrialActive', 'true');
+            setShowSuccessChoice(true);
+          } else if (!data.user?.isTrialUsed && !trialEnd) {
+            toast.success('৩ দিনের ফ্রি ট্রায়াল চালু করতে প্রোফাইল সম্পন্ন করুন!', { id: 'authCheck', duration: 4000 });
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('isSubscribed', 'false');
+            setTimeout(() => navigate('/complete-profile'), 1200);
+          } else {
+            toast.error('আপনার ৩ দিনের ফ্রি ট্রায়াল শেষ হয়ে গেছে! দয়া করে বিকাশ দিয়ে সাবস্ক্রাইব করুন।', { duration: 4000, id: 'authCheck' });
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('isSubscribed', 'false');
             setTimeout(() => navigate('/paywall'), 1500);
           }
         }
@@ -138,19 +153,34 @@ export default function Auth() {
         if (res.ok) {
           localStorage.setItem('token', data.token);
           
-          if (data.user.isSubscribed) {
+          const isSub = Boolean(data.user?.isSubscribed);
+          const trialEnd = data.user?.trialEndDate;
+          const isTrialValid = Boolean(trialEnd && new Date() < new Date(trialEnd));
+
+          if (data.user?.name) localStorage.setItem('userName', data.user.name);
+          if (data.user?.mobile) localStorage.setItem('userMobile', data.user.mobile);
+          if (trialEnd) localStorage.setItem('trialEndDate', trialEnd);
+
+          if (isSub) {
             toast.success('লগইন সফল হয়েছে!', { id: 'authCheck' });
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('isSubscribed', 'true');
-            localStorage.setItem('userName', data.user.name);
-            localStorage.setItem('userMobile', data.user.mobile);
             setShowSuccessChoice(true);
-          } else {
-            toast.error('আপনার সাবস্ক্রিপশন নেই! আগে সাবস্ক্রাইব করুন।', { duration: 4000, id: 'authCheck' });
+          } else if (isTrialValid) {
+            toast.success('লগইন সফল! ৩ দিনের ফ্রি ট্রায়াল সক্রিয় রয়েছে 🎉', { id: 'authCheck' });
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('isSubscribed', 'false');
-            localStorage.setItem('userName', data.user.name);
-            localStorage.setItem('userMobile', data.user.mobile);
+            localStorage.setItem('isTrialActive', 'true');
+            setShowSuccessChoice(true);
+          } else if (!data.user?.isTrialUsed && !trialEnd) {
+            toast.success('৩ দিনের ফ্রি ট্রায়াল চালু করতে প্রোফাইল সম্পন্ন করুন!', { id: 'authCheck', duration: 4000 });
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('isSubscribed', 'false');
+            setTimeout(() => navigate('/complete-profile'), 1200);
+          } else {
+            toast.error('আপনার ৩ দিনের ফ্রি ট্রায়াল শেষ হয়ে গেছে! দয়া করে বিকাশ দিয়ে সাবস্ক্রাইব করুন।', { duration: 4000, id: 'authCheck' });
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('isSubscribed', 'false');
             setTimeout(() => navigate('/paywall'), 1500);
           }
         } else {

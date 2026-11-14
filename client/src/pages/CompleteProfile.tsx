@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, ChevronRight, CheckCircle2, ShieldCheck, MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react';
+import { User, Mail, Phone, ChevronRight, CheckCircle2, ShieldCheck, MessageSquare, LayoutDashboard, Sparkles, Gift } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchWithAuth } from '../utils/api';
 
@@ -12,17 +12,16 @@ export default function CompleteProfile() {
   const [bkashNumber, setBkashNumber] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+  const [isPaidUser, setIsPaidUser] = useState(false);
 
   useEffect(() => {
-    // Get the mobile number saved during payment
+    const isSub = localStorage.getItem('isSubscribed') === 'true';
+    setIsPaidUser(isSub);
+
+    // Get the mobile number saved during payment or login
     const savedNumber = localStorage.getItem('userMobile') || localStorage.getItem('pendingMsisdn') || '';
-    if (!savedNumber && !localStorage.getItem('token')) {
-      // If somehow reached here without payment
-      navigate('/');
-      return;
-    }
     if (savedNumber) {
-      setBkashNumber(savedNumber);
+      if (isSub) setBkashNumber(savedNumber);
       setWhatsapp(savedNumber);
     }
 
@@ -47,7 +46,7 @@ export default function CompleteProfile() {
       window.removeEventListener('resize', handleResize);
       document.documentElement.style.fontSize = '';
     };
-  }, [navigate]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,37 +59,89 @@ export default function CompleteProfile() {
 
     const cleanWhatsapp = whatsapp.trim();
     if (!cleanWhatsapp || !/^01[3-9]\d{8}$/.test(cleanWhatsapp)) {
-      toast.error('সঠিক ১১ ডিজিটের WhatsApp নম্বর দিন (যেমন: 017XXXXXXXX)');
+      toast.error('সঠিক ১১ ডিজিটের WhatsApp/মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)');
       return;
     }
 
     try {
-      // Construct payload dynamically to avoid overriding valid email with empty string
-      const payload: any = { name: name.trim(), whatsapp: cleanWhatsapp };
-      if (email.trim() !== '') {
-        payload.email = email.trim();
-      }
-      
-      const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/users/profile`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        const result = await res.json();
-        // Also save to localStorage for immediate UI updates
-        localStorage.setItem('userName', name.trim());
-        if (result.email) localStorage.setItem('userEmail', result.email);
-        localStorage.setItem('whatsappNumber', cleanWhatsapp);
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('isSubscribed', 'true');
-        localStorage.setItem('isProfileCompleted', 'true');
+      const token = localStorage.getItem('token');
 
-        toast.success('প্রোফাইল আপডেট সফল হয়েছে!');
-        setIsSavedSuccess(true);
+      if (token) {
+        // Authenticated user -> Update Profile
+        const payload: any = { name: name.trim(), whatsapp: cleanWhatsapp };
+        if (email.trim() !== '') {
+          payload.email = email.trim();
+        }
+        
+        const res = await fetchWithAuth(`${import.meta.env.VITE_API_URL}/users/profile`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (res.ok) {
+          const result = await res.json();
+          localStorage.setItem('userName', name.trim());
+          if (result.email) localStorage.setItem('userEmail', result.email);
+          localStorage.setItem('whatsappNumber', cleanWhatsapp);
+          localStorage.setItem('userMobile', cleanWhatsapp);
+          localStorage.setItem('isAuthenticated', 'true');
+          localStorage.setItem('isProfileCompleted', 'true');
+
+          if (result.access?.trialEndDate) {
+            localStorage.setItem('trialEndDate', result.access.trialEndDate);
+            localStorage.setItem('isTrialActive', 'true');
+          }
+
+          toast.success('প্রোফাইল সফলভাবে আপডেট হয়েছে!');
+          setIsSavedSuccess(true);
+        } else {
+          toast.error('প্রোফাইল সেভ করতে সমস্যা হয়েছে!');
+        }
       } else {
-        toast.error('প্রোফাইল সেভ করতে সমস্যা হয়েছে!');
+        // Unauthenticated user -> Start 3-Day Free Trial
+        const payload: any = {
+          name: name.trim(),
+          mobile: cleanWhatsapp,
+          whatsapp: cleanWhatsapp,
+          deviceId: localStorage.getItem('deviceId') || ''
+        };
+        if (email.trim() !== '') {
+          payload.email = email.trim();
+        }
+
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/users/start-trial`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('userName', data.user.name);
+          localStorage.setItem('userMobile', data.user.mobile);
+          localStorage.setItem('whatsappNumber', data.user.whatsapp);
+          localStorage.setItem('isAuthenticated', 'true');
+          localStorage.setItem('isSubscribed', data.user.isSubscribed ? 'true' : 'false');
+          localStorage.setItem('isTrialActive', 'true');
+          if (data.trialEndDate) {
+            localStorage.setItem('trialEndDate', data.trialEndDate);
+          }
+          localStorage.setItem('isProfileCompleted', 'true');
+
+          toast.success('🎉 প্রোফাইল সফল হয়েছে! WhatsApp ওপেন হচ্ছে...', { duration: 3000 });
+          setIsSavedSuccess(true);
+          setTimeout(() => {
+            window.location.href = `https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`;
+          }, 800);
+        } else if (data.status === 'TRIAL_EXPIRED') {
+          toast.error(data.message || 'আপনার ৩ দিনের ফ্রি ট্রায়াল শেষ হয়ে গেছে। বিকাশ দিয়ে সাবস্ক্রাইব করুন।');
+          navigate('/paywall');
+        } else {
+          toast.error(data.message || 'প্রোফাইল সেভ করতে সমস্যা হয়েছে!');
+        }
       }
     } catch (error) {
       console.error(error);
@@ -103,8 +154,8 @@ export default function CompleteProfile() {
       {/* Header Background */}
       <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-[#0A7756] to-[#12A57A] rounded-b-[3rem] z-0 shadow-lg"></div>
 
-      <div className="relative z-10 flex flex-col flex-1 p-5 pt-16 max-w-lg mx-auto w-full">
-        <div className="bg-white rounded-[2rem] p-8 shadow-2xl flex-1 flex flex-col animate-in fade-in zoom-in-95 duration-500">
+      <div className="relative z-10 flex flex-col flex-1 p-5 pt-12 sm:pt-16 max-w-lg mx-auto w-full">
+        <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-2xl flex-1 flex flex-col animate-in fade-in zoom-in-95 duration-500">
           
           {isSavedSuccess ? (
             /* Choice Screen: WhatsApp AI vs Web App */
@@ -115,13 +166,13 @@ export default function CompleteProfile() {
 
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-[#0A7756]/10 text-[#0A7756] mb-2">
-                  <Sparkles className="w-4 h-4" /> প্রোফাইল সফলভাবে সেট করা হয়েছে
+                  <Sparkles className="w-4 h-4" /> ৩ দিনের ফ্রি ট্রায়াল সক্রিয়
                 </div>
                 <h2 className="text-2xl font-black text-slate-800 tracking-tight">
                   স্বাগতম, {name || 'স্মৃতি ইউজার'}!
                 </h2>
                 <p className="text-slate-500 text-sm mt-1 px-4">
-                  আপনি কোন মাধ্যমে স্মৃতি লাইফ ব্যবহার করতে চান নির্বাচন করুন:
+                  স্মৃতি লাইফ শুরু করতে আপনার পছন্দের মাধ্যম বেছে নিন:
                 </p>
               </div>
 
@@ -165,21 +216,33 @@ export default function CompleteProfile() {
             </div>
           ) : (
             <>
-              <div className="flex justify-center mb-6">
-                <div className="w-16 h-16 bg-[#0A7756]/10 rounded-full flex items-center justify-center">
-                  <CheckCircle2 className="w-8 h-8 text-[#0A7756]" />
+              <div className="flex justify-center mb-5">
+                <div className="w-16 h-16 bg-[#0A7756]/10 rounded-2xl flex items-center justify-center shadow-xs">
+                  {isPaidUser ? (
+                    <CheckCircle2 className="w-9 h-9 text-[#0A7756]" />
+                  ) : (
+                    <Gift className="w-9 h-9 text-[#0A7756] animate-bounce" />
+                  )}
                 </div>
               </div>
 
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-extrabold text-slate-800 mb-2">সাবস্ক্রিপশন সফল হয়েছে!</h2>
-                <p className="text-slate-500 text-sm font-medium px-4">
-                  দয়া করে আপনার নাম এবং WhatsApp নম্বর দিন যেন আমরা আপনাকে সময়মতো রিমাইন্ডার ও অ্যাসিস্ট্যান্ট সেবা দিতে পারি।
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 text-[11px] font-black px-3 py-1 rounded-full border border-emerald-200/80 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{isPaidUser ? 'সাবস্ক্রিপশন সম্পন্ন' : '৩ দিন সম্পূর্ণ ফ্রি ট্রায়াল'}</span>
+                </div>
+                <h2 className="text-2xl font-black text-slate-800 mb-1.5 tracking-tight">
+                  {isPaidUser ? 'প্রোফাইল তথ্য দিন' : 'প্রোফাইল পূরণ করে শুরু করুন'}
+                </h2>
+                <p className="text-slate-500 text-xs sm:text-sm font-medium px-2 leading-relaxed">
+                  {isPaidUser 
+                    ? 'আপনার নাম এবং WhatsApp নম্বর দিন যেন আমরা আপনাকে সময়মতো রিমাইন্ডার ও অ্যাসিস্ট্যান্ট সেবা দিতে পারি।'
+                    : 'তথ্য পূরণ করলেই ৩ দিন সম্পূর্ণ ফ্রিতে স্মৃতি লাইফের সব ফিচার উপভোগ করতে পারবেন। কোনো অগ্রিম ফি লাগবে না!'}
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Disabled Mobile Number field */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Disabled Mobile Number field for paid users */}
                 {bkashNumber && (
                   <div>
                     <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">সাবস্ক্রিপশন মোবাইল নম্বর</label>
@@ -191,14 +254,14 @@ export default function CompleteProfile() {
                         type="text"
                         value={bkashNumber}
                         disabled
-                        className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold text-emerald-800 cursor-not-allowed"
+                        className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold text-emerald-800 cursor-not-allowed"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block ml-1">
                     আপনার পূর্ণ নাম {isSubmitted && !name && <span className="text-red-500 text-sm">*</span>}
                   </label>
                   <div className="relative">
@@ -216,8 +279,8 @@ export default function CompleteProfile() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">
-                    WhatsApp নম্বর (রিমাইন্ডারের জন্য) {isSubmitted && !whatsapp && <span className="text-red-500 text-sm">*</span>}
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block ml-1">
+                    WhatsApp / মোবাইল নম্বর {isSubmitted && !whatsapp && <span className="text-red-500 text-sm">*</span>}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -232,12 +295,12 @@ export default function CompleteProfile() {
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 mt-1 ml-1">
-                    💡 আপনার হোয়াটসঅ্যাপ নম্বর যদি সাবস্ক্রিপশন নম্বর থেকে আলাদা হয়, তবে সেই নম্বরটি দিন।
+                    💡 এই নম্বরেই আপনার WhatsApp AI সহকারী রিমাইন্ডার ও তথ্য পাঠাবে।
                   </p>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1.5 block ml-1">ইমেইল অ্যাড্রেস (ঐচ্ছিক)</label>
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block ml-1">ইমেইল অ্যাড্রেস (ঐচ্ছিক)</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <Mail className="h-5 w-5 text-slate-400" />
@@ -254,9 +317,9 @@ export default function CompleteProfile() {
 
                 <button
                   type="submit"
-                  className="w-full bg-[#0A7756] hover:bg-[#086146] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center group mt-6 cursor-pointer"
+                  className="w-full bg-gradient-to-r from-[#0A7756] to-[#12A57A] hover:opacity-95 text-white font-black py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center group mt-6 cursor-pointer"
                 >
-                  প্রোফাইল সেভ করুন 
+                  <span>{isPaidUser ? 'প্রোফাইল সেভ করুন' : '৩ দিন ফ্রি ট্রায়াল শুরু করুন 🚀'}</span>
                   <ChevronRight className="w-5 h-5 ml-1 group-hover:translate-x-1 transition-transform" />
                 </button>
               </form>

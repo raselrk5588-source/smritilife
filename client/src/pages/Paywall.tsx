@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Shield, Sparkles, ChevronRight, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, Shield, Sparkles, ChevronRight, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 export default function Paywall() {
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const trialEndDateStr = localStorage.getItem('trialEndDate');
+  const isTrialExpired = Boolean(trialEndDateStr && new Date() >= new Date(trialEndDateStr));
 
   useEffect(() => {
     // Adjust font size for web view
@@ -99,6 +102,19 @@ export default function Paywall() {
             <h2 className="text-slate-800 font-black text-lg">আনলিমিটেড প্রিমিয়াম অ্যাক্সেস</h2>
             <p className="text-slate-500 text-xs mt-1">সব ফিচার সম্পূর্ণ আনলক করতে সাবস্ক্রাইব করুন</p>
           </div>
+
+          {/* Trial Expired Alert Banner */}
+          {isTrialExpired && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200/80 rounded-2xl text-center animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center justify-center gap-1.5 text-red-700 font-black text-xs mb-1">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>আপনার ৩ দিনের ফ্রি ট্রায়াল শেষ হয়েছে!</span>
+              </div>
+              <p className="text-[11px] text-red-600 font-medium leading-relaxed">
+                স্মৃতি লাইফের AI রিমাইন্ডার, হিসাব খাতা ও সকল ফিচার নিরবচ্ছিন্নভাবে ব্যবহার করতে বিকাশ দিয়ে সাবস্ক্রাইব করুন।
+              </p>
+            </div>
+          )}
 
           {/* Features List */}
           <div className="space-y-2.5 mb-5 bg-slate-50 p-4 rounded-2xl border border-slate-100/70">

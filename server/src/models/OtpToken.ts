@@ -11,6 +11,11 @@ export interface IOtpToken extends Document {
     name: string;
     mobile: string;
     isSubscribed: boolean;
+    trialStartDate?: Date;
+    trialEndDate?: Date;
+    isTrialActive?: boolean;
+    hasAccess?: boolean;
+    status?: string;
   };
   expiresAt: Date;
   createdAt: Date;

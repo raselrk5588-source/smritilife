@@ -30,7 +30,10 @@ import {
   ListTodo,
   Mic,
   Store,
-  Loader2
+  Loader2,
+  User,
+  Phone,
+  Gift
 } from 'lucide-react';
 
 const heroFeatures = [
@@ -130,6 +133,104 @@ export default function Landing() {
   }, []);
 
   const [isSubscribing, setIsSubscribing] = useState(false);
+
+  // 3-Day Free Trial Profile Completion Modal State
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [trialName, setTrialName] = useState('');
+  const [trialMobile, setTrialMobile] = useState('');
+  const [trialDistrict, setTrialDistrict] = useState('Dhaka');
+  const [isStartingTrial, setIsStartingTrial] = useState(false);
+
+  // Click on "শুরু করুন" button
+  const handleStartClick = () => {
+    setMobileMenuOpen(false);
+    const isAuth = localStorage.getItem('isAuthenticated') === 'true';
+    const isSub = localStorage.getItem('isSubscribed') === 'true';
+    const trialEndDate = localStorage.getItem('trialEndDate');
+    const isTrialValid = Boolean(trialEndDate && new Date() < new Date(trialEndDate));
+
+    if (isAuth) {
+      if (isSub || isTrialValid) {
+        navigate('/app');
+      } else {
+        navigate('/paywall');
+      }
+      return;
+    }
+
+    // Unregistered/Logged-out user: Show Profile Completion for 3-Day Trial
+    setShowTrialModal(true);
+  };
+
+  const handleStartTrialSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trialName.trim()) {
+      toast.error('অনুগ্রহ করে আপনার নাম লিখুন');
+      return;
+    }
+    const cleanMobile = trialMobile.replace(/[^\d]/g, '').replace(/^88(?=01)/, '');
+    if (!/^01[3-9]\d{8}$/.test(cleanMobile)) {
+      toast.error('সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)');
+      return;
+    }
+
+    setIsStartingTrial(true);
+    toast.loading('৩ দিনের ফ্রি ট্রায়াল চালু হচ্ছে...', { id: 'trialStart' });
+
+    try {
+      let deviceId = localStorage.getItem('deviceId');
+      if (!deviceId) {
+        deviceId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('deviceId', deviceId);
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/users/start-trial`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trialName.trim(),
+          mobile: cleanMobile,
+          whatsapp: cleanMobile,
+          district: trialDistrict,
+          deviceId
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userName', data.user.name);
+        localStorage.setItem('userMobile', data.user.mobile);
+        localStorage.setItem('whatsappNumber', data.user.whatsapp || data.user.mobile);
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('isSubscribed', data.user.isSubscribed ? 'true' : 'false');
+        localStorage.setItem('isTrialActive', 'true');
+        if (data.trialEndDate) {
+          localStorage.setItem('trialEndDate', data.trialEndDate);
+        }
+        localStorage.setItem('isProfileCompleted', 'true');
+
+        toast.success('🎉 প্রোফাইল সফল হয়েছে! WhatsApp ওপেন হচ্ছে...', { id: 'trialStart', duration: 3000 });
+        setShowTrialModal(false);
+
+        // Immediately open WhatsApp with /start smritilife so user initiates message to the agent first
+        const whatsappUrl = `https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`;
+        window.location.href = whatsappUrl;
+      } else if (data.status === 'TRIAL_EXPIRED') {
+        toast.error(data.message || 'আপনার ৩ দিনের ফ্রি ট্রায়াল শেষ হয়ে গেছে। বিকাশ দিয়ে সাবস্ক্রাইব করুন।', { id: 'trialStart', duration: 5000 });
+        setShowTrialModal(false);
+        navigate('/paywall');
+      } else {
+        toast.error(data.message || 'ট্রায়াল শুরু করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।', { id: 'trialStart' });
+      }
+    } catch (err: any) {
+      console.error('start-trial error:', err);
+      toast.error('সার্ভারের সাথে সংযোগ করা সম্ভব হয়নি। আবার চেষ্টা করুন।', { id: 'trialStart' });
+    } finally {
+      setIsStartingTrial(false);
+    }
+  };
 
   // Direct 1-click checkout: Initiates BDApps charging gateway directly
   const [showMsisdnModal, setShowMsisdnModal] = useState(false);
@@ -809,23 +910,21 @@ export default function Landing() {
                     </li>
                   </ul>
 
-                  {/* Subscribe Action Button */}
+                  {/* 3-Day Free Trial Action Button */}
                   <button
-                    onClick={handleSubscribe}
-                    disabled={isSubscribing}
-                    className="w-full bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-98 text-white font-bold text-base py-4 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+                    onClick={handleStartClick}
+                    className="w-full bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-98 text-white font-bold text-base py-4 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {isSubscribing ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>পেমেন্ট পেজে পাঠানো হচ্ছে...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>এখনই শুরু করুন</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
+                    <span>৩ দিন ফ্রি ট্রায়াল শুরু করুন</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => handleSubscribe()} 
+                    className="mt-3 text-xs text-slate-500 hover:text-[#0A7756] font-semibold underline block mx-auto cursor-pointer"
+                  >
+                    সরাসরি বিকাশ দিয়ে সাবস্ক্রাইব করুন (৳১৯০/মাস)
                   </button>
 
                 </div>
@@ -912,24 +1011,130 @@ export default function Landing() {
 
       {/* Persistent Floating Action Button at Bottom Right Corner */}
       <button
-        onClick={handleSubscribe}
+        onClick={handleStartClick}
         disabled={isSubscribing}
         className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-50 inline-flex items-center gap-2 sm:gap-2.5 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-95 text-white font-black text-sm sm:text-base px-5 py-3 sm:px-6 sm:py-3.5 rounded-full shadow-[0_12px_28px_rgba(10,119,86,0.45)] hover:shadow-[0_18px_36px_rgba(10,119,86,0.6)] border border-emerald-300/40 backdrop-blur-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group disabled:opacity-75 disabled:cursor-not-allowed"
         aria-label="শুরু করুন"
       >
-        {isSubscribing ? (
-          <>
-            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-white" />
-            <span>অপেক্ষা করুন...</span>
-          </>
-        ) : (
-          <>
-            <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 group-hover:rotate-12 transition-transform" />
-            <span>শুরু করুন</span>
-            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-          </>
-        )}
+        <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 group-hover:rotate-12 transition-transform" />
+        <span>শুরু করুন</span>
+        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
       </button>
+
+      {/* 3-Day Free Trial Profile Completion Modal */}
+      {showTrialModal && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onClick={() => setShowTrialModal(false)}
+        >
+          <div 
+            className="w-full max-w-md rounded-[28px] bg-white p-6 sm:p-7 shadow-2xl border border-white/80 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-[#0A7756] flex items-center justify-center shadow-xs">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-800 leading-tight">৩ দিন ফ্রি ট্রায়াল শুরু করুন</h3>
+                  <p className="text-xs text-slate-500 font-medium">কোনো অগ্রিম পেমেন্ট বা ক্রেডিট কার্ড লাগবে না</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowTrialModal(false)} 
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Trial Feature Highlights */}
+            <div className="mb-4 bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3 text-xs space-y-1.5 text-emerald-900 font-medium">
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                <span>৩ দিন WhatsApp AI ও ওয়েবসাইটের সব ফিচার সম্পূর্ণ ফ্রি</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                <span>৩ দিন পর পছন্দ হলে বিকাশ দিয়ে পেমেন্ট করবেন</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleStartTrialSubmit} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-slate-600 mb-1 block ml-1">আপনার পূর্ণ নাম</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <User className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    autoFocus
+                    type="text"
+                    required
+                    placeholder="যেমন: রিয়াদ হাসান"
+                    value={trialName}
+                    onChange={(e) => setTrialName(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-3.5 py-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0A7756] focus:bg-white focus:ring-2 focus:ring-[#0A7756]/20 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-600 mb-1 block ml-1">WhatsApp / মোবাইল নম্বর</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <Phone className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    required
+                    maxLength={14}
+                    placeholder="01XXXXXXXXX"
+                    value={trialMobile}
+                    onChange={(e) => setTrialMobile(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-3.5 py-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0A7756] focus:bg-white focus:ring-2 focus:ring-[#0A7756]/20 transition"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-400 ml-1 mt-0.5 block">
+                  💡 এই নম্বরেই আপনার WhatsApp AI সহকারী চালু হবে
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isStartingTrial}
+                className="w-full mt-2 bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-98 text-white font-black text-sm py-3.5 rounded-xl shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+              >
+                {isStartingTrial ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>প্রোফাইল তৈরি হচ্ছে...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>৩ দিন ফ্রি ট্রায়াল শুরু করুন 🚀</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowTrialModal(false); navigate('/auth'); }}
+                  className="text-xs font-bold text-slate-500 hover:text-[#0A7756] transition"
+                >
+                  আগে থেকেই একাউন্ট আছে? <span className="underline">লগইন করুন</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Mobile number prompt → goes straight to bKash payment page */}
       {showMsisdnModal && (

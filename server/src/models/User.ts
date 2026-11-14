@@ -13,6 +13,11 @@ export interface IUser extends Document {
     voice: boolean;
   };
   isSubscribed: boolean;
+  trialStartDate?: Date;
+  trialEndDate?: Date;
+  isTrialUsed?: boolean;
+  isProfileCompleted?: boolean;
+  subscriptionExpiresAt?: Date;
   isAdmin?: boolean;
   deviceIds: string[];
   lastFollowUpDate?: string;
@@ -46,6 +51,11 @@ const UserSchema: Schema = new Schema(
       voice: { type: Boolean, default: true }
     },
     isSubscribed: { type: Boolean, default: true },
+    trialStartDate: { type: Date },
+    trialEndDate: { type: Date },
+    isTrialUsed: { type: Boolean, default: false },
+    isProfileCompleted: { type: Boolean, default: false },
+    subscriptionExpiresAt: { type: Date },
     isAdmin: { type: Boolean, default: false },
     deviceIds: { type: [String], default: [] },
     lastFollowUpDate: { type: String },

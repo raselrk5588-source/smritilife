@@ -14,15 +14,30 @@ export default function MainLayout() {
   const userName = localStorage.getItem('userName') || "রিয়াদ";
   const isMainTab = ['/app', '/app/', '/app/notes', '/app/reminders', '/app/wishes', '/app/ramadan', '/app/documents', '/app/fcommerce'].includes(location.pathname);
 
+  const isAuth = localStorage.getItem('isAuthenticated') === 'true';
+  const isSub = localStorage.getItem('isSubscribed') === 'true';
+  const trialEndDateStr = localStorage.getItem('trialEndDate');
+  const isTrialValid = Boolean(trialEndDateStr && new Date() < new Date(trialEndDateStr));
+
   useEffect(() => {
-    if (!localStorage.getItem('isAuthenticated')) {
+    if (!isAuth) {
       navigate('/');
-    } else if (localStorage.getItem('isSubscribed') !== 'true') {
+    } else if (!isSub && !isTrialValid) {
       navigate('/paywall');
     }
     // Ensure default natural 100% font size on mobile and desktop
     document.documentElement.style.fontSize = '';
-  }, [navigate]);
+  }, [navigate, isAuth, isSub, isTrialValid]);
+
+  const getTrialRemainingText = () => {
+    if (!trialEndDateStr) return '';
+    const diffMs = new Date(trialEndDateStr).getTime() - Date.now();
+    if (diffMs <= 0) return 'মেয়াদ শেষ';
+    const hours = Math.ceil(diffMs / (1000 * 60 * 60));
+    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (days > 1) return `বাকি ${days} দিন`;
+    return `বাকি ${hours} ঘণ্টা`;
+  };
 
   // Dynamic check for Ramadan season (Month 9 of Islamic calendar or Sha'ban 26+)
   const isRamadanSeason = () => {
@@ -51,6 +66,26 @@ export default function MainLayout() {
   return (
     <div className="flex flex-col min-h-screen bg-[#f6f8f9] font-sans">
       
+      {/* 3-Day Free Trial Notice Banner */}
+      {!isSub && isTrialValid && (
+        <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white text-xs px-4 py-2 flex items-center justify-between shadow-xs sticky top-0 z-[60]">
+          <div className="flex items-center gap-2 max-w-xl">
+            <span className="bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0">
+              ফ্রি ট্রায়াল
+            </span>
+            <span className="font-semibold text-[11px] sm:text-xs">
+              আপনার ৩ দিনের ফ্রি ট্রায়াল চালু আছে ({getTrialRemainingText()})
+            </span>
+          </div>
+          <Link
+            to="/paywall"
+            className="inline-flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-800 px-3 py-1 rounded-full text-[11px] font-bold transition shadow-2xs shrink-0"
+          >
+            <span>বিকাশ দিয়ে সাবস্ক্রাইব করুন</span>
+          </Link>
+        </div>
+      )}
+
       {/* Web View Top Navigation (Premium Consumer Glassmorphism Style) */}
       <header className="hidden md:flex bg-white/95 backdrop-blur-md text-slate-800 sticky top-0 z-50 h-[64px] items-center border-b border-slate-200/80 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] transition-all">
         <div className="w-full max-w-6xl mx-auto px-4 lg:px-6 flex items-center justify-between gap-3">

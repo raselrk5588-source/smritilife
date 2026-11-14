@@ -1,10 +1,11 @@
 import express from 'express';
-import { getProfile, updateProfile } from '../controllers/userController';
+import { getProfile, updateProfile, startTrial } from '../controllers/userController';
 import { loginWithOtp, checkMobile, checkAuthSessionStatus } from '../controllers/authController';
 import { protect } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
+router.post('/start-trial', startTrial);
 router.post('/check-mobile', checkMobile);
 router.post('/login', loginWithOtp);
 router.get('/auth-session/:sessionId', checkAuthSessionStatus);
