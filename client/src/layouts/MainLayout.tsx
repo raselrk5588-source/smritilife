@@ -74,7 +74,7 @@ export default function MainLayout() {
               ফ্রি ট্রায়াল
             </span>
             <span className="font-semibold text-[11px] sm:text-xs">
-              আপনার ৩ দিনের ফ্রি ট্রায়াল চালু আছে ({getTrialRemainingText()})
+              আপনার ফ্রি ট্রায়াল চালু আছে ({getTrialRemainingText()})
             </span>
           </div>
           <Link

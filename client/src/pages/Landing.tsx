@@ -134,12 +134,29 @@ export default function Landing() {
 
   const [isSubscribing, setIsSubscribing] = useState(false);
 
-  // 3-Day Free Trial Profile Completion Modal State
+  // Free Trial Settings State (Configurable by Admin)
+  const [isTrialEnabled, setIsTrialEnabled] = useState(true);
+  const [trialDays, setTrialDays] = useState(3);
+
+  // Free Trial Profile Completion Modal State
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [trialName, setTrialName] = useState('');
   const [trialMobile, setTrialMobile] = useState('');
   const [trialDistrict, setTrialDistrict] = useState('Dhaka');
   const [isStartingTrial, setIsStartingTrial] = useState(false);
+
+  // Fetch Public Trial Settings from Admin Configuration
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/users/trial-settings`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          setIsTrialEnabled(data.isTrialEnabled !== false);
+          if (data.trialDays) setTrialDays(Number(data.trialDays));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Click on "শুরু করুন" button
   const handleStartClick = () => {
@@ -158,7 +175,13 @@ export default function Landing() {
       return;
     }
 
-    // Unregistered/Logged-out user: Show Profile Completion for 3-Day Trial
+    // If trial is turned off by admin:
+    if (!isTrialEnabled) {
+      navigate('/auth');
+      return;
+    }
+
+    // Unregistered/Logged-out user: Show Profile Completion for Free Trial
     setShowTrialModal(true);
   };
 
@@ -175,7 +198,7 @@ export default function Landing() {
     }
 
     setIsStartingTrial(true);
-    toast.loading('৩ দিনের ফ্রি ট্রায়াল চালু হচ্ছে...', { id: 'trialStart' });
+    toast.loading(`${trialDays} দিনের ফ্রি ট্রায়াল চালু হচ্ছে...`, { id: 'trialStart' });
 
     try {
       let deviceId = localStorage.getItem('deviceId');
@@ -218,7 +241,7 @@ export default function Landing() {
         const whatsappUrl = `https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`;
         window.location.href = whatsappUrl;
       } else if (data.status === 'TRIAL_EXPIRED') {
-        toast.error(data.message || 'আপনার ৩ দিনের ফ্রি ট্রায়াল শেষ হয়ে গেছে। বিকাশ দিয়ে সাবস্ক্রাইব করুন।', { id: 'trialStart', duration: 5000 });
+        toast.error(data.message || 'আপনার ফ্রি ট্রায়ালের মেয়াদ শেষ হয়ে গেছে। বিকাশ দিয়ে সাবস্ক্রাইব করুন।', { id: 'trialStart', duration: 5000 });
         setShowTrialModal(false);
         navigate('/paywall');
       } else {
@@ -910,12 +933,12 @@ export default function Landing() {
                     </li>
                   </ul>
 
-                  {/* 3-Day Free Trial Action Button */}
+                  {/* Free Trial Action Button */}
                   <button
                     onClick={handleStartClick}
                     className="w-full bg-gradient-to-r from-[#0A7756] via-[#0B8560] to-[#0E9E73] hover:from-[#086347] hover:to-[#0A7756] active:scale-98 text-white font-bold text-base py-4 rounded-full shadow-lg shadow-[#0A7756]/25 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span>৩ দিন ফ্রি ট্রায়াল শুরু করুন</span>
+                    <span>{isTrialEnabled ? `${trialDays} দিন ফ্রি ট্রায়াল শুরু করুন` : 'শুরু করুন'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
@@ -1038,7 +1061,7 @@ export default function Landing() {
                   <Gift className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-800 leading-tight">৩ দিন ফ্রি ট্রায়াল শুরু করুন</h3>
+                  <h3 className="text-lg font-black text-slate-800 leading-tight">{trialDays} দিন ফ্রি ট্রায়াল শুরু করুন</h3>
                   <p className="text-xs text-slate-500 font-medium">কোনো অগ্রিম পেমেন্ট বা ক্রেডিট কার্ড লাগবে না</p>
                 </div>
               </div>
@@ -1055,11 +1078,11 @@ export default function Landing() {
             <div className="mb-4 bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3 text-xs space-y-1.5 text-emerald-900 font-medium">
               <div className="flex items-center gap-2">
                 <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
-                <span>৩ দিন WhatsApp AI ও ওয়েবসাইটের সব ফিচার সম্পূর্ণ ফ্রি</span>
+                <span>{trialDays} দিন WhatsApp AI ও ওয়েবসাইটের সব ফিচার সম্পূর্ণ ফ্রি</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
-                <span>৩ দিন পর পছন্দ হলে বিকাশ দিয়ে পেমেন্ট করবেন</span>
+                <span>{trialDays} দিন পর পছন্দ হলে বিকাশ দিয়ে পেমেন্ট করবেন</span>
               </div>
             </div>
 
@@ -1116,7 +1139,7 @@ export default function Landing() {
                   </>
                 ) : (
                   <>
-                    <span>৩ দিন ফ্রি ট্রায়াল শুরু করুন 🚀</span>
+                    <span>{trialDays} দিন ফ্রি ট্রায়াল শুরু করুন 🚀</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

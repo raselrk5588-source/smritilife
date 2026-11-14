@@ -112,6 +112,8 @@ interface SystemSettings {
   bdappsApiSecret?: string;
   bdappsRedirectUrl?: string;
   subscriptionFee?: number;
+  isTrialEnabled?: boolean;
+  trialDays?: number;
   isMaintenanceMode?: boolean;
   maintenanceTitle?: string;
   maintenanceMessage?: string;
@@ -174,6 +176,8 @@ export default function AdminDashboard() {
   const [settings, setSettings] = useState<SystemSettings>({
     openaiApiKey: '', geminiApiKey: '', whatsappApiToken: '', twilioAccountSid: '', twilioPhoneNumber: '', smsGatewayKey: '', freeUserReminderLimit: 5, proUserReminderLimit: 100,
     bdappsApiKey: '', bdappsApiSecret: '', bdappsRedirectUrl: '', subscriptionFee: 190,
+    isTrialEnabled: true,
+    trialDays: 3,
     isMaintenanceMode: false,
     maintenanceTitle: 'SmritiLive • সিস্টেম আপডেট চলছে',
     maintenanceMessage: 'SmritiLive-কে আরও দ্রুত ও উন্নত করতে বর্তমানে সিস্টেম আপগ্রেডের কাজ চলছে। খুব শীঘ্রই আমরা আবার পুরোদমে ফিরে আসছি। আপনার সাময়িক অসুবিধার জন্য আন্তরিকভাবে দুঃখিত।',
@@ -2372,6 +2376,84 @@ export default function AdminDashboard() {
                           />
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Free Trial Management Section */}
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white text-xs font-black flex items-center justify-center">🎁</span>
+                      ফ্রি ট্রায়াল নিয়ন্ত্রণ (Free Trial Control)
+                    </h3>
+                    <div className="space-y-5 bg-gradient-to-br from-emerald-50/50 via-slate-50 to-teal-50/30 p-6 rounded-2xl border border-emerald-100/70">
+                      
+                      {/* ON / OFF Switch */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-xl border border-slate-200/80 shadow-xs">
+                        <div>
+                          <div className="font-bold text-slate-800 flex items-center gap-2">
+                            <span>ফ্রি ট্রায়াল সিস্টেম চালু / বন্ধ</span>
+                            <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${settings.isTrialEnabled !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                              {settings.isTrialEnabled !== false ? 'চালু (ACTIVE)' : 'সম্পূর্ণ বন্ধ (OFF)'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {settings.isTrialEnabled !== false 
+                              ? 'নতুন ব্যবহারকারীরা রেজিস্ট্রেশন করলেই নির্ধারিত দিনের ফ্রি ট্রায়াল পাবেন।' 
+                              : 'ফ্রি ট্রায়াল বন্ধ রয়েছে। নতুন ইউজারদের সরাসরি বিকাশ দিয়ে সাবস্ক্রিপশন নিতে হবে।'}
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={settings.isTrialEnabled !== false}
+                            onChange={(e) => setSettings({ ...settings, isTrialEnabled: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600"></div>
+                        </label>
+                      </div>
+
+                      {/* Trial Days Duration Input & Quick Presets */}
+                      <div className={`space-y-3 transition-opacity ${settings.isTrialEnabled === false ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                        <div>
+                          <label className="text-sm font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                            <span>ট্রায়ালের মেয়াদ (দিন হিসেবে)</span>
+                            <span className="text-xs text-emerald-700 font-semibold">বর্তমানে সেট করা: {settings.trialDays || 3} দিন</span>
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="number"
+                              min={1}
+                              max={365}
+                              value={settings.trialDays ?? 3}
+                              onChange={(e) => setSettings({ ...settings, trialDays: Math.max(1, Number(e.target.value) || 1) })}
+                              className="w-full sm:w-48 bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 text-base focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                              placeholder="যেমন: 3, 7, 10, 30"
+                            />
+                            <span className="text-sm font-bold text-slate-600 shrink-0">দিন ফ্রি ট্রায়াল</span>
+                          </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className="text-xs text-slate-400 font-medium">দ্রুত নির্বাচন করুন:</span>
+                          {[3, 7, 10, 14, 30].map((days) => (
+                            <button
+                              key={days}
+                              type="button"
+                              onClick={() => setSettings({ ...settings, trialDays: days })}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                (settings.trialDays ?? 3) === days
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-white hover:bg-emerald-50 text-slate-700 border border-slate-200 hover:border-emerald-300'
+                              }`}
+                            >
+                              {days} দিন
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                   

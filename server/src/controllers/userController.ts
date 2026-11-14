@@ -4,6 +4,7 @@ import User from '../models/User';
 import Note from '../models/Note';
 import Reminder from '../models/Reminder';
 import SpecialDate from '../models/SpecialDate';
+import SystemSettings from '../models/SystemSettings';
 import { sendLoginWelcomeMessage } from './authController';
 import { sendMetaWhatsAppMessage } from './whatsappController';
 import { checkUserAccess, normalizeMobile } from '../utils/subscriptionHelper';
@@ -90,12 +91,47 @@ export const updateProfile = async (req: Request, res: Response) => {
 };
 
 /**
- * Public Endpoint: Complete Profile and Start 3-Day Free Trial
- * When clicking "শুরু করুন" button, user completes profile and gets 3 days free trial
+ * Public Endpoint: Get Current Free Trial Settings
+ * Allows landing page and client to know if trial is enabled and how many days it offers
+ */
+export const getTrialSettings = async (req: Request, res: Response) => {
+  try {
+    const settings = await SystemSettings.findOne();
+    const isTrialEnabled = settings?.isTrialEnabled !== false;
+    const trialDays = Number(settings?.trialDays) > 0 ? Number(settings?.trialDays) : 3;
+    return res.json({
+      success: true,
+      isTrialEnabled,
+      trialDays
+    });
+  } catch (err: any) {
+    return res.json({
+      success: true,
+      isTrialEnabled: true,
+      trialDays: 3
+    });
+  }
+};
+
+/**
+ * Public Endpoint: Complete Profile and Start Free Trial
+ * When clicking "শুরু করুন" button, user completes profile and gets trial (default 3 days or admin defined)
  */
 export const startTrial = async (req: Request, res: Response) => {
   try {
     const { name, mobile, whatsapp, district, email, deviceId } = req.body;
+
+    // Check system trial configuration
+    const systemSettings = await SystemSettings.findOne();
+    const isTrialEnabled = systemSettings?.isTrialEnabled !== false;
+    const trialDays = Number(systemSettings?.trialDays) > 0 ? Number(systemSettings?.trialDays) : 3;
+
+    if (!isTrialEnabled) {
+      return res.status(403).json({
+        success: false,
+        message: 'বর্তমানে ফ্রি ট্রায়াল সুবিধা বন্ধ রয়েছে। সরাসরি সাবস্ক্রিপশন সম্পন্ন করুন।'
+      });
+    }
 
     if (!name || !String(name).trim()) {
       return res.status(400).json({ success: false, message: 'অনুগ্রহ করে আপনার নাম লিখুন।' });
@@ -175,7 +211,7 @@ export const startTrial = async (req: Request, res: Response) => {
           status: 'TRIAL_ACTIVE',
           trialEndDate: user.trialEndDate,
           trialRemainingDays: access.trialRemainingDays,
-          message: `আপনার ৩ দিনের ফ্রি ট্রায়াল চলছে (বাকি ${access.trialRemainingDays} দিন)।`
+          message: `আপনার ফ্রি ট্রায়াল চলছে (বাকি ${access.trialRemainingDays} দিন)।`
         });
       }
 
@@ -184,7 +220,7 @@ export const startTrial = async (req: Request, res: Response) => {
         return res.status(403).json({
           success: false,
           status: 'TRIAL_EXPIRED',
-          message: 'আপনার ৩ দিনের ফ্রি ট্রায়ালের মেয়াদ শেষ হয়ে গেছে। স্মৃতি লাইফ চালিয়ে যেতে বিকাশ দিয়ে সাবস্ক্রাইব করুন।'
+          message: `আপনার ফ্রি ট্রায়ালের মেয়াদ শেষ হয়ে গেছে। স্মৃতি লাইফ চালিয়ে যেতে বিকাশ দিয়ে সাবস্ক্রাইব করুন।`
         });
       }
 
@@ -196,7 +232,7 @@ export const startTrial = async (req: Request, res: Response) => {
       user.isProfileCompleted = true;
       user.isTrialUsed = true;
       user.trialStartDate = new Date();
-      user.trialEndDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // exactly 3 days from now
+      user.trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000); // Admin defined days
       if (deviceId) {
         if (!user.deviceIds) user.deviceIds = [];
         if (!user.deviceIds.includes(deviceId)) {
@@ -208,7 +244,7 @@ export const startTrial = async (req: Request, res: Response) => {
       isNewTrialStarted = true;
 
     } else {
-      // Brand new user registration with 3-day trial
+      // Brand new user registration with trial
       const cleanEmail = email && String(email).trim() 
         ? String(email).trim() 
         : `${cleanMobile}@smritilife.com`;
@@ -223,7 +259,7 @@ export const startTrial = async (req: Request, res: Response) => {
         isProfileCompleted: true,
         isTrialUsed: true,
         trialStartDate: new Date(),
-        trialEndDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days free trial
+        trialEndDate: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000), // Admin defined days
         deviceIds: deviceId ? [deviceId] : []
       });
 
@@ -231,10 +267,10 @@ export const startTrial = async (req: Request, res: Response) => {
       isNewTrialStarted = true;
     }
 
-    // Send WhatsApp Welcome Message about the 3-day trial
+    // Send WhatsApp Welcome Message about the trial
     if (isNewTrialStarted) {
       try {
-        const welcomeText = `🎉 *স্মৃতি লাইফে স্বাগতম, ${user.name}!* 🤖\n\nআপনার *৩ দিনের ফ্রি ট্রায়াল* সফলভাবে শুরু হয়েছে! আগামী ৩ দিন আপনি স্মৃতি লাইফের সকল এআই ফিচার (রিমাইন্ডার, হিসাব খাতা, শুভেচ্ছা ও নোট) সম্পূর্ণ বিনামূল্যে ব্যবহার করতে পারবেন।\n\n💬 এখনই এই চ্যাটে আপনার যেকোনো রিমাইন্ডার বা খরচ লিখে পাঠান! 😊\n\n🌐 ওয়েবসাইট ড্যাশবোর্ড: https://smritilife.com/app`;
+        const welcomeText = `🎉 *স্মৃতি লাইফে স্বাগতম, ${user.name}!* 🤖\n\nআপনার *${trialDays} দিনের ফ্রি ট্রায়াল* সফলভাবে শুরু হয়েছে! আগামী ${trialDays} দিন আপনি স্মৃতি লাইফের সকল এআই ফিচার (রিমাইন্ডার, হিসাব খাতা, শুভেচ্ছা ও নোট) সম্পূর্ণ বিনামূল্যে ব্যবহার করতে পারবেন।\n\n💬 এখনই এই চ্যাটে আপনার যেকোনো রিমাইন্ডার বা খরচ লিখে পাঠান! 😊\n\n🌐 ওয়েবসাইট ড্যাশবোর্ড: https://smritilife.com/app`;
         await sendMetaWhatsAppMessage(user.whatsapp || user.mobile || '', welcomeText);
       } catch (waErr) {
         console.error('[startTrial] WhatsApp welcome message error:', waErr);
@@ -259,8 +295,8 @@ export const startTrial = async (req: Request, res: Response) => {
       },
       status: 'TRIAL_ACTIVE',
       trialEndDate: user.trialEndDate,
-      trialRemainingDays: 3,
-      message: '🎉 অভিনন্দন! আপনার ৩ দিনের ফ্রি ট্রায়াল সফলভাবে চালু হয়েছে।'
+      trialRemainingDays: trialDays,
+      message: `🎉 অভিনন্দন! আপনার ${trialDays} দিনের ফ্রি ট্রায়াল সফলভাবে চালু হয়েছে।`
     });
 
   } catch (error: any) {
