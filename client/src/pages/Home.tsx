@@ -148,7 +148,7 @@ export default function Home() {
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       
       {/* Top Section with Soft Gradient Background */}
-      <div className="relative pt-3 sm:pt-4 pb-4 sm:pb-6 px-3 sm:px-5 rounded-b-[1.75rem] sm:rounded-b-[2rem] overflow-hidden bg-gradient-to-b from-emerald-100/70 via-teal-50/40 to-[#f6f8f9]">
+      <div className="relative pt-3 sm:pt-4 pb-5 sm:pb-7 px-3 sm:px-5 rounded-b-[1.75rem] sm:rounded-b-[2rem] overflow-hidden bg-gradient-to-b from-emerald-100/70 via-teal-50/40 to-[#f6f8f9]">
         <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-200/30 via-teal-100/10 to-transparent pointer-events-none"></div>
 
         <div className="relative z-10 pt-1">
@@ -249,7 +249,7 @@ export default function Home() {
             return (
               <>
                 {/* Greeting & Date Row */}
-                <div className="mb-3.5 sm:mb-5 flex items-center justify-between gap-3">
+                <div className="mb-4 sm:mb-5 flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-600/10 text-[#0A7756] text-[11px] sm:text-xs font-bold mb-1 border border-emerald-600/15">
                       <span>{greetingEmoji}</span>
@@ -283,7 +283,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="px-3 md:px-5 relative z-20 space-y-3 md:space-y-4">
+      <div className="px-3 md:px-5 relative z-20 space-y-3.5 md:space-y-4 mt-2.5 sm:mt-3.5">
         
         {/* Quick Service Duo: WhatsApp AI & Namaz Tracker */}
         {(() => {
