@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, Plus, Bell, Calendar, Clock, Pill, Briefcase, Bookmark, Trash2, MoreVertical, ShoppingCart, CreditCard, Gift, Edit, Phone, MessageSquare, BellRing, AlarmClock, SunMedium, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -47,15 +47,25 @@ export default function Reminders() {
   const [savedReminders, setSavedReminders] = useState<any[]>([]);
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
 
-  const filteredReminders = activeFilter === 'all' 
-    ? savedReminders 
-    : activeFilter === 'pending'
-    ? savedReminders.filter(rem => rem.status === 'Pending')
-    : activeFilter === 'completed'
-    ? savedReminders.filter(rem => rem.status === 'Completed')
-    : activeFilter === 'message'
-    ? savedReminders.filter(rem => rem.type === 'message' || !!rem.recipientPhone)
-    : savedReminders.filter(rem => rem.type === activeFilter);
+  const activeRemindersCount = useMemo(() => savedReminders.filter(rem => rem.status !== 'Completed').length, [savedReminders]);
+  const completedRemindersCount = useMemo(() => savedReminders.filter(rem => rem.status === 'Completed').length, [savedReminders]);
+
+  const filteredReminders = useMemo(() => {
+    if (activeFilter === 'completed') {
+      return savedReminders.filter(rem => rem.status === 'Completed');
+    }
+
+    // By default, exclude completed reminders so only active/running reminders are shown
+    const activeReminders = savedReminders.filter(rem => rem.status !== 'Completed');
+
+    if (activeFilter === 'all' || activeFilter === 'pending') {
+      return activeReminders;
+    }
+    if (activeFilter === 'message') {
+      return activeReminders.filter(rem => rem.type === 'message' || !!rem.recipientPhone);
+    }
+    return activeReminders.filter(rem => rem.type === activeFilter);
+  }, [activeFilter, savedReminders]);
 
   // Fetch from backend on load
   const fetchReminders = async () => {
@@ -199,6 +209,20 @@ export default function Reminders() {
           const slotIcon = slotIcons[slotGroup.slot] || '💊';
           const title = `${slotIcon} ${slotGroup.slot}ের ওষুধ`;
 
+          // Determine status: if slot status is Completed OR all medicines in the slot have ended their course
+          const now = new Date();
+          const allMedsEnded = slotGroup.medicines.length > 0 && slotGroup.medicines.every((m: any) => {
+            if (m.status === 'Completed') return true;
+            if (m.endDate) {
+              const end = new Date(m.endDate);
+              const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              return diffDays < 0;
+            }
+            return false;
+          });
+
+          const finalStatus = (slotGroup.status === 'Completed' || allMedsEnded) ? 'Completed' : (slotGroup.status || 'Pending');
+
           return {
             id: slotGroup.id,
             legacyIds: slotGroup.legacyIds,
@@ -211,7 +235,7 @@ export default function Reminders() {
             icon: Pill,
             color: 'text-red-500',
             bg: 'bg-red-50',
-            status: slotGroup.status,
+            status: finalStatus,
             active: slotGroup.status !== 'Cancelled',
             originalDate: slotGroup.rawItem?.date,
             originalTime: slotGroup.time,
@@ -829,17 +853,16 @@ export default function Reminders() {
         <div className="mt-5 sm:mt-6">
           <div className="flex justify-between items-center mb-2.5 sm:mb-3">
             <h2 className="text-sm sm:text-[15px] font-bold text-slate-800">{t('আপনার রিমাইন্ডার লিস্ট', 'Your Reminder List')}</h2>
-            <div className="text-[11px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-200/80 shadow-2xs">{savedReminders.length} {t('টি', '')}</div>
+            <div className="text-[11px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-200/80 shadow-2xs">{filteredReminders.length} {t('টি', '')}</div>
           </div>
 
           {/* Filter Tabs */}
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar mb-3 pb-1">
             {[
-              { id: 'all', label: t('সব', 'All') },
-              { id: 'pending', label: t('চলমান/পেন্ডিং', 'Pending') },
-              { id: 'completed', label: t('সম্পন্ন', 'Completed') },
-              { id: 'message', label: t('মেসেজ', 'Messages') },
+              { id: 'all', label: `${t('চলমান/সব', 'Active')} (${activeRemindersCount})` },
+              { id: 'completed', label: `${t('সম্পন্ন', 'Completed')} (${completedRemindersCount})` },
               { id: 'medicine', label: t('ওষুধ', 'Medicine') },
+              { id: 'message', label: t('মেসেজ', 'Messages') },
               { id: 'work', label: t('কাজ', 'Work') },
               { id: 'shopping', label: t('শপিং', 'Shopping') },
               { id: 'event', label: t('অনুষ্ঠান', 'Event') }
@@ -860,8 +883,12 @@ export default function Reminders() {
                 <Bell className="w-4 h-4" />
               </div>
               <div className="text-left min-w-0 flex-1">
-                <p className="text-slate-700 text-xs font-bold leading-tight">{t('কোনো রিমাইন্ডার পাওয়া যায়নি', 'No reminders found')}</p>
-                <p className="text-slate-400 text-[10px] font-medium mt-0.5 leading-snug">{t('ওপরের ফর্মটি ব্যবহার করে প্রয়োজনীয় রিমাইন্ডার যোগ করুন', 'Use the form above to add reminders')}</p>
+                <p className="text-slate-700 text-xs font-bold leading-tight">
+                  {activeFilter === 'completed' ? t('কোনো সম্পন্ন রিমাইন্ডার নেই', 'No completed reminders') : t('কোনো চলমান রিমাইন্ডার পাওয়া যায়নি', 'No active reminders found')}
+                </p>
+                <p className="text-slate-400 text-[10px] font-medium mt-0.5 leading-snug">
+                  {activeFilter === 'completed' ? t('সম্পন্ন হওয়া রিমাইন্ডার এখানে জমা থাকবে', 'Completed reminders will appear here') : t('ওপরের ফর্মটি ব্যবহার করে প্রয়োজনীয় রিমাইন্ডার যোগ করুন', 'Use the form above to add reminders')}
+                </p>
               </div>
             </div>
           ) : (
