@@ -85,8 +85,8 @@ export default function Paywall() {
       <div className="relative z-10 flex-1 flex flex-col items-center px-4 pt-10">
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl mx-auto flex items-center justify-center mb-3 p-2.5 border border-white/60">
-            <img src="/robot-icon.png" alt="SmritiLife AI" className="w-full h-full object-contain drop-shadow-sm" />
+          <div className="w-16 h-16 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl mx-auto flex items-center justify-center mb-3 p-1.5 border border-white/60">
+            <img src="/smritilifeIcon.gif" alt="SmritiLife AI" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight drop-shadow-sm">Smriti Life Premium</h1>
           <p className="text-emerald-100 text-xs sm:text-sm font-medium mt-1">আপনার সব সুন্দর স্মৃতি ও প্রয়োজনীয় হিসাব সুরক্ষিত রাখুন</p>

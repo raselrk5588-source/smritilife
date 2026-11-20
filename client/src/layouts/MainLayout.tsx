@@ -93,13 +93,12 @@ export default function MainLayout() {
         <div className="w-full max-w-5xl mx-auto px-4 flex items-center justify-between gap-4">
           {/* Brand Logo & Name */}
           <Link to="/app" className="flex items-center space-x-2.5 group select-none shrink-0">
-            <div className="relative w-9 h-9 rounded-full flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
+            <div className="w-8 h-8 flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
               <img 
-                src="/robot-icon.png" 
+                src="/smritilifeIcon.gif" 
                 alt="SmritiLife AI" 
-                className="w-full h-full rounded-full object-cover shadow-sm ring-2 ring-emerald-500/25" 
+                className="w-full h-full object-contain" 
               />
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center space-x-1.5">
@@ -124,18 +123,6 @@ export default function MainLayout() {
               <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>SOS</span>
             </button>
-
-            {/* Direct WhatsApp AI Button */}
-            <a
-              href={`https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="হোয়াটসঅ্যাপে এআই চ্যাট খুলুন"
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#0f7b57] rounded-full text-xs font-bold transition border border-[#25D366]/30 shrink-0"
-            >
-              <MessageSquare className="w-3.5 h-3.5 fill-current text-[#25D366]" />
-              <span className="hidden xl:inline">WhatsApp</span>
-            </a>
 
             {/* Web View Notification Button */}
             <Link 
@@ -171,13 +158,12 @@ export default function MainLayout() {
         {isMainTab && (
           <header className="sticky top-0 z-40 md:hidden flex justify-between items-center px-4 h-14 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
             <Link to="/app" className="flex items-center gap-2 select-none">
-              <div className="relative w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 flex items-center justify-center shrink-0">
                 <img 
-                  src="/robot-icon.png" 
+                  src="/smritilifeIcon.gif" 
                   alt="SmritiLife AI" 
-                  className="w-full h-full rounded-full object-cover shadow-xs ring-1.5 ring-emerald-500/30" 
+                  className="w-full h-full object-contain" 
                 />
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
               </div>
               <span className="text-lg font-black tracking-tight text-slate-900">
                 Smriti<span className="text-[#0A7756]">Life</span>
@@ -205,15 +191,6 @@ export default function MainLayout() {
                   <span className="text-[11px] font-bold tracking-tight">রমজান</span>
                 </Link>
               )}
-              <a
-                href={`https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 bg-emerald-50 hover:bg-emerald-100 rounded-full flex items-center justify-center text-[#25D366] active:scale-95 transition border border-emerald-200/60"
-                title="হোয়াটসঅ্যাপ এআই চ্যাট"
-              >
-                <MessageSquare className="w-4 h-4 fill-current" />
-              </a>
               <button 
                 onClick={() => navigate('/app/notifications')} 
                 className="w-8 h-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-600 relative active:scale-95 transition border border-slate-200/60 cursor-pointer"
@@ -238,7 +215,7 @@ export default function MainLayout() {
 
         {/* Scrollable Page Content */}
         {/* We remove default top/side padding so all pages can span edge-to-edge if needed */}
-        <div className="flex-1 pb-24 md:pb-0 w-full mx-auto max-w-5xl pt-0 px-0">
+        <div className="flex-1 pb-20 md:pb-0 w-full mx-auto max-w-5xl pt-0 px-0">
           <Outlet />
         </div>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake, FolderArchive, Store } from 'lucide-react';
+import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake, FolderArchive, Store, MessageSquare } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AIAssistantModal from '../components/AIAssistantModal';
@@ -144,21 +144,12 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-[#f6f8f9] min-h-screen pb-24 font-sans">
+    <div className="bg-[#f6f8f9] min-h-screen pb-2 font-sans">
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       
-      {/* Top Section with Scenic Background */}
-      <div className="relative pt-3 sm:pt-5 pb-10 sm:pb-14 px-3 sm:px-5 rounded-b-[2rem] sm:rounded-b-[2.5rem] overflow-hidden">
-        {/* Background Image / Soft Scenic Overlay */}
-        <div 
-          className="absolute inset-0 z-0 bg-cover bg-center"
-          style={{ 
-            backgroundImage: "url('/theme-bg.png')",
-            backgroundPosition: "center 25%",
-            opacity: "0.22"
-          }}
-        ></div>
-        <div className="absolute inset-0 z-0 bg-gradient-to-b from-emerald-100/60 via-teal-50/50 to-[#f6f8f9]"></div>
+      {/* Top Section with Soft Gradient Background */}
+      <div className="relative pt-3 sm:pt-4 pb-4 sm:pb-6 px-3 sm:px-5 rounded-b-[1.75rem] sm:rounded-b-[2rem] overflow-hidden bg-gradient-to-b from-emerald-100/70 via-teal-50/40 to-[#f6f8f9]">
+        <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-200/30 via-teal-100/10 to-transparent pointer-events-none"></div>
 
         <div className="relative z-10 pt-1">
           {(() => {
@@ -166,37 +157,69 @@ export default function Home() {
             const hour = now.getHours();
             let greetingText = t('শুভ সকাল', 'Good Morning');
             let greetingEmoji = '🌅';
+            let greetingSubtitle = t('আজকের দিনটাকে সুন্দর ও গোছানো করে শুরু করি।', 'Let\'s start the day beautifully and organized.');
+            
             if (hour >= 12 && hour < 17) {
               greetingText = t('শুভ দুপুর', 'Good Afternoon');
               greetingEmoji = '☀️';
+              greetingSubtitle = t('আজকের বাকি কাজগুলো সহজে সম্পন্ন করে নিন।', 'Wishing you a productive and successful day.');
             } else if (hour >= 17 && hour < 20) {
               greetingText = t('শুভ সন্ধ্যা', 'Good Evening');
               greetingEmoji = '🌇';
+              greetingSubtitle = t('দিনের সব কাজ ও খরচের হিসাব দেখে নিন।', 'Review your day\'s tasks and expenses.');
             } else if (hour >= 20 || hour < 5) {
               greetingText = t('শুভ রাত্রি', 'Good Night');
               greetingEmoji = '🌙';
+              greetingSubtitle = t('সারাদিনের কাজ শেষে শান্তিময় বিশ্রামের শুভকামনা।', 'Wishing you peaceful rest after a long day.');
             }
 
+            // Official Bangladesh Bangla Academy Calendar (2019 Revision)
             const getBengaliDate = (date: Date) => {
               const d = date.getDate(), m = date.getMonth(), y = date.getFullYear();
-              let bDay, bMonth, bYear;
               const isLeapYear = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
               const bMonths = ['বৈশাখ', 'জ্যৈষ্ঠ', 'আষাঢ়', 'শ্রাবণ', 'ভাদ্র', 'আশ্বিন', 'কার্তিক', 'অগ্রহায়ণ', 'পৌষ', 'মাঘ', 'ফাল্গুন', 'চৈত্র'];
-              
-              if(m===0) { if(d<14){ bMonth=8; bDay=d+17; } else { bMonth=9; bDay=d-13; } }
-              else if(m===1) { if(d<13){ bMonth=9; bDay=d+18; } else { bMonth=10; bDay=d-12; } }
-              else if(m===2) { if(d<15){ bMonth=10; bDay=d+(isLeapYear?17:16); } else { bMonth=11; bDay=d-14; } }
-              else if(m===3) { if(d<14){ bMonth=11; bDay=d+17; } else { bMonth=0; bDay=d-13; } }
-              else if(m===4) { if(d<15){ bMonth=0; bDay=d+17; } else { bMonth=1; bDay=d-14; } }
-              else if(m===5) { if(d<15){ bMonth=1; bDay=d+17; } else { bMonth=2; bDay=d-14; } }
-              else if(m===6) { if(d<16){ bMonth=2; bDay=d+16; } else { bMonth=3; bDay=d-15; } }
-              else if(m===7) { if(d<16){ bMonth=3; bDay=d+16; } else { bMonth=4; bDay=d-15; } }
-              else if(m===8) { if(d<16){ bMonth=4; bDay=d+16; } else { bMonth=5; bDay=d-15; } }
-              else if(m===9) { if(d<16){ bMonth=5; bDay=d+15; } else { bMonth=6; bDay=d-15; } }
-              else if(m===10) { if(d<15){ bMonth=6; bDay=d+16; } else { bMonth=7; bDay=d-14; } }
-              else { if(d<15){ bMonth=7; bDay=d+16; } else { bMonth=8; bDay=d-14; } }
-              
-              bYear = y - 593;
+              let bDay, bMonth;
+
+              if (m === 0) { // Jan
+                if (d < 15) { bMonth = 8; bDay = d + 16; }
+                else { bMonth = 9; bDay = d - 14; }
+              } else if (m === 1) { // Feb
+                if (d < 14) { bMonth = 9; bDay = d + 17; }
+                else { bMonth = 10; bDay = d - 13; }
+              } else if (m === 2) { // Mar
+                const falgunDays = isLeapYear ? 30 : 29;
+                if (d < 15) { bMonth = 10; bDay = d + (falgunDays - 14); }
+                else { bMonth = 11; bDay = d - 14; }
+              } else if (m === 3) { // Apr
+                if (d < 14) { bMonth = 11; bDay = d + 17; }
+                else { bMonth = 0; bDay = d - 13; }
+              } else if (m === 4) { // May
+                if (d < 15) { bMonth = 0; bDay = d + 17; }
+                else { bMonth = 1; bDay = d - 14; }
+              } else if (m === 5) { // Jun
+                if (d < 15) { bMonth = 1; bDay = d + 17; }
+                else { bMonth = 2; bDay = d - 14; }
+              } else if (m === 6) { // Jul
+                if (d < 16) { bMonth = 2; bDay = d + 16; }
+                else { bMonth = 3; bDay = d - 15; }
+              } else if (m === 7) { // Aug
+                if (d < 16) { bMonth = 3; bDay = d + 16; }
+                else { bMonth = 4; bDay = d - 15; }
+              } else if (m === 8) { // Sep
+                if (d < 16) { bMonth = 4; bDay = d + 16; }
+                else { bMonth = 5; bDay = d - 15; }
+              } else if (m === 9) { // Oct
+                if (d < 17) { bMonth = 5; bDay = d + 15; }
+                else { bMonth = 6; bDay = d - 16; }
+              } else if (m === 10) { // Nov
+                if (d < 16) { bMonth = 6; bDay = d + 15; }
+                else { bMonth = 7; bDay = d - 15; } // Nov 16 = 1 Agrahayan, Nov 20 = 5 Agrahayan
+              } else { // Dec
+                if (d < 16) { bMonth = 7; bDay = d + 15; }
+                else { bMonth = 8; bDay = d - 15; }
+              }
+
+              let bYear = y - 593;
               if (m < 3 || (m === 3 && d < 14)) bYear--;
               const bnNumbers = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
               const toBn = (num: number) => num.toString().split('').map(n => bnNumbers[parseInt(n)] || n).join('');
@@ -205,59 +228,54 @@ export default function Home() {
 
             const bnDate = getBengaliDate(now);
             const enDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(now);
-            let arDate = new Intl.DateTimeFormat('bn-BD-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
-            arDate = arDate.replace('যুগ', 'হিজরি'); 
+            const weekdayBn = new Intl.DateTimeFormat('bn-BD', { weekday: 'short' }).format(now);
+            
+            // Accurate Islamic Date (Umm al-Qura standard)
+            let arDate = '';
+            try {
+              arDate = new Intl.DateTimeFormat('bn-BD-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+              arDate = arDate.replace('যুগ', 'হিজরি').replace(/,\s*/g, ' ');
+            } catch (e) {
+              arDate = new Intl.DateTimeFormat('bn-BD-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+              arDate = arDate.replace('যুগ', 'হিজরি').replace(/,\s*/g, ' ');
+            }
+
+            // Ensure Islamic day number is 100% readable (e.g. 11 instead of curved Bengali quotes)
+            const bnToEnMap: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+            const arParts = arDate.split(' ');
+            const arDayEn = arParts[0]?.split('').map(c => bnToEnMap[c] || c).join('') || '';
+            const clearArDate = `${arDayEn} ${arParts.slice(1).join(' ')}`;
 
             return (
               <>
                 {/* Greeting & Date Row */}
-                <div className="mb-3.5 sm:mb-5 flex items-start justify-between gap-3">
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#0A7756]/10 text-[#0A7756] text-[11px] sm:text-xs font-bold mb-1">
+                <div className="mb-3.5 sm:mb-5 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-600/10 text-[#0A7756] text-[11px] sm:text-xs font-bold mb-1 border border-emerald-600/15">
                       <span>{greetingEmoji}</span>
                       <span>{greetingText}</span>
                     </div>
                     <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight">
                       {userName}! 👋
                     </h2>
-                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
-                      {t('আজকের দিনটাকে সুন্দর ও গোছানো করে শুরু করি।', 'Let\'s start the day beautifully and organized.')}
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5 leading-snug">
+                      {greetingSubtitle}
                     </p>
                   </div>
 
-                  {/* Date Card */}
-                  <div className="bg-white/90 backdrop-blur-md px-3 py-2 rounded-2xl shadow-2xs border border-emerald-100/80 flex flex-col items-end text-right justify-center shrink-0">
-                    <span className="text-xs font-extrabold text-[#0A7756] tracking-tight">{bnDate}</span>
-                    <span className="text-[11px] font-bold text-slate-600 mt-0.5">{enDate}</span>
-                    <span className="text-[10px] font-semibold text-emerald-700/80 mt-0.5">{arDate}</span>
-                  </div>
-                </div>
-
-                {/* Smart Input Bar (Full Width & Clean Interactive Style) */}
-                <div 
-                  onClick={() => setIsModalOpen(true)}
-                  className="w-full bg-white/95 backdrop-blur-md rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-3 shadow-sm border border-emerald-200/80 hover:border-emerald-400 hover:shadow-md cursor-pointer active:scale-[0.99] transition-all group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-[#0A7756] flex items-center justify-center shrink-0 border border-emerald-100 group-hover:scale-105 transition-transform">
-                      <Search className="w-4 h-4 text-[#0A7756]" />
+                  {/* Date Card with Generous Height & Readable Font */}
+                  <div className="bg-white/95 backdrop-blur-md px-3.5 py-3 rounded-2xl shadow-xs border border-emerald-100/90 flex flex-col items-end text-right justify-center shrink-0 min-w-[155px] gap-1.5">
+                    <div className="flex items-center gap-1.5 text-xs sm:text-[13px] font-black text-slate-800 leading-tight">
+                      <Calendar className="w-3.5 h-3.5 text-[#0A7756] shrink-0" />
+                      <span>{enDate} ({weekdayBn})</span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs sm:text-sm text-slate-800 font-bold leading-tight truncate">
-                        {t('কিছু লিখুন বা বলে বলুন...', 'Type or say something...')}
-                      </p>
-                      <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium leading-tight mt-0.5 truncate">
-                        {t('যেমন: "কাল সকাল ১০টায় মিটিং মনে করিয়ে দাও"', 'e.g. "Remind me about the meeting tomorrow at 10 AM"')}
-                      </p>
+                    <div className="text-xs sm:text-[13px] font-extrabold text-[#0A7756] leading-tight">
+                      {bnDate} বঙ্গাব্দ
+                    </div>
+                    <div className="text-xs sm:text-[13px] font-bold text-slate-700 leading-tight">
+                      {clearArDate}
                     </div>
                   </div>
-
-                  <button 
-                    type="button"
-                    className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-tr from-[#0A7756] to-emerald-500 rounded-xl flex items-center justify-center text-white shadow-sm shadow-emerald-700/20 group-hover:shadow-md transition-all shrink-0 cursor-pointer"
-                  >
-                    <Mic className="w-4 h-4 animate-pulse" />
-                  </button>
                 </div>
               </>
             );
@@ -265,9 +283,9 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="px-3 md:px-5 -mt-5 sm:-mt-8 relative z-20 space-y-3 md:space-y-5">
+      <div className="px-3 md:px-5 relative z-20 space-y-3 md:space-y-4">
         
-        {/* Islamic Prayer & Ramadan Auto Tracker Special Banner */}
+        {/* Quick Service Duo: WhatsApp AI & Namaz Tracker */}
         {(() => {
           const isRamadanSeason = () => {
             try {
@@ -282,178 +300,110 @@ export default function Home() {
           const isRamadan = isRamadanSeason();
 
           return (
-            <Link 
-              to="/app/ramadan"
-              className="block relative overflow-hidden rounded-2xl md:rounded-3xl p-3 md:p-3.5 bg-gradient-to-r from-[#063828] via-[#0A543A] to-[#04281c] text-white shadow-md shadow-emerald-950/20 border border-emerald-500/30 group hover:shadow-lg hover:scale-[1.01] transition-all duration-300"
-            >
-              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-400/10 rounded-full blur-xl pointer-events-none"></div>
-              <div className="relative z-10 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-gradient-to-br from-amber-400/20 to-emerald-500/20 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                    <Moon className="w-4 h-4 md:w-5 md:h-5 text-amber-300 fill-amber-300 animate-pulse" />
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              {/* WhatsApp AI */}
+              <a
+                href={`https://wa.me/8801862636137?text=${encodeURIComponent('/start smritilife')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gradient-to-r from-[#128C7E] to-[#25D366] text-white rounded-2xl p-2.5 sm:p-3 flex items-center justify-between shadow-xs hover:shadow-md active:scale-95 transition-all group border border-white/20 select-none cursor-pointer"
+                title={t('হোয়াটসঅ্যাপে এআই সহকারী ব্যবহার করুন', 'Use WhatsApp AI Assistant')}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-4 h-4 text-white fill-white" />
                   </div>
-                  <div>
-                    <div className="flex items-center space-x-1.5 mb-0.5">
-                      <span className="text-[9px] uppercase tracking-wider font-extrabold text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
-                        {isRamadan ? 'রমজান স্পেশাল' : 'নামাজ ও রোজা'}
-                      </span>
-                      <span className="text-[9px] text-emerald-200 font-semibold hidden sm:inline">৬৪ জেলা</span>
-                    </div>
-                    <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
-                      {isRamadan ? 'অটো সেহরি ও ইফতার ট্র্যাকার' : '৫ ওয়াক্ত নামাজের সময়সূচি'}
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
+                      {t('WhatsApp এআই', 'WhatsApp AI')}
                     </h4>
-                    <p className="text-[9px] md:text-xs text-emerald-200/80 font-medium line-clamp-1">
-                      {isRamadan ? 'স্বয়ংক্রিয় সেহরি অ্যালার্ম ও ইফতার নোটিশ চালু করুন' : 'আজকের ওয়াক্ত, সেহরি ও ইফতার সময় দেখুন'}
+                    <p className="text-[10px] text-emerald-50 font-medium truncate">
+                      {t('চ্যাটে সরাসরি ব্যবহার', 'Direct in chat')}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-1 text-amber-300 text-xs font-bold pl-2 shrink-0">
-                  <span className="hidden sm:inline">সময় দেখুন</span>
-                  <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <ChevronRight className="w-4 h-4 text-white/80 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              </a>
+
+              {/* Namaz & Ramadan Tracker */}
+              <Link
+                to="/app/ramadan"
+                className="bg-gradient-to-r from-[#063828] via-[#0A543A] to-[#04281c] text-white rounded-2xl p-2.5 sm:p-3 flex items-center justify-between shadow-xs hover:shadow-md active:scale-95 transition-all group border border-emerald-500/30 select-none"
+                title={t('নামাজ ও রোজার সময়সূচি', 'Prayer & Fasting Schedule')}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center shrink-0">
+                    <Moon className="w-4 h-4 text-amber-300 fill-amber-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
+                      {isRamadan ? t('রমজান স্পেশাল', 'Ramadan Special') : t('নামাজ ও রোজা', 'Prayer & Fasting')}
+                    </h4>
+                    <p className="text-[10px] text-emerald-200 font-medium truncate">
+                      {t('আজকের সময়সূচি', "Today's Schedule")}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </Link>
+                <ChevronRight className="w-4 h-4 text-emerald-300 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
           );
         })()}
 
         {/* Quick Access Pills Grid */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
           <Link to="/app/notes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center mb-1 relative">
               <FileText className="w-4 h-4 md:w-5 md:h-5" />
               {notesCount > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{notesCount}</div>}
             </div>
-            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('নোট', 'Notes')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('নোট', 'Notes')}</span>
           </Link>
           <Link to="/app/reminders" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center mb-1 relative">
               <Calendar className="w-4 h-4 md:w-5 md:h-5" />
               {remindersCount > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{remindersCount}</div>}
             </div>
-            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('রিমাইন্ডার', 'Reminders')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('রিমাইন্ডার', 'Reminders')}</span>
           </Link>
           <Link to="/app/wishes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-pink-50 text-pink-500 rounded-xl flex items-center justify-center mb-1">
               <Gift className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('বিশেষ দিন', 'Wishes')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('বিশেষ দিন', 'Wishes')}</span>
           </Link>
           <Link to="/app/expenses" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-teal-50 text-[#0A7756] rounded-xl flex items-center justify-center mb-1 relative">
               <Wallet className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('হিসাব খাতা', 'Expenses')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('হিসাব খাতা', 'Expenses')}</span>
           </Link>
           <Link to="/app/debts" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-1 relative">
               <Handshake className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('বাকি খাতা', 'Debts')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('বাকি খাতা', 'Debts')}</span>
           </Link>
           <Link to="/app/documents" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-1 relative">
               <FolderArchive className="w-4 h-4 md:w-5 md:h-5" />
               {docsCount > 0 && <div className="absolute -top-1 -right-1 bg-purple-600 text-white text-[8px] font-bold px-1 rounded-full shadow-sm">{docsCount}</div>}
             </div>
-            <span className="text-[10px] md:text-xs font-bold text-slate-700">{t('ফাইল ভল্ট', 'Vault')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('ফাইল ভল্ট', 'Vault')}</span>
+          </Link>
+          <Link to="/app/fcommerce" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mb-1">
+              <Store className="w-4 h-4 md:w-5 md:h-5" />
+            </div>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('এফ-কমার্স', 'F-Commerce')}</span>
+          </Link>
+          <Link to="/app/period" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center mb-1">
+              <Heart className="w-4 h-4 md:w-5 md:h-5" />
+            </div>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('পিরিয়ড কেয়ার', 'Period Care')}</span>
           </Link>
         </div>
-
-        {/* Document Vault Feature Card */}
-        <Link 
-          to="/app/documents"
-          className="block bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 rounded-2xl md:rounded-3xl p-3 md:p-4 text-white shadow-md hover:shadow-lg transition-all group border border-purple-500/30"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                <FolderArchive className="w-4 h-4 md:w-5 md:h-5 text-purple-300" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-1.5 mb-0.5">
-                  <span className="text-[9px] uppercase tracking-wider font-extrabold text-purple-300 bg-purple-400/20 px-2 py-0.5 rounded-full border border-purple-400/30">
-                    {t('স্মৃতি ভল্ট', 'Memory Vault')}
-                  </span>
-                  <span className="text-[9px] text-purple-200 font-semibold hidden sm:inline">প্রেসক্রিপশন ও জরুরি ফাইল</span>
-                </div>
-                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
-                  {t('প্রেসক্রিপশন, রিপোর্ট বা ডকুমেন্ট সেভ করুন', 'Prescription, Reports & Documents')}
-                </h4>
-                <p className="text-[9px] md:text-xs text-purple-200/80 font-medium line-clamp-1">
-                  {t('হোয়াটসঅ্যাপে ছবি বা পিডিএফ পাঠিয়ে নাম বললেই স্মৃতি মনে রাখবে এবং চাওয়ামাত্র পাঠিয়ে দেবে', 'Send via WhatsApp or upload here, retrieve instantly')}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1 text-purple-300 text-xs font-bold pl-2 shrink-0">
-              <span className="hidden sm:inline">ভল্ট খুলুন</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-        </Link>
-
-        {/* Facebook Messenger AI Shop (F-Commerce SaaS) Feature Card */}
-        <Link 
-          to="/app/fcommerce"
-          className="block bg-gradient-to-r from-[#063828] via-[#0A543A] to-[#04281c] rounded-2xl md:rounded-3xl p-3 md:p-4 text-white shadow-md hover:shadow-lg transition-all group border border-emerald-500/30"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-emerald-400/20 border border-emerald-400/40 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                <Store className="w-4 h-4 md:w-5 md:h-5 text-emerald-300" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-1.5 mb-0.5">
-                  <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-300 bg-emerald-400/20 px-2 py-0.5 rounded-full border border-emerald-400/30">
-                    F-COMMERCE SAAS
-                  </span>
-                  <span className="text-[9px] text-emerald-200 font-semibold hidden sm:inline">মেসেঞ্জার এআই সেলস সহকারী</span>
-                </div>
-                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
-                  ফেসবুক পেজ কানেক্ট করে ২৪/৭ অটো এআই সেলস ও অর্ডার নিন
-                </h4>
-                <p className="text-[9px] md:text-xs text-emerald-200/80 font-medium line-clamp-1">
-                  কাস্টমারদের সাথে অটো চ্যাট, পণ্যের বিবরণ, অর্ডার কনফার্ম ও হোয়াটসঅ্যাপে ইনস্ট্যান্ট অ্যালার্ট
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1 text-emerald-300 text-xs font-bold pl-2 shrink-0">
-              <span className="hidden sm:inline">শপ খুলুন</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-        </Link>
-
-        {/* Period & Cycle Day Count Feature Card */}
-        <Link 
-          to="/app/period"
-          className="block bg-gradient-to-r from-rose-700 via-pink-600 to-fuchsia-700 rounded-2xl md:rounded-3xl p-3 md:p-4 text-white shadow-md hover:shadow-lg transition-all group border border-rose-400/30"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                <Heart className="w-4 h-4 md:w-5 md:h-5 text-rose-100 fill-rose-200/40" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-1.5 mb-0.5">
-                  <span className="text-[9px] uppercase tracking-wider font-extrabold text-rose-100 bg-white/20 px-2 py-0.5 rounded-full border border-white/25">
-                    {t('হেলথ ও সাইকেল ট্র্যাকার', 'Period & Cycle Tracker')}
-                  </span>
-                  <span className="text-[9px] text-rose-100 font-semibold hidden sm:inline">ডে কাউন্ট ও অটো রিমাইন্ডার</span>
-                </div>
-                <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
-                  🌸 পিরিয়ড ও সাইকেল ডে কাউন্টার (নারীদের স্বাস্থ্য সহকারী)
-                </h4>
-                <p className="text-[9px] md:text-xs text-rose-100/90 font-medium line-clamp-1">
-                  সাইকেলের কততম দিন চলছে, পরবর্তী সম্ভাব্য তারিখ ও ২ দিন আগে গোপনীয় হোয়াটসঅ্যাপ রিমাইন্ডার
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1 text-rose-100 text-xs font-bold pl-2 shrink-0">
-              <span className="hidden sm:inline">ট্র্যাকার খুলুন</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-        </Link>
 
         {/* Tasks and Calendar Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
@@ -561,26 +511,6 @@ export default function Home() {
           
         </div>
 
-        {/* AI Assistant Banner */}
-        <div 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl md:rounded-3xl p-2 md:p-4 shadow-sm border border-emerald-100 cursor-pointer hover:shadow-md active:scale-95 transition"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1.5 md:space-x-3">
-              <div className="w-7 h-7 md:w-10 md:h-10 bg-emerald-100 text-emerald-600 rounded-lg md:rounded-2xl flex items-center justify-center">
-                <Bot className="w-4 h-4 md:w-6 md:h-6" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-[10px] md:text-sm">{t('AI সহায়ক', 'AI Assistant')}</h3>
-                <p className="text-[8px] md:text-[10px] text-slate-500 font-medium">{t('ভয়েসের মাধ্যমে রিমাইন্ডার বা নোট তৈরি করুন', 'Create reminders or notes via voice')}</p>
-              </div>
-            </div>
-            <div className="w-6 h-6 md:w-8 md:h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-sm">
-              <Mic className="w-3 h-3 md:w-4 md:h-4" />
-            </div>
-          </div>
-        </div>
 
         {/* Two Big Action Cards */}
         <div className="grid grid-cols-2 gap-2 md:gap-3">
@@ -707,7 +637,7 @@ export default function Home() {
         </div>
 
         {/* Upcoming Special Days / Scheduled Messages */}
-        <div className="mb-8">
+        <div className="mb-2">
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-bold text-slate-800 text-sm flex items-center">
               <Gift className="w-4 h-4 mr-1.5 text-slate-500" /> {t('শিডিউলড মেসেজ ও বিশেষ দিন', 'Scheduled Messages & Special Days')}

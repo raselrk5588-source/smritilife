@@ -353,13 +353,12 @@ export default function Landing() {
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none group shrink-0"
           >
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center group-hover:scale-105 transition-all duration-300">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
               <img 
-                src="/robot-icon.png" 
+                src="/smritilifeIcon.gif" 
                 alt="SmritiLife AI" 
-                className="w-full h-full rounded-full object-cover shadow-md shadow-[#0A7756]/20 ring-2 ring-emerald-500/30" 
+                className="w-full h-full object-contain" 
               />
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -475,13 +474,12 @@ export default function Landing() {
                     {/* WhatsApp Top Header with Verified AI Badge */}
                     <div className="bg-[#075E54] px-4 py-2.5 text-white flex items-center justify-between shadow-sm">
                       <div className="flex items-center gap-2.5">
-                        <div className="relative w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 flex items-center justify-center shrink-0">
                           <img 
-                            src="/robot-icon.png" 
+                            src="/smritilifeIcon.gif" 
                             alt="SmritiLife AI" 
-                            className="w-full h-full rounded-full object-cover border border-emerald-300/40 shadow-xs" 
+                            className="w-full h-full object-contain" 
                           />
-                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white" />
                         </div>
                         <div>
                           <div className="text-xs font-bold flex items-center gap-1 leading-tight">

@@ -334,13 +334,12 @@ export default function Auth() {
           <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-8 shadow-xl flex-1 flex flex-col justify-center animate-in fade-in slide-in-from-bottom-8 duration-500">
             <div className="text-center mb-6 sm:mb-8 flex flex-col items-center">
               {/* Brand Logo */}
-              <div className="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 rounded-full flex items-center justify-center p-1 bg-gradient-to-tr from-emerald-100 to-teal-50 border border-emerald-200/80 shadow-md">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mb-3 flex items-center justify-center">
                 <img 
-                  src="/robot-icon.png" 
+                  src="/smritilifeIcon.gif" 
                   alt="SmritiLife Logo" 
-                  className="w-full h-full rounded-full object-cover shadow-2xs ring-2 ring-emerald-500/25" 
+                  className="w-full h-full object-contain" 
                 />
-                <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
               </div>
 
               <h2 className="text-3xl font-extrabold text-slate-800 mb-2 tracking-tight">Smriti <span className="text-[#0A7756]">Life</span><span className="text-[#0A7756] text-4xl">.</span></h2>

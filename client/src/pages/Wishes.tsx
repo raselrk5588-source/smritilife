@@ -37,7 +37,7 @@ const PRESET_CARD_IMAGES = [
 
 export default function Wishes() {
   const { t } = useSettings();
-  const [activeTab, setActiveTab] = useState('text');
+  const [activeTab, setActiveTab] = useState('image');
   
   // Form States
   const [selectedOccasion, setSelectedOccasion] = useState('');
@@ -724,43 +724,21 @@ export default function Wishes() {
       <div className="px-4 -mt-5">
         {/* Main Tabs */}
         <div className="bg-white rounded-2xl shadow-sm p-1.5 border border-slate-100 mb-6 relative z-20">
-          <div className="grid grid-cols-4 gap-1">
-            <button 
-              onClick={() => setActiveTab('text')}
-              className={`py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
-                activeTab === 'text' 
-                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
-                  : 'text-slate-500 hover:bg-slate-50 border border-transparent'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('টেক্সট', 'Text')}</span>
-            </button>
+          <div className="grid grid-cols-2 gap-2">
             <button 
               onClick={() => setActiveTab('image')}
-              className={`py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+              className={`py-2.5 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'image' 
                   ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
                   : 'text-slate-500 hover:bg-slate-50 border border-transparent'
               }`}
             >
               <ImageIcon className="w-4 h-4 shrink-0" />
-              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('গ্রিটিং কার্ড', 'Greeting Card')}</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('voice')}
-              className={`py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
-                activeTab === 'voice' 
-                  ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
-                  : 'text-slate-500 hover:bg-slate-50 border border-transparent'
-              }`}
-            >
-              <Mic className="w-4 h-4 shrink-0" />
-              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('ভয়েস', 'Voice')}</span>
+              <span className="text-xs sm:text-sm font-bold leading-tight">{t('গ্রিটিং কার্ড তৈরি', 'Greeting Card')}</span>
             </button>
             <button 
               onClick={() => { setActiveTab('list'); fetchWishes(); }}
-              className={`relative py-2 px-1 rounded-xl font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+              className={`relative py-2.5 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'list' 
                   ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60' 
                   : 'text-slate-500 hover:bg-slate-50 border border-transparent'
@@ -768,15 +746,10 @@ export default function Wishes() {
             >
               <div className="relative flex items-center justify-center">
                 <Calendar className="w-4 h-4 shrink-0" />
-                {scheduledWishes.length > 0 && (
-                  <span className="sm:hidden absolute -top-1.5 -right-2.5 bg-[#0A7756] text-white text-[9px] px-1 py-0.2 rounded-full font-bold leading-none shadow-xs">
-                    {scheduledWishes.length}
-                  </span>
-                )}
               </div>
-              <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t('শিডিউলড', 'Scheduled')}</span>
+              <span className="text-xs sm:text-sm font-bold leading-tight">{t('শিডিউলড উইশ', 'Scheduled Wishes')}</span>
               {scheduledWishes.length > 0 && (
-                <span className="hidden sm:inline-flex bg-[#0A7756] text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none shrink-0">
+                <span className="bg-[#0A7756] text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold leading-none shrink-0 ml-1">
                   {scheduledWishes.length}
                 </span>
               )}
@@ -1646,10 +1619,10 @@ export default function Wishes() {
                     </div>
                     <h3 className="text-sm font-bold text-slate-700 mb-1">{t('কোনো উইশ পাওয়া যায়নি', 'No wishes found')}</h3>
                     <p className="text-xs text-slate-400 max-w-xs mb-4">
-                      {t('আপনি এখনো কাউকে শুভেচ্ছা শিডিউল করেননি। ওপরের "টেক্সট" বা "গ্রিটিং কার্ড" ট্যাব থেকে শিডিউল করতে পারেন।', 'You have not scheduled any wishes yet. Schedule one from Text or Greeting Card tabs above.')}
+                      {t('আপনি এখনো কাউকে শুভেচ্ছা শিডিউল করেননি। ওপরের "গ্রিটিং কার্ড" ট্যাব থেকে শিডিউল করতে পারেন।', 'You have not scheduled any wishes yet. Schedule one from Greeting Card tab above.')}
                     </p>
                     <button
-                      onClick={() => setActiveTab('text')}
+                      onClick={() => setActiveTab('image')}
                       className="bg-[#0A7756] hover:bg-[#086146] text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm"
                     >
                       {t('+ নতুন উইশ শিডিউল করুন', '+ Schedule New Wish')}

@@ -1,5 +1,5 @@
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { ChevronRight, Camera, Settings, Cloud, Crown, Palette, Globe, Shield, User, LogOut, Mail, Phone, MessageSquare, FileText, Bell, Gift, Sparkles, Smartphone, ExternalLink, HelpCircle } from 'lucide-react';
+import { ChevronRight, Camera, Settings, Cloud, Crown, Palette, Globe, Shield, ShieldAlert, User, LogOut, Mail, Phone, MessageSquare, FileText, Bell, Gift, Sparkles, Smartphone, ExternalLink, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchWithAuth } from '../utils/api';
@@ -303,9 +303,10 @@ export default function Profile() {
           <button 
             type="button"
             onClick={() => setShowUnsubscribeConfirm(true)} 
-            className="w-full text-center text-xs text-slate-400 hover:text-rose-500 py-2 transition-colors cursor-pointer border-none bg-transparent hover:underline"
+            className="w-full py-3 rounded-2xl bg-white hover:bg-rose-50/50 border border-slate-200/90 hover:border-rose-200 text-slate-500 hover:text-rose-600 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99] cursor-pointer"
           >
-            {t('আনসাবস্ক্রাইব করুন', 'Unsubscribe')}
+            <ShieldAlert className="w-4 h-4 text-slate-400 group-hover:text-rose-500" />
+            <span>{t('আনসাবস্ক্রাইব করুন', 'Unsubscribe')}</span>
           </button>
         </div>
       </div>
