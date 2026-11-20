@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 
 export interface ParsedExpense {
   isQuery: boolean;
-  queryType?: 'daily' | 'monthly' | 'range';
+  queryType?: 'daily' | 'monthly' | 'range' | 'all';
   targetDate?: Date;
   dateLabelBn?: string;
   monthYear?: { year: number; month: number; monthLabelBn: string };
@@ -12,6 +12,9 @@ export interface ParsedExpense {
   amount?: number;
   paymentMethod?: string;
   expenseDate?: Date;
+  filterItem?: string;
+  filterCategory?: string;
+  filterLabelBn?: string;
 }
 
 export interface CategoryInfo {
@@ -291,15 +294,16 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     };
   }
 
-  // 4. This / Current Month: "এই মাসের", "চলতি মাসের", "ay mas ar", "ei mas er", "ai maser", "this month"
-  const thisMonthRegex = /(?:(?:এই|এ|চলতি|বর্তমান)\s*মাস(?:ের|ে)?(?:\s*এর)?|(?:ay|ai|ei|a|this|current|cholti|colti|bortoman)\s*(?:months?|mas(?:er|e)?|mash(?:er|e)?)(?:\s*(?:ar|er|a|e))?)/i;
+  // 4. This / Current / Whole Month: "এই মাসের", "চলতি মাসের", "সারা মাসের", "সারামাসে", "sara mas a", "sara maser", "this month"
+  const thisMonthRegex = /(?:(?:এই|এ|চলতি|বর্তমান|সারা|সারার?|পুরো|সব)\s*মাস(?:ের|ে)?(?:\s*এর)?|সারামাস(?:ের|ে)?|পুরোমাস(?:ের|ে)?|(?:ay|ai|ei|a|this|current|cholti|colti|bortoman|sara|shara|puro|all|whole)\s*(?:months?|mas(?:er|e|a)?|mash(?:er|e|a)?)(?:\s*(?:ar|er|a|e))?|saramas(?:er|e|a)?|saramash(?:er|e|a)?)/i;
   if (thisMonthRegex.test(clean)) {
+    const isSara = /(?:সারা|সারার?|পুরো|সব|sara|shara|puro|all|whole)/i.test(clean);
     const cleaned = clean.replace(thisMonthRegex, ' ').trim();
     return {
       monthDate: {
         year: refYear,
         month: refMonth,
-        monthLabelBn: `চলতি মাস (${BENGALI_MONTHS[refMonth]} ${enToBnDigits(refYear)})`
+        monthLabelBn: isSara ? 'সারামাসে' : `চলতি মাস (${BENGALI_MONTHS[refMonth]} ${enToBnDigits(refYear)})`
       },
       cleanedText: cleaned
     };
@@ -334,9 +338,10 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
     }
   }
 
-  // 5.5. Week Range: e.g. "এই সপ্তাহের খরচ", "গত সপ্তাহের খরচ", "last week ar khoros", "this week cost"
-  const weekMatch = clean.match(/(?:(?:এই|গত|বিগত|আগের)\s*সপ্তাহ(?:ের|ে)?|(?:this|last|past|goto|ay|ai|ei)\s*(?:weeks?|soptah(?:er|o)?|shoptah(?:er|o)?)(?:\s*(?:ar|er))?)/i);
+  // 5.5. Week Range: e.g. "এই সপ্তাহের খরচ", "সাপ্তাহিক খরচ", "গত সপ্তাহের খরচ", "last week ar khoros", "this week cost"
+  const weekMatch = clean.match(/(?:(?:এই|চলতি|বর্তমান|গত|বিগত|আগের)\s*সপ্তাহ(?:ের|ে)?|সাপ্তাহিক|(?:this|current|last|past|goto|ay|ai|ei)\s*(?:weeks?|soptah(?:er|o)?|shoptah(?:er|o)?)(?:\s*(?:ar|er))?|weekly)/i);
   if (weekMatch) {
+    const isPastWeek = /(?:গত|বিগত|আগের|last|past|goto)/i.test(weekMatch[0]);
     const startRef = new Date(referenceDate);
     startRef.setDate(startRef.getDate() - 6);
     const startDhaka = startRef.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
@@ -348,7 +353,7 @@ export const parseExpenseDate = (text: string, referenceDate: Date = new Date())
         days: 7,
         startDate,
         endDate,
-        labelBn: 'গত ৭ দিনের (সপ্তাহের)'
+        labelBn: isPastWeek ? 'গত সপ্তাহের' : 'এই সপ্তাহের (গত ৭ দিনের)'
       },
       cleanedText: cleaned
     };
@@ -618,6 +623,202 @@ const cleanTitleText = (raw: string): string => {
   return toBanglaExpenseTitle(raw);
 };
 
+export interface ExtractedExpenseFilter {
+  filterItem?: string;
+  filterCategory?: string;
+  filterLabelBn: string;
+  icon: string;
+}
+
+/**
+ * Extract specific expense item or category from user query text
+ */
+export const extractExpenseQueryFilter = (text: string): ExtractedExpenseFilter | null => {
+  const lower = text.toLowerCase();
+  
+  // 1. Transport items
+  if (/(?:রিকশা\s*ভাড়া|রিক্সা\s*ভাড়া|রিকশা|রিক্সা|rickshaw|riksha|riksa)/i.test(lower)) {
+    return { filterItem: 'রিকশা', filterCategory: 'transport', filterLabelBn: 'রিকশা ভাড়া', icon: '🚕' };
+  }
+  if (/(?:বাস\s*ভাড়া|বাস(?:\s*ভাড়া)?|bus(?:\s*fare)?)/i.test(lower)) {
+    return { filterItem: 'বাস', filterCategory: 'transport', filterLabelBn: 'বাস ভাড়া', icon: '🚌' };
+  }
+  if (/(?:সিএনজি\s*ভাড়া|সিএনজি|cng(?:\s*fare)?)/i.test(lower)) {
+    return { filterItem: 'সিএনজি', filterCategory: 'transport', filterLabelBn: 'সিএনজি ভাড়া', icon: '🛺' };
+  }
+  if (/(?:অটো\s*ভাড়া|অটো|auto(?:\s*fare)?|oto)/i.test(lower)) {
+    return { filterItem: 'অটো', filterCategory: 'transport', filterLabelBn: 'অটো ভাড়া', icon: '🛺' };
+  }
+  if (/(?:মেট্রো\s*ভাড়া|মেট্রো|মেট্রোরেল|metro)/i.test(lower)) {
+    return { filterItem: 'মেট্রো', filterCategory: 'transport', filterLabelBn: 'মেট্রোরেল ভাড়া', icon: '🚇' };
+  }
+  if (/(?:উবার|পাঠাও|uber|pathao)/i.test(lower)) {
+    return { filterItem: 'উবার', filterCategory: 'transport', filterLabelBn: 'উবার/পাঠাও ভাড়া', icon: '🚗' };
+  }
+  if (/(?:ট্রেন\s*ভাড়া|ট্রেন|train)/i.test(lower)) {
+    return { filterItem: 'ট্রেন', filterCategory: 'transport', filterLabelBn: 'ট্রেন ভাড়া', icon: '🚆' };
+  }
+  if (/(?:তেল|পেট্রোল|অকটেন|ডিজেল|petrol|octane|diesel)/i.test(lower)) {
+    return { filterItem: 'তেল', filterCategory: 'transport', filterLabelBn: 'জ্বালানি/পেট্রোল', icon: '⛽' };
+  }
+  // Generic "ভাড়া" (when not house/room rent)
+  if (!/(?:বাসা|বাড়ি|রুম|মেস|basa|basha|bari|room|mess)/i.test(lower) && /(?:ভাড়া|ভাড়া|vara|bhara|fare)/i.test(lower)) {
+    return { filterItem: 'ভাড়া', filterCategory: 'transport', filterLabelBn: 'ভাড়া', icon: '🚕' };
+  }
+  if (/(?:যাতায়াত|যাতায়াত|transport|travel)/i.test(lower)) {
+    return { filterCategory: 'transport', filterLabelBn: 'যাতায়াত খরচ', icon: '🚗' };
+  }
+
+  // 2. Bills & Rent
+  if (/(?:বাসা\s*ভাড়া|বাড়ি\s*ভাড়া|রুম\s*ভাড়া|মেস\s*ভাড়া|basa\s*vara|bari\s*vara|room\s*rent|house\s*rent)/i.test(lower)) {
+    return { filterItem: 'বাসা ভাড়া', filterCategory: 'bills', filterLabelBn: 'বাসা ভাড়া', icon: '🏠' };
+  }
+  if (/(?:বিদ্যুৎ\s*বিল|কারেন্ট\s*বিল|বিদ্যুৎ|electricity|current\s*bill)/i.test(lower)) {
+    return { filterItem: 'বিদ্যুৎ', filterCategory: 'bills', filterLabelBn: 'বিদ্যুৎ বিল', icon: '💡' };
+  }
+  if (/(?:গ্যাস\s*বিল|গ্যাস|gas\s*bill)/i.test(lower)) {
+    return { filterItem: 'গ্যাস', filterCategory: 'bills', filterLabelBn: 'গ্যাস বিল', icon: '🔥' };
+  }
+  if (/(?:পানি\s*বিল|পানি|water\s*bill)/i.test(lower)) {
+    return { filterItem: 'পানি', filterCategory: 'bills', filterLabelBn: 'পানি বিল', icon: '🚰' };
+  }
+  if (/(?:ওয়াইফাই|ইন্টারনেট|নেট\s*বিল|wifi|internet|net\s*bill)/i.test(lower)) {
+    return { filterItem: 'ওয়াইফাই', filterCategory: 'bills', filterLabelBn: 'ওয়াইফাই/ইন্টারনেট বিল', icon: '📶' };
+  }
+  if (/(?:রিচার্জ|ফ্লেক্সিলোড|recharge|topup|flexiload)/i.test(lower)) {
+    return { filterItem: 'রিচার্জ', filterCategory: 'bills', filterLabelBn: 'মোবাইল রিচার্জ', icon: '📱' };
+  }
+  if (/(?:বিল|bill)/i.test(lower) && !/(?:বিরিয়ানি|biryani)/i.test(lower)) {
+    return { filterCategory: 'bills', filterLabelBn: 'ইউটিলিটি ও বিল', icon: '💡' };
+  }
+
+  // 3. Food & Bazar
+  if (/(?:কাঁচা\s*বাজার|বাজার|bazar|bazaar)/i.test(lower)) {
+    return { filterItem: 'বাজার', filterCategory: 'food', filterLabelBn: 'বাজার', icon: '🛒' };
+  }
+  if (/(?:চা|কফি|tea|coffee|cha|kofi)/i.test(lower)) {
+    return { filterItem: 'চা', filterCategory: 'food', filterLabelBn: 'চা/কফি', icon: '☕' };
+  }
+  if (/(?:নাস্তা|সকালের\s*নাস্তা|বিকালে?র\s*নাস্তা|nasta|nashta|breakfast)/i.test(lower)) {
+    return { filterItem: 'নাস্তা', filterCategory: 'food', filterLabelBn: 'নাস্তা', icon: '🥪' };
+  }
+  if (/(?:লাঞ্চ|দুপুরের\s*খাবার|lunch)/i.test(lower)) {
+    return { filterItem: 'লাঞ্চ', filterCategory: 'food', filterLabelBn: 'লাঞ্চ', icon: '🍛' };
+  }
+  if (/(?:ডিনার|রাতের\s*খাবার|dinner)/i.test(lower)) {
+    return { filterItem: 'ডিনার', filterCategory: 'food', filterLabelBn: 'ডিনার', icon: '🍽️' };
+  }
+  if (/(?:মাংস|গরু|মুরগি|চিকেন|খাসি|meat|beef|chicken|mutton)/i.test(lower)) {
+    return { filterItem: 'মাংস', filterCategory: 'food', filterLabelBn: 'মাংস', icon: '🥩' };
+  }
+  if (/(?:মাছ|fish|mach)/i.test(lower)) {
+    return { filterItem: 'মাছ', filterCategory: 'food', filterLabelBn: 'মাছ', icon: '🐟' };
+  }
+  if (/(?:ডিম|দুধ|egg|milk|dim|dudh)/i.test(lower)) {
+    return { filterItem: 'ডিম/দুধ', filterCategory: 'food', filterLabelBn: 'ডিম ও দুধ', icon: '🥚' };
+  }
+  if (/(?:ফল|fruits?|fol)/i.test(lower)) {
+    return { filterItem: 'ফল', filterCategory: 'food', filterLabelBn: 'ফল', icon: '🍎' };
+  }
+  if (/(?:খাবার|রেস্টুরেন্ট|হোটেল|food|khabar|khawar|restaurant|hotel)/i.test(lower)) {
+    return { filterCategory: 'food', filterLabelBn: 'খাবার খরচ', icon: '🍽️' };
+  }
+
+  // 4. Health
+  if (/(?:ওষুধ|ঔষধ|medicine|medecin|medisin|osud|oshud|oushud)/i.test(lower)) {
+    return { filterItem: 'ওষুধ', filterCategory: 'health', filterLabelBn: 'ওষুধ', icon: '💊' };
+  }
+  if (/(?:ডাক্তার|হাসপাতাল|ক্লিনিক|টেস্ট|doctor|hospital|clinic|test)/i.test(lower)) {
+    return { filterItem: 'ডাক্তার', filterCategory: 'health', filterLabelBn: 'চিকিৎসা/ডাক্তার', icon: '🩺' };
+  }
+  if (/(?:স্বাস্থ্য|চিকিৎসা|health|treatment)/i.test(lower)) {
+    return { filterCategory: 'health', filterLabelBn: 'ওষুধ ও চিকিৎসা', icon: '💊' };
+  }
+
+  // 5. Shopping
+  if (/(?:কেনাকাটা|শপিং|shopping|jama|kapor|cloth|shoes|জুতা|কাপড়)/i.test(lower)) {
+    return { filterCategory: 'shopping', filterLabelBn: 'কেনাকাটা', icon: '🛍️' };
+  }
+
+  // 6. Education
+  if (/(?:টিউশন|কোচিং|স্কুল\s*ফি|কলেজ\s*ফি|বই|tuition|coaching|school\s*fee|book)/i.test(lower)) {
+    return { filterCategory: 'education', filterLabelBn: 'শিক্ষা খরচ', icon: '📚' };
+  }
+
+  // 7. Entertainment
+  if (/(?:সিনেমা|মুভি|ঘুরতে|ট্যুর|movie|cinema|tour)/i.test(lower)) {
+    return { filterCategory: 'entertainment', filterLabelBn: 'বিনোদন ও ট্যুর', icon: '🎬' };
+  }
+
+  return null;
+};
+
+/**
+ * Filter expense list by a target item or category
+ */
+export const filterExpensesByKeyword = (
+  expenses: IExpense[],
+  filterItem?: string,
+  filterCategory?: string
+): IExpense[] => {
+  if (!filterItem && !filterCategory) return expenses;
+
+  return expenses.filter(exp => {
+    const title = (exp.title || '').toLowerCase();
+    const notes = (exp.notes || '').toLowerCase();
+    const cat = exp.category;
+    const catBn = (exp.categoryBn || '').toLowerCase();
+
+    if (filterCategory && !filterItem) {
+      return cat === filterCategory;
+    }
+
+    if (filterItem) {
+      const itemLower = filterItem.toLowerCase();
+      
+      if (title.includes(itemLower) || notes.includes(itemLower) || catBn.includes(itemLower)) {
+        return true;
+      }
+
+      if (itemLower === 'রিকশা' && /(?:রিকশা|রিক্সা|rickshaw|riksha|riksa)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'ভাড়া' && (cat === 'transport' || /(?:ভাড়া|ভাড়া|vara|bhara|fare)/i.test(title + ' ' + notes))) {
+        return true;
+      }
+      if (itemLower === 'বাস' && /(?:বাস|bus)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'ওষুধ' && /(?:ওষুধ|ঔষধ|medicine|osud|oshud)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'বাজার' && /(?:বাজার|bazar|bazaar)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'চা' && /(?:চা|কফি|tea|coffee|cha)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'নাস্তা' && /(?:নাস্তা|breakfast|nasta|nashta)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'লাঞ্চ' && /(?:লাঞ্চ|lunch|দুপুরের\s*খাবার)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'ডিনার' && /(?:ডিনার|dinner|রাতের\s*খাবার)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'বিদ্যুৎ' && /(?:বিদ্যুৎ|কারেন্ট|current|electricity)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'বাসা ভাড়া' && /(?:বাসা|বাড়ি|রুম|মেস|basa|bari|room|rent)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+};
+
 /**
  * Natural Language Expense Parser for WhatsApp (Zero AI Cost)
  */
@@ -652,33 +853,48 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
     && !/\b(?:hisabe|hisebe)\b/i.test(clean)
     && !/(?:হিসাবে|হিসেবে)/.test(clean);
 
-  const isQuery = (hasExpenseWord && (hasQueryWord || clean.endsWith('?'))) || isDirectExpensePhrase;
+  // Check if there is an item filter (e.g. "রিকশা ভাড়া", "ভাড়া", "বাজার", "ওষুধ", "লাঞ্চ")
+  const itemFilter = extractExpenseQueryFilter(clean);
+  const hasItemOrCategory = !!itemFilter;
 
-  // 1. Month Query (e.g. "গত মাসের খরচ কত", "সেপ্টেম্বর মাসের খরচ", "এই মাসের খরচ", "ay mas ar khoros daw", "octobor ar khoros koto")
-  if (dateInfo?.monthDate && (isQuery || hasExpenseWord)) {
+  const isQuery = (hasExpenseWord && (hasQueryWord || clean.endsWith('?'))) ||
+                  isDirectExpensePhrase ||
+                  (hasItemOrCategory && (hasQueryWord || clean.endsWith('?') || /(?:কত|koto|কতো|হিসাব|hisab|খরচ|khoros|খরচা|দাও|daw|দেও|dao|দেখাও|dekhao|list|লিস্ট)/i.test(clean)));
+
+  // 1. Month Query (e.g. "গত মাসের খরচ কত", "সেপ্টেম্বর মাসের খরচ", "এই মাসের খরচ", "সারা মাসে রিকশা ভাড়া কত দাও", "ay mas ar khoros daw")
+  if (dateInfo?.monthDate && (isQuery || hasExpenseWord || hasItemOrCategory)) {
     return {
       isQuery: true,
       queryType: 'monthly',
-      monthYear: dateInfo.monthDate
+      monthYear: dateInfo.monthDate,
+      filterItem: itemFilter?.filterItem,
+      filterCategory: itemFilter?.filterCategory,
+      filterLabelBn: itemFilter?.filterLabelBn
     };
   }
 
   if (
-    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|এই\s*মাস|চলতি\s*মাস|ay\s*mas|ei\s*mas|ai\s*mas|cholti\s*mas|month|monthly|maser|masher|mas\s*ar|mas\s*er|mash\s*ar|mash\s*er|last\s*month|this\s*month)\s*(?:এর|র|ar|er)?\s*(?:মোট\s*|mot\s*|total\s*)?(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses)/i.test(clean) ||
+    /(?:এই\s*মাসের|মাসের|চলতি\s*মাসের|এই\s*মাস|চলতি\s*মাস|সারা\s*মাস|সারামাস|সারামাসে|পুরো\s*মাস|ay\s*mas|ei\s*mas|ai\s*mas|cholti\s*mas|sara\s*mas|saramas|month|monthly|maser|masher|mas\s*ar|mas\s*er|mash\s*ar|mash\s*er|last\s*month|this\s*month)\s*(?:এর|র|ar|er)?\s*(?:মোট\s*|mot\s*|total\s*)?(?:খরচ|খরচের|খরচা|ব্যয়|ব্যায়|khoroch|khoroc|khoros|khoroa|koros|koroch|cost|costs|হিসাব|hisab|expense|expenses|ভাড়া|vara|বাজার|ওষুধ)/i.test(clean) ||
     /^(?:মাসের\s*খরচ|এই\s*মাসের\s*খরচ|মাসের\s*হিসাব|maser\s*khoros|maser\s*khoroch|maser\s*hisab|monthly\s*cost|monthly\s*expense)$/i.test(clean)
   ) {
     return {
       isQuery: true,
-      queryType: 'monthly'
+      queryType: 'monthly',
+      filterItem: itemFilter?.filterItem,
+      filterCategory: itemFilter?.filterCategory,
+      filterLabelBn: itemFilter?.filterLabelBn
     };
   }
 
-  // 1.5. Multi-day Range Query (e.g. "last 2 din ar khoros koto", "last 2 din ar cost koto", "গত ২ দিনের খরচ কত")
-  if (dateInfo?.rangeDays && (isQuery || hasExpenseWord)) {
+  // 1.5. Multi-day Range Query (e.g. "last 2 din ar khoros koto", "এই সপ্তাহে বাজার খরচ কত", "গত ২ দিনের খরচ কত")
+  if (dateInfo?.rangeDays && (isQuery || hasExpenseWord || hasItemOrCategory)) {
     return {
       isQuery: true,
       queryType: 'range',
-      rangeDays: dateInfo.rangeDays
+      rangeDays: dateInfo.rangeDays,
+      filterItem: itemFilter?.filterItem,
+      filterCategory: itemFilter?.filterCategory,
+      filterLabelBn: itemFilter?.filterLabelBn
     };
   }
 
@@ -688,17 +904,23 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
       isQuery: true,
       queryType: 'daily',
       targetDate: dateInfo.dayDate.date,
-      dateLabelBn: dateInfo.dayDate.dateLabelBn
+      dateLabelBn: dateInfo.dayDate.dateLabelBn,
+      filterItem: itemFilter?.filterItem,
+      filterCategory: itemFilter?.filterCategory,
+      filterLabelBn: itemFilter?.filterLabelBn
     };
   }
 
-  // 3. General or Today Query (e.g. "Aj mot koto khoros hoyeche?", "aj koto khoroc", "mot khoros koto", "খরচ কত")
+  // 3. General or Today Query (e.g. "Aj mot koto khoros hoyeche?", "ajker vara koto", "আজকের রিকশা ভাড়া কত", "খরচ কত")
   if (isQuery) {
     return {
       isQuery: true,
       queryType: 'daily',
       targetDate: dateInfo?.dayDate?.date,
-      dateLabelBn: dateInfo?.dayDate?.dateLabelBn || 'আজকের'
+      dateLabelBn: dateInfo?.dayDate?.dateLabelBn || 'আজকের',
+      filterItem: itemFilter?.filterItem,
+      filterCategory: itemFilter?.filterCategory,
+      filterLabelBn: itemFilter?.filterLabelBn
     };
   }
 
@@ -1139,6 +1361,50 @@ export const buildMonthlyExpenseQueryMessage = (
          `──────────────\n` +
          `💰 *মোট খরচ:* ${formatTaka(monthTotal)} (${enToBnDigits(monthCount)}টি এন্ট্রি)\n\n` +
          `🌐 সম্পূর্ণ গ্রাফ ও খাতা দেখতে: https://smritilife.com/app/expenses`;
+};
+
+/**
+ * Format Response Message for a Specific Item / Category Query (e.g. Rickshaw Fare, Bazaar, Medicine, Daily, Monthly, Weekly)
+ */
+export const buildFilteredExpenseQueryMessage = (
+  allExpenses: IExpense[],
+  filteredExpenses: IExpense[],
+  filteredTotal: number,
+  overallTotal: number,
+  filterLabelBn: string,
+  periodLabelBn: string = 'আজকের',
+  filterIcon: string = '💰'
+): string => {
+  const normPeriod = periodLabelBn.includes('আজ') ? 'আজকের' : periodLabelBn;
+
+  if (filteredExpenses.length === 0) {
+    const hasAnyInPeriod = allExpenses.length > 0;
+    return `${filterIcon} *${normPeriod} ${filterLabelBn}র হিসাব*\n\n` +
+           `${normPeriod} আপনার "${filterLabelBn}" বাবদ কোনো খরচ রেকর্ড করা নেই।\n` +
+           (hasAnyInPeriod ? `\n📊 *${normPeriod} সর্বমোট খরচ ছিল:* ${formatTaka(overallTotal)}\n` : '') +
+           `\n💡 খরচ যোগ করতে লিখুন, যেমন: "${filterLabelBn} ৬০ টাকা"`;
+  }
+
+  const itemsList = filteredExpenses
+    .map((e, idx) => {
+      const displayTitle = toBanglaExpenseTitle(e.title) || e.title;
+      const dStr = new Date(e.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const [, mNum, dNum] = dStr.split('-').map(Number);
+      const shortDate = `${enToBnDigits(dNum)} ${BENGALI_MONTHS[mNum] || ''}`.trim();
+      const isSingleDay = normPeriod.includes('আজ') || normPeriod.includes('গতকাল');
+      const dateSuffix = isSingleDay ? '' : ` _(${shortDate})_`;
+      return `${enToBnDigits(idx + 1)}. ${displayTitle}: *${formatTaka(e.amount)}*${dateSuffix}`;
+    })
+    .join('\n');
+
+  const unitName = (filterLabelBn.includes('ভাড়া') || filterLabelBn.includes('রিকশা') || filterLabelBn.includes('বাস')) ? 'টি ট্রিপ' : 'টি এন্ট্রি';
+
+  return `${filterIcon} *${normPeriod} ${filterLabelBn}র হিসাব*\n\n` +
+         `${itemsList}\n\n` +
+         `──────────────\n` +
+         `💰 *${normPeriod} ${filterLabelBn} মোট:* ${formatTaka(filteredTotal)} (${enToBnDigits(filteredExpenses.length)}${unitName})\n` +
+         (overallTotal > filteredTotal ? `📊 *${normPeriod} সর্বমোট খরচ:* ${formatTaka(overallTotal)}\n\n` : '\n') +
+         `🌐 বিস্তারিত খাতা: https://smritilife.com/app/expenses`;
 };
 
 /**

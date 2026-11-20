@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || (req as any).user?._id;
-    const { category, month, year, limit = 50, page = 1 } = req.query;
+    const { category, month, year, limit = 500, page = 1 } = req.query;
 
     const query: any = { userId };
     if (category && category !== 'all') {

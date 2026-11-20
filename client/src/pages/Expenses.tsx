@@ -74,10 +74,22 @@ export default function Expenses() {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [summary, setSummary] = useState<ExpenseSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'today' | 'yesterday' | 'month' | 'custom'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom'>('all');
   const [customDate, setCustomDate] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedQuickItem, setSelectedQuickItem] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const QUICK_ITEMS = [
+    { id: 'all', label: 'সব আইটেম', icon: '📋', pattern: null },
+    { id: 'riksha', label: 'রিকশা/ভাড়া', icon: '🚕', pattern: /(?:রিকশা|রিক্সা|ভাড়া|ভাড়া|vara|bhara|rickshaw|bus|বাস|cng|সিএনজি)/i },
+    { id: 'bazar', label: 'কাঁচা বাজার', icon: '🛒', pattern: /(?:বাজার|bazar)/i },
+    { id: 'food', label: 'খাবার/লাঞ্চ', icon: '🍽️', pattern: /(?:খাবার|লাঞ্চ|ডিনার|lunch|dinner|food|ভাত|বিরিয়ানি)/i },
+    { id: 'osud', label: 'ওষুধ/চিকিৎসা', icon: '💊', pattern: /(?:ওষুধ|ঔষধ|medicine|doctor|ডাক্তার|test|clinic)/i },
+    { id: 'bills', label: 'বিল/রিচার্জ', icon: '💡', pattern: /(?:বিল|বিদ্যুৎ|কারেন্ট|গ্যাস|পানি|wifi|bill|recharge|রিচার্জ)/i },
+    { id: 'cha', label: 'চা ও নাস্তা', icon: '☕', pattern: /(?:চা|নাস্তা|কফি|tea|coffee|nasta)/i },
+    { id: 'shopping', label: 'কেনাকাটা', icon: '🛍️', pattern: /(?:কেনাকাটা|শপিং|shopping|dress|cloth|জামা|জুতা)/i }
+  ];
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -185,7 +197,24 @@ export default function Expenses() {
   // Filter expenses
   const filteredExpenses = expenses.filter(item => {
     if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
-    if (searchQuery.trim() && !item.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    
+    // Quick Item chip filter
+    if (selectedQuickItem !== 'all') {
+      const targetQuick = QUICK_ITEMS.find(q => q.id === selectedQuickItem);
+      if (targetQuick?.pattern) {
+        const titleAndNotes = `${item.title} ${item.notes || ''} ${item.categoryBn || ''}`;
+        if (!targetQuick.pattern.test(titleAndNotes)) return false;
+      }
+    }
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const match = item.title.toLowerCase().includes(q) ||
+                    (item.notes && item.notes.toLowerCase().includes(q)) ||
+                    (item.categoryBn && item.categoryBn.toLowerCase().includes(q));
+      if (!match) return false;
+    }
 
     if (activeFilter === 'today') {
       const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
@@ -201,6 +230,15 @@ export default function Expenses() {
       return yesterdayStr === itemDateStr;
     }
 
+    if (activeFilter === 'week') {
+      const now = new Date();
+      const weekAgo = new Date();
+      weekAgo.setDate(now.getDate() - 6);
+      weekAgo.setHours(0, 0, 0, 0);
+      const itemDate = new Date(item.date);
+      return itemDate >= weekAgo && itemDate <= now;
+    }
+
     if (activeFilter === 'month') {
       const now = new Date();
       const itemDate = new Date(item.date);
@@ -214,6 +252,8 @@ export default function Expenses() {
 
     return true;
   });
+
+  const filteredTotal = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
 
   const topCategory = summary?.categoryBreakdown?.[0];
 
@@ -372,63 +412,151 @@ export default function Expenses() {
         <div className="bg-white rounded-3xl p-4 md:p-5 shadow-sm border border-slate-200/80 space-y-4">
           
           {/* Controls: Tabs & Category Filter */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          {/* Controls: Tabs, Search & Category Filter */}
+          <div className="space-y-3">
             
             {/* Filter Tabs */}
-            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-2xl text-xs font-semibold">
-              <button
-                onClick={() => { setActiveFilter('all'); setCustomDate(''); }}
-                className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'all' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
-              >
-                সব খরচ
-              </button>
-              <button
-                onClick={() => { setActiveFilter('today'); setCustomDate(''); }}
-                className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'today' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
-              >
-                আজকে ({summary?.todayCount || 0})
-              </button>
-              <button
-                onClick={() => { setActiveFilter('yesterday'); setCustomDate(''); }}
-                className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'yesterday' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
-              >
-                গতকালকে
-              </button>
-              <button
-                onClick={() => { setActiveFilter('month'); setCustomDate(''); }}
-                className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'month' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
-              >
-                এই মাস ({summary?.monthCount || 0})
-              </button>
-              <div className="flex items-center gap-1 pl-1">
-                <input
-                  type="date"
-                  value={customDate}
-                  onChange={(e) => {
-                    setCustomDate(e.target.value);
-                    if (e.target.value) setActiveFilter('custom');
-                  }}
-                  title="নির্দিষ্ট তারিখ বাছাই করুন (যেমন: ১০ অক্টোবর)"
-                  className="bg-white border border-slate-200 text-slate-700 text-xs px-2 py-1 rounded-xl outline-none cursor-pointer"
-                />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-2xl text-xs font-semibold">
+                <button
+                  onClick={() => { setActiveFilter('all'); setCustomDate(''); }}
+                  className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'all' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  সব খরচ
+                </button>
+                <button
+                  onClick={() => { setActiveFilter('today'); setCustomDate(''); }}
+                  className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'today' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  আজকে ({summary?.todayCount || 0})
+                </button>
+                <button
+                  onClick={() => { setActiveFilter('yesterday'); setCustomDate(''); }}
+                  className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'yesterday' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  গতকালকে
+                </button>
+                <button
+                  onClick={() => { setActiveFilter('week'); setCustomDate(''); }}
+                  className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'week' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  এই সপ্তাহ (৭ দিন)
+                </button>
+                <button
+                  onClick={() => { setActiveFilter('month'); setCustomDate(''); }}
+                  className={`px-3 py-1.5 rounded-full transition cursor-pointer ${activeFilter === 'month' ? 'bg-white text-[#0A7756] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  এই মাস ({summary?.monthCount || 0})
+                </button>
+                <div className="flex items-center gap-1 pl-1">
+                  <input
+                    type="date"
+                    value={customDate}
+                    onChange={(e) => {
+                      setCustomDate(e.target.value);
+                      if (e.target.value) setActiveFilter('custom');
+                    }}
+                    title="নির্দিষ্ট তারিখ বাছাই করুন"
+                    className="bg-white border border-slate-200 text-slate-700 text-xs px-2 py-1 rounded-xl outline-none cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Category Dropdown */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-2xl px-3 py-2 outline-none cursor-pointer w-full sm:w-auto"
+                >
+                  <option value="all">সব খাত (All Categories)</option>
+                  {Object.entries(CATEGORY_ICONS).map(([key, val]) => (
+                    <option key={key} value={key}>
+                      {val.icon} {val.nameBn}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* Category Dropdown & Search */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-2xl px-3 py-2 outline-none cursor-pointer flex-1 sm:flex-initial"
-              >
-                <option value="all">সব খাত (All Categories)</option>
-                {Object.entries(CATEGORY_ICONS).map(([key, val]) => (
-                  <option key={key} value={key}>
-                    {val.icon} {val.nameBn}
-                  </option>
-                ))}
-              </select>
+            {/* Quick Item Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+              {QUICK_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedQuickItem(item.id)}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    selectedQuickItem === item.id
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/60'
+                  }`}
+                >
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
             </div>
+
+            {/* Search Input Bar */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="খাত বা খরচের নাম লিখে খুঁজুন (যেমন: রিকশা, কাঁচা বাজার, নাস্তা, ওষুধ)..."
+                className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl pl-9 pr-9 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#0A7756] focus:bg-white transition"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Dynamic Filtered Summary Hero Box */}
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border border-emerald-200/80 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+                  ৳
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-800">
+                      {activeFilter === 'today' ? 'আজকের' :
+                       activeFilter === 'yesterday' ? 'গতকালের' :
+                       activeFilter === 'week' ? 'এই সপ্তাহের' :
+                       activeFilter === 'month' ? 'চলতি মাসের' :
+                       activeFilter === 'custom' ? `${customDate} তারিখের` : 'সর্বমোট'}
+                      {' '}
+                      {selectedQuickItem !== 'all' ? (QUICK_ITEMS.find(q => q.id === selectedQuickItem)?.label || '') :
+                       searchQuery ? `"${searchQuery}" এর` :
+                       selectedCategory !== 'all' ? (CATEGORY_ICONS[selectedCategory]?.nameBn || '') : 'সব'}
+                      {' '}হিসাব
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      {filteredExpenses.length}টি এন্ট্রি
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {selectedQuickItem === 'riksha' ? '🚕 মোট যাতায়াত ও রিকশা ভাড়া' :
+                     selectedQuickItem === 'bazar' ? '🛒 মোট কাঁচা বাজার খরচ' :
+                     selectedQuickItem === 'food' ? '🍽️ মোট খাবার ও রেস্টুরেন্ট বিল' :
+                     selectedQuickItem === 'osud' ? '💊 মোট ওষুধ ও মেডিকেল খরচ' :
+                     'নির্বাচিত ফিল্টার অনুযায়ী মোট হিসাব'}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right sm:self-center pl-11 sm:pl-0">
+                <span className="text-xl sm:text-2xl font-black text-emerald-800 font-mono tracking-tight">
+                  ৳{Math.round(filteredTotal).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
           </div>
 
           {/* Items List */}

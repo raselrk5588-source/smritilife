@@ -2,7 +2,19 @@ import { Request, Response } from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { matchRelativeDuration, parseBengaliTime, parseRelativeDate, transcribeAudioMessage } from '../services/aiWhatsAppService';
 import { handleMedicineInquiry } from './whatsappController';
-import { parseExpenseInput, recordExpense, detectExpenseCategory } from '../services/expenseService';
+import { 
+  parseExpenseInput, 
+  recordExpense, 
+  detectExpenseCategory,
+  getExpenseSummaryForDate,
+  getExpenseSummaryForMonth,
+  getExpenseSummaryForRange,
+  filterExpensesByKeyword,
+  buildFilteredExpenseQueryMessage,
+  buildDailyExpenseQueryMessage,
+  buildMonthlyExpenseQueryMessage,
+  buildRangeExpenseQueryMessage
+} from '../services/expenseService';
 import Reminder from '../models/Reminder';
 import Note from '../models/Note';
 import UserDocument from '../models/UserDocument';
@@ -88,18 +100,121 @@ export const parseCommand = async (req: Request, res: Response) => {
 
       // Check if command is an expense tracker command
       const parsedExp = parseExpenseInput(command);
-      if (parsedExp && parsedExp.amount && parsedExp.title && !parsedExp.isQuery && !/(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নোট|note)/i.test(command)) {
-        const expDate = parsedExp.expenseDate || new Date();
-        await recordExpense(userId, parsedExp.title, parsedExp.amount, parsedExp.paymentMethod || 'cash', expDate);
-        return res.json({
-          success: true,
-          data: {
-            intent: "expense_logged",
-            title: parsedExp.title,
-            amount: parsedExp.amount,
-            message: `💸 খরচ "${parsedExp.title}" (৳${parsedExp.amount}) সফলভাবে সংরক্ষণ করা হয়েছে!`
+      if (parsedExp) {
+        if (!parsedExp.isQuery && parsedExp.amount && parsedExp.title && !/(?:রিমাইন্ডার|reminder|অ্যালার্ম|alarm|নোট|note)/i.test(command)) {
+          const expDate = parsedExp.expenseDate || new Date();
+          await recordExpense(userId, parsedExp.title, parsedExp.amount, parsedExp.paymentMethod || 'cash', expDate);
+          return res.json({
+            success: true,
+            data: {
+              intent: "expense_logged",
+              title: parsedExp.title,
+              amount: parsedExp.amount,
+              message: `💸 খরচ "${parsedExp.title}" (৳${parsedExp.amount}) সফলভাবে সংরক্ষণ করা হয়েছে!`
+            }
+          });
+        }
+
+        if (parsedExp.isQuery) {
+          const isItemFiltered = !!(parsedExp.filterItem || parsedExp.filterCategory);
+          const filterLabelBn = parsedExp.filterLabelBn || parsedExp.filterItem || 'খরচ';
+          const filterIcon = parsedExp.filterCategory === 'transport' ? '🚕' :
+                             parsedExp.filterCategory === 'food' ? '🛒' :
+                             parsedExp.filterCategory === 'health' ? '💊' :
+                             parsedExp.filterCategory === 'bills' ? '💡' :
+                             parsedExp.filterCategory === 'shopping' ? '🛍️' : '💰';
+
+          let reply = '';
+          if (parsedExp.queryType === 'monthly') {
+            const year = parsedExp.monthYear?.year || new Date().getFullYear();
+            const month = parsedExp.monthYear?.month || (new Date().getMonth() + 1);
+            const periodLabel = parsedExp.monthYear?.monthLabelBn || 'সারামাসে';
+            const mSummary = await getExpenseSummaryForMonth(userId, year, month, periodLabel);
+
+            if (isItemFiltered) {
+              const matching = filterExpensesByKeyword(mSummary.monthExpenses, parsedExp.filterItem, parsedExp.filterCategory);
+              const filteredTotal = matching.reduce((sum, item) => sum + item.amount, 0);
+              reply = buildFilteredExpenseQueryMessage(
+                mSummary.monthExpenses,
+                matching,
+                filteredTotal,
+                mSummary.monthTotal,
+                filterLabelBn,
+                periodLabel,
+                filterIcon
+              );
+            } else {
+              reply = buildMonthlyExpenseQueryMessage(
+                mSummary.monthTotal,
+                mSummary.monthCount,
+                mSummary.categoryBreakdown,
+                periodLabel,
+                mSummary.monthExpenses
+              );
+            }
+          } else if (parsedExp.queryType === 'range' && parsedExp.rangeDays) {
+            const rSummary = await getExpenseSummaryForRange(
+              userId,
+              parsedExp.rangeDays.startDate,
+              parsedExp.rangeDays.endDate,
+              parsedExp.rangeDays.labelBn
+            );
+
+            if (isItemFiltered) {
+              const matching = filterExpensesByKeyword(rSummary.rangeExpenses, parsedExp.filterItem, parsedExp.filterCategory);
+              const filteredTotal = matching.reduce((sum, item) => sum + item.amount, 0);
+              reply = buildFilteredExpenseQueryMessage(
+                rSummary.rangeExpenses,
+                matching,
+                filteredTotal,
+                rSummary.rangeTotal,
+                filterLabelBn,
+                rSummary.labelBn,
+                filterIcon
+              );
+            } else {
+              reply = buildRangeExpenseQueryMessage(
+                rSummary.rangeExpenses,
+                rSummary.rangeTotal,
+                rSummary.monthTotal,
+                rSummary.labelBn
+              );
+            }
+          } else {
+            const targetDate = parsedExp.targetDate || new Date();
+            const dateLabel = parsedExp.dateLabelBn || 'আজকের';
+            const dSummary = await getExpenseSummaryForDate(userId, targetDate, dateLabel);
+
+            if (isItemFiltered) {
+              const matching = filterExpensesByKeyword(dSummary.dateExpenses, parsedExp.filterItem, parsedExp.filterCategory);
+              const filteredTotal = matching.reduce((sum, item) => sum + item.amount, 0);
+              reply = buildFilteredExpenseQueryMessage(
+                dSummary.dateExpenses,
+                matching,
+                filteredTotal,
+                dSummary.dateTotal,
+                filterLabelBn,
+                dateLabel,
+                filterIcon
+              );
+            } else {
+              reply = buildDailyExpenseQueryMessage(
+                dSummary.dateExpenses,
+                dSummary.dateTotal,
+                dSummary.monthTotal,
+                dSummary.dateLabelBn
+              );
+            }
           }
-        });
+
+          return res.json({
+            success: true,
+            data: {
+              intent: "expense_query",
+              message: reply
+            }
+          });
+        }
       }
     }
     

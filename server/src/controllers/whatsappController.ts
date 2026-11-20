@@ -42,6 +42,8 @@ import {
   deleteAllExpensesForDate,
   buildExpenseDeletedMessage,
   buildExpenseDeleteChoiceMessage,
+  buildFilteredExpenseQueryMessage,
+  filterExpensesByKeyword,
   enToBnDigits,
   formatTaka,
   bnToEnDigits
@@ -4468,55 +4470,62 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             userReminderListContext.delete(user._id.toString());
             await Note.deleteMany({ userId: user._id, title: /(?:খরচ|khoroc|khoros|expense|cost)/i }).catch(() => {});
             if (parsedExpense.isQuery) {
+              const isItemFiltered = !!(parsedExpense.filterItem || parsedExpense.filterCategory);
+              const filterLabelBn = parsedExpense.filterLabelBn || parsedExpense.filterItem || 'খরচ';
+              const filterIcon = parsedExpense.filterCategory === 'transport' ? '🚕' :
+                                 parsedExpense.filterCategory === 'food' ? '🛒' :
+                                 parsedExpense.filterCategory === 'health' ? '💊' :
+                                 parsedExpense.filterCategory === 'bills' ? '💡' :
+                                 parsedExpense.filterCategory === 'shopping' ? '🛍️' : '💰';
+
               if (parsedExpense.queryType === 'monthly') {
-                if (parsedExpense.monthYear) {
-                  const mSummary = await getExpenseSummaryForMonth(
-                    user._id,
-                    parsedExpense.monthYear.year,
-                    parsedExpense.monthYear.month,
-                    parsedExpense.monthYear.monthLabelBn
+                const year = parsedExpense.monthYear?.year || new Date().getFullYear();
+                const month = parsedExpense.monthYear?.month || (new Date().getMonth() + 1);
+                const periodLabel = parsedExpense.monthYear?.monthLabelBn || 'সারামাসে';
+
+                const mSummary = await getExpenseSummaryForMonth(
+                  user._id,
+                  year,
+                  month,
+                  periodLabel
+                );
+
+                let reply = '';
+                if (isItemFiltered) {
+                  const matching = filterExpensesByKeyword(mSummary.monthExpenses, parsedExpense.filterItem, parsedExpense.filterCategory);
+                  const filteredTotal = matching.reduce((sum, item) => sum + item.amount, 0);
+                  reply = buildFilteredExpenseQueryMessage(
+                    mSummary.monthExpenses,
+                    matching,
+                    filteredTotal,
+                    mSummary.monthTotal,
+                    filterLabelBn,
+                    periodLabel,
+                    filterIcon
                   );
-                  if (mSummary.monthExpenses.length > 0) {
-                    userExpenseContext.set(user._id.toString(), {
-                      targetDate: mSummary.monthExpenses[0].date,
-                      dateLabelBn: mSummary.monthLabelBn,
-                      expenses: mSummary.monthExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
-                      expiresAt: Date.now() + 15 * 60 * 1000
-                    });
-                  }
-                  const reply = buildMonthlyExpenseQueryMessage(
+                } else {
+                  reply = buildMonthlyExpenseQueryMessage(
                     mSummary.monthTotal,
                     mSummary.monthCount,
                     mSummary.categoryBreakdown,
-                    mSummary.monthLabelBn,
+                    periodLabel,
                     mSummary.monthExpenses
                   );
-                  await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
-                } else {
-                  const summary = await getExpenseSummary(user._id);
-                  if (summary.monthExpenses.length > 0) {
-                    userExpenseContext.set(user._id.toString(), {
-                      targetDate: summary.monthExpenses[0].date,
-                      dateLabelBn: 'চলতি মাসের',
-                      expenses: summary.monthExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
-                      expiresAt: Date.now() + 15 * 60 * 1000
-                    });
-                  }
-                  const reply = buildMonthlyExpenseQueryMessage(
-                    summary.monthTotal,
-                    summary.monthCount,
-                    summary.categoryBreakdown,
-                    'চলতি মাসের',
-                    summary.monthExpenses
-                  );
-                  await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
                 }
+
+                if (mSummary.monthExpenses.length > 0) {
+                  userExpenseContext.set(user._id.toString(), {
+                    targetDate: mSummary.monthExpenses[0].date,
+                    dateLabelBn: periodLabel,
+                    expenses: mSummary.monthExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
+                    expiresAt: Date.now() + 15 * 60 * 1000
+                  });
+                }
+
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                );
               } else if (parsedExpense.queryType === 'range' && parsedExpense.rangeDays) {
                 const rSummary = await getExpenseSummaryForRange(
                   user._id,
@@ -4524,18 +4533,36 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   parsedExpense.rangeDays.endDate,
                   parsedExpense.rangeDays.labelBn
                 );
+
+                let reply = '';
+                if (isItemFiltered) {
+                  const matching = filterExpensesByKeyword(rSummary.rangeExpenses, parsedExpense.filterItem, parsedExpense.filterCategory);
+                  const filteredTotal = matching.reduce((sum, item) => sum + item.amount, 0);
+                  reply = buildFilteredExpenseQueryMessage(
+                    rSummary.rangeExpenses,
+                    matching,
+                    filteredTotal,
+                    rSummary.rangeTotal,
+                    filterLabelBn,
+                    rSummary.labelBn,
+                    filterIcon
+                  );
+                } else {
+                  reply = buildRangeExpenseQueryMessage(
+                    rSummary.rangeExpenses,
+                    rSummary.rangeTotal,
+                    rSummary.monthTotal,
+                    rSummary.labelBn
+                  );
+                }
+
                 userExpenseContext.set(user._id.toString(), {
                   targetDate: parsedExpense.rangeDays.endDate,
                   dateLabelBn: rSummary.labelBn,
                   expenses: rSummary.rangeExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
                   expiresAt: Date.now() + 15 * 60 * 1000
                 });
-                const reply = buildRangeExpenseQueryMessage(
-                  rSummary.rangeExpenses,
-                  rSummary.rangeTotal,
-                  rSummary.monthTotal,
-                  rSummary.labelBn
-                );
+
                 await sendMetaWhatsAppMessage(
                   fromNumber,
                   (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
@@ -4543,28 +4570,47 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               } else {
                 // Daily query (Today, Yesterday, Day before yesterday, Specific Date like 10 Oct)
                 const targetDate = parsedExpense.targetDate || new Date();
+                const dateLabel = parsedExpense.dateLabelBn || 'আজকের';
                 const dSummary = await getExpenseSummaryForDate(
                   user._id,
                   targetDate,
-                  parsedExpense.dateLabelBn || 'আজকের'
+                  dateLabel
                 );
+
+                let reply = '';
+                if (isItemFiltered) {
+                  const matching = filterExpensesByKeyword(dSummary.dateExpenses, parsedExpense.filterItem, parsedExpense.filterCategory);
+                  const filteredTotal = matching.reduce((sum, item) => sum + item.amount, 0);
+                  reply = buildFilteredExpenseQueryMessage(
+                    dSummary.dateExpenses,
+                    matching,
+                    filteredTotal,
+                    dSummary.dateTotal,
+                    filterLabelBn,
+                    dateLabel,
+                    filterIcon
+                  );
+                } else {
+                  reply = buildDailyExpenseQueryMessage(
+                    dSummary.dateExpenses,
+                    dSummary.dateTotal,
+                    dSummary.monthTotal,
+                    dSummary.dateLabelBn
+                  );
+                }
+
                 // Save conversation context for follow-up deletions or edits
                 userExpenseContext.set(user._id.toString(), {
                   targetDate,
-                  dateLabelBn: dSummary.dateLabelBn || 'আজকের',
+                  dateLabelBn: dSummary.dateLabelBn || dateLabel,
                   expenses: dSummary.dateExpenses.map(e => ({ id: e._id.toString(), title: e.title, amount: e.amount })),
                   expiresAt: Date.now() + 15 * 60 * 1000
                 });
-                const reply = buildDailyExpenseQueryMessage(
-                  dSummary.dateExpenses,
-                  dSummary.dateTotal,
-                  dSummary.monthTotal,
-                  dSummary.dateLabelBn
-                );
+
                 await sendMetaWhatsAppMessage(
-                fromNumber,
-                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
-              );
+                  fromNumber,
+                  (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reply}` : reply
+                );
               }
               return;
             } else if (parsedExpense.title && parsedExpense.amount) {
