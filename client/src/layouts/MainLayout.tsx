@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate, Moon, FolderArchive, MessageSquare, Store } from 'lucide-react';
+import { Home, FileText, Bell, Gift, Mic, Users, LayoutTemplate, Moon, FolderArchive, MessageSquare, Store, AlertTriangle, Search } from 'lucide-react';
 import AIAssistantModal from '../components/AIAssistantModal';
 import WakeUpAlarmModal from '../components/WakeUpAlarmModal';
+import SOSModal from '../components/SOSModal';
 import { Toaster } from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -11,6 +12,7 @@ export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSosOpen, setIsSosOpen] = useState(false);
   const userName = localStorage.getItem('userName') || "রিয়াদ";
   const isMainTab = ['/app', '/app/', '/app/notes', '/app/reminders', '/app/wishes', '/app/ramadan', '/app/documents', '/app/fcommerce'].includes(location.pathname);
 
@@ -88,7 +90,7 @@ export default function MainLayout() {
 
       {/* Web View Top Navigation (Premium Consumer Glassmorphism Style) */}
       <header className="hidden md:flex bg-white/95 backdrop-blur-md text-slate-800 sticky top-0 z-50 h-[64px] items-center border-b border-slate-200/80 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] transition-all">
-        <div className="w-full max-w-6xl mx-auto px-4 lg:px-6 flex items-center justify-between gap-3">
+        <div className="w-full max-w-5xl mx-auto px-4 flex items-center justify-between gap-4">
           {/* Brand Logo & Name */}
           <Link to="/app" className="flex items-center space-x-2.5 group select-none shrink-0">
             <div className="relative w-9 h-9 rounded-full flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
@@ -110,41 +112,17 @@ export default function MainLayout() {
             </div>
           </Link>
           
-          {/* Center Navigation Tabs (Sleek Segmented Bar) */}
-          <nav className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 shadow-inner">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path || (item.path === '/app' && location.pathname === '/app/');
-              return (
-                <Link 
-                  key={item.path}
-                  to={item.path} 
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border-none whitespace-nowrap ${
-                    isActive 
-                      ? 'bg-white text-[#0A7756] shadow-xs font-bold' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                  }`}
-                >
-                  <item.icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#0A7756] stroke-[2.2]' : 'text-slate-500 stroke-[1.8]'}`} />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Right Action Controls: Voice Assistant, Notifications, Profile */}
-          <div className="flex items-center space-x-2.5 shrink-0">
-            {/* AI Voice Assistant Button */}
+          {/* Right Action Controls: SOS, WhatsApp, Notifications, Profile */}
+          <div className="flex items-center space-x-2 shrink-0">
+            {/* Emergency SOS Button */}
             <button 
               type="button"
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#0A7756] via-emerald-600 to-teal-600 text-white font-semibold text-xs shadow-xs hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 border-none cursor-pointer whitespace-nowrap shrink-0"
+              onClick={() => setIsSosOpen(true)}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-xs shadow-xs hover:shadow-md transition-all duration-200 border-none cursor-pointer whitespace-nowrap shrink-0 animate-pulse active:scale-95"
+              title="জরুরি এসওএস অ্যালার্ট (Emergency SOS)"
             >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-80"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-              </span>
-              <Mic className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span className="font-bold tracking-tight">{t('ভয়েস সহকারী', 'AI Voice')}</span>
+              <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>SOS</span>
             </button>
 
             {/* Direct WhatsApp AI Button */}
@@ -153,10 +131,10 @@ export default function MainLayout() {
               target="_blank"
               rel="noopener noreferrer"
               title="হোয়াটসঅ্যাপে এআই চ্যাট খুলুন"
-              className="flex items-center gap-1.5 px-3 py-1 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#0f7b57] rounded-full text-xs font-bold transition border border-[#25D366]/30 shrink-0"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#0f7b57] rounded-full text-xs font-bold transition border border-[#25D366]/30 shrink-0"
             >
               <MessageSquare className="w-3.5 h-3.5 fill-current text-[#25D366]" />
-              <span className="hidden lg:inline">হোয়াটসঅ্যাপ এআই</span>
+              <span className="hidden xl:inline">WhatsApp</span>
             </a>
 
             {/* Web View Notification Button */}
@@ -172,13 +150,13 @@ export default function MainLayout() {
             {/* User Profile Pill */}
             <Link 
               to="/app/profile" 
-              className="flex items-center space-x-2 pl-1 pr-2.5 py-0.5 bg-slate-50 hover:bg-slate-100/90 transition-all rounded-full border border-slate-200/80 shadow-2xs group shrink-0"
+              className="flex items-center space-x-1.5 pl-1 pr-2.5 py-1 bg-slate-50 hover:bg-slate-100/90 transition-all rounded-full border border-slate-200/80 shadow-2xs group shrink-0"
               title={userName}
             >
-              <div className="w-7 h-7 bg-gradient-to-tr from-[#0A7756] to-emerald-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-xs ring-1 ring-white">
+              <div className="w-6 h-6 bg-gradient-to-tr from-[#0A7756] to-emerald-500 text-white rounded-full flex items-center justify-center font-bold text-[11px] shadow-xs ring-1 ring-white">
                 {(userName || 'User').charAt(0).toUpperCase()}
               </div>
-              <span className="text-xs font-semibold text-slate-700 group-hover:text-[#0A7756] max-w-[110px] truncate inline-block">
+              <span className="text-xs font-semibold text-slate-700 group-hover:text-[#0A7756] max-w-[90px] truncate inline-block">
                 {userName || 'প্রোফাইল'}
               </span>
             </Link>
@@ -206,6 +184,17 @@ export default function MainLayout() {
               </span>
             </Link>
             <div className="flex items-center space-x-2">
+              {/* Emergency SOS Button for Mobile */}
+              <button
+                type="button"
+                onClick={() => setIsSosOpen(true)}
+                className="flex items-center gap-1 bg-gradient-to-r from-rose-600 to-red-600 active:scale-95 text-white font-black text-xs px-2.5 py-1 rounded-full shadow-xs shrink-0 animate-pulse cursor-pointer"
+                title="ইমার্জেন্সি SOS"
+              >
+                <AlertTriangle className="w-3 h-3 stroke-[3]" />
+                <span>SOS</span>
+              </button>
+
               {isRamadan && (
                 <Link 
                   to="/app/ramadan"
@@ -328,6 +317,9 @@ export default function MainLayout() {
 
       {/* AI Assistant Voice Modal */}
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
+      {/* Emergency SOS Modal */}
+      <SOSModal isOpen={isSosOpen} onClose={() => setIsSosOpen(false)} />
 
       {/* Global In-App Wake-Up Alarm Engine */}
       <WakeUpAlarmModal />

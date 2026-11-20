@@ -1,5 +1,11 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface IEmergencyContact {
+  name: string;
+  phone: string;
+  relation?: string;
+}
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -24,6 +30,9 @@ export interface IUser extends Document {
   lastActiveAt?: Date;
   honorific?: string;
   district?: string;
+  bloodGroup?: string;
+  emergencyContacts?: IEmergencyContact[];
+  medicalNotes?: string;
   ramadanAlerts?: {
     enabled?: boolean;
     sehriAlert?: boolean;
@@ -62,6 +71,15 @@ const UserSchema: Schema = new Schema(
     lastActiveAt: { type: Date },
     honorific: { type: String },
     district: { type: String, default: 'Dhaka' },
+    bloodGroup: { type: String, default: '' },
+    emergencyContacts: [
+      {
+        name: { type: String, required: true },
+        phone: { type: String, required: true },
+        relation: { type: String, default: 'অভিভাবক' }
+      }
+    ],
+    medicalNotes: { type: String, default: '' },
     ramadanAlerts: {
       enabled: { type: Boolean, default: false },
       sehriAlert: { type: Boolean, default: false },

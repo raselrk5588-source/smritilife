@@ -16,8 +16,9 @@ import UserDocument from '../models/UserDocument';
 import SystemSettings from '../models/SystemSettings';
 import Debt from '../models/Debt';
 import Expense from '../models/Expense';
-import { checkUserAccess } from '../utils/subscriptionHelper';
+import { checkUserAccess, normalizeMobile } from '../utils/subscriptionHelper';
 import { getMaintenanceStatus, updateMaintenanceCache } from '../services/maintenanceService';
+import { triggerSosAlert, updateEmergencyProfile, resolveSosAlert } from '../services/sosService';
 import { analyzeMessage, analyzeAudioMessage, transcribeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache, getLastUserTurn } from '../services/aiWhatsAppService';
 import { searchReminders, formatReminderMatchMessage, formatMultipleRemindersMessage } from '../services/memoryRetrievalService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
@@ -2436,6 +2437,82 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
 
           await sendMetaWhatsAppMessage(fromNumber, startMsg);
+          return;
+        }
+
+        // --- STEP 0-SOS: Emergency SOS Trigger & Contact Management ---
+        const isSosTrigger = /^(?:sos|help|বাঁচাও|জরুরি|বিপদে|বিপদ|emergency|আটকে\s*গেছি|অ্যাক্সিডেন্ট|accident)(?:[!\s\?].*)?$/i.test(cleanText) ||
+          /(?:^|\s)(?:বাঁচাও|জরুরি\s*সাহায্য|বিপদে\s*পড়েছি|বিপদে\s*আছি|help\s*me|save\s*me)(?:\s|$|!|\?)/i.test(cleanText);
+
+        const isSosSafe = /(?:আমি\s*এখন\s*নিরাপদ|আমি\s*ভালো\s*আছি|সব\s*ঠিক\s*আছে|নিরাপদে\s*আছি|i\s*am\s*safe|im\s*safe|cancel\s*sos|sos\s*off)\b/i.test(cleanText);
+
+        const sosContactAddMatch = cleanText.match(/^(?:sos\s*contact|ইমার্জেন্সি\s*কন্টাক্ট|জরুরি\s*নম্বর|জরুরি\s*কন্টাক্ট|emergency\s*contact)\s+(.+)$/i);
+
+        if (isSosSafe) {
+          const resolved = await resolveSosAlert(user._id.toString());
+          if (resolved) {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `✅ *আলহামদুলিল্লাহ! আপনার জরুরি অ্যালার্ট সফলভাবে বন্ধ করা হয়েছে।*\n\nআপনার কন্টাক্টদের আপনি নিরাপদ থাকার বার্তা পাঠানো হয়েছে। ভালো থাকুন, নিরাপদে থাকুন! 🤲`
+            );
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `✅ আপনার কোনো সক্রিয় SOS অ্যালার্ট নেই। আপনি নিরাপদ থাকায় আমরা আনন্দিত! 😊`
+            );
+          }
+          return;
+        }
+
+        if (sosContactAddMatch) {
+          const rawInput = sosContactAddMatch[1].trim();
+          const phoneMatch = rawInput.match(/(?:01[3-9]\d{8}|\+?8801[3-9]\d{8})/);
+          if (phoneMatch) {
+            const cleanPhone = normalizeMobile(phoneMatch[0]);
+            let contactName = rawInput.replace(phoneMatch[0], '').replace(/\s+/g, ' ').trim();
+            if (!contactName) contactName = 'জরুরি অভিভাবক';
+            
+            const existing = user.emergencyContacts || [];
+            existing.push({
+              name: contactName,
+              phone: cleanPhone,
+              relation: 'অভিভাবক'
+            });
+            await updateEmergencyProfile(user._id.toString(), { emergencyContacts: existing });
+
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `✅ *জরুরি কন্টাক্ট সেভ হয়েছে!* 🛡️\n\n👤 *নাম:* ${contactName}\n📞 *নম্বর:* ${cleanPhone}\n\n💡 বিপদের সময় শুধু লিখবেন *"SOS"* বা *"বাঁচাও"*—স্মৃতি স্বয়ংক্রিয়ভাবে তার নম্বরে আপনার লাইভ সতর্কবার্তা পাঠিয়ে দেবে!`
+            );
+            return;
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `⚠️ অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।\n\nউদাহরণ:\n_SOS contact 017XXXXXXXX বাবা_`
+            );
+            return;
+          }
+        }
+
+        if (isSosTrigger) {
+          const sosResult = await triggerSosAlert({
+            userId: user._id.toString(),
+            source: 'whatsapp',
+            note: cleanText
+          });
+
+          if (sosResult.totalContacts > 0) {
+            const contactNames = (user.emergencyContacts || []).map(c => `${c.name} (${c.phone})`).join('\n• ');
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🚨 *জরুরি বিপদকালীন অ্যালার্ট (SOS) সক্রিয় করা হয়েছে!* 🚨\n\n✅ আপনার *${sosResult.contactsNotifiedCount} জন জরুরি কন্টাক্টকে* হোয়াটসঅ্যাপে সতর্কবার্তা পাঠানো হয়েছে:\n• ${contactNames}\n\n🚔 *জাতীয় জরুরি সেবা:* ৯৯৯ (999) - পুলিশ, অ্যাম্বুলেন্স, ফায়ার সার্ভিস\n🛡️ *নারী ও শিশু নির্যাতন প্রতিরোধ সেল:* ১০৯ (109)\n🚑 *জাতীয় স্বাস্থ্য বাতায়ন:* ১৬২৬৩ (16263)\n\n_শান্ত থাকুন। আপনি একা নন! বিপদ কেটে গেলে লিখুন: "আমি এখন নিরাপদ"_ 🤲`
+            );
+          } else {
+            await sendMetaWhatsAppMessage(
+              fromNumber,
+              `🚨 *জরুরি সতর্কতা!* 🚨\n\nআপনার স্মৃতি একাউন্টে কোনো *জরুরি অভিভাবক/কন্টাক্ট সেভ করা নেই*!\n\n👉 *অবিলম্বে সরাসরি কল করুন:*\n🚔 *জাতীয় জরুরি সেবা:* ৯৯৯ (পুলিশ, অ্যাম্বুলেন্স, ফায়ার)\n🛡️ *নারী ও শিশু সহায়তা সেল:* ১০৯\n\n💡 জরুরি কন্টাক্ট সেভ করতে লিখুন:\n_"SOS contact 017XXXXXXXX বাবা"_`
+            );
+          }
           return;
         }
 
