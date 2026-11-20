@@ -337,23 +337,23 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-start sm:justify-center overflow-y-auto p-3 sm:p-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border-2 border-rose-500/30 flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border-2 border-rose-500/30 flex flex-col my-auto max-h-[calc(100dvh-3rem)] sm:max-h-[90vh] animate-in zoom-in-95 duration-200 shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white p-4 sm:p-5 flex items-center justify-between shadow-md shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30 shadow-inner">
-              <AlertTriangle className="w-6 h-6 text-white stroke-[2.5]" />
+        <div className="bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white px-4 py-3.5 sm:px-5 sm:py-4 flex items-center justify-between shadow-md shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30 shadow-inner shrink-0">
+              <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-white stroke-[2.5]" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-tight leading-none">ইমার্জেন্সি SOS</h2>
-                <span className="bg-white text-rose-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-tight leading-normal">ইমার্জেন্সি SOS</h2>
+                <span className="bg-white text-rose-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                   Live Guard
                 </span>
               </div>
@@ -362,7 +362,7 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
           </div>
           <button 
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition border border-white/20"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition border border-white/20 shrink-0 ml-2 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
