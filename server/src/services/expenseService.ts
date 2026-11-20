@@ -636,17 +636,22 @@ export interface ExtractedExpenseFilter {
 export const extractExpenseQueryFilter = (text: string): ExtractedExpenseFilter | null => {
   const lower = text.toLowerCase();
   
-  // 1. Transport items
-  if (/(?:রিকশা\s*ভাড়া|রিক্সা\s*ভাড়া|রিকশা|রিক্সা|rickshaw|riksha|riksa)/i.test(lower)) {
+  // 1. House Rent (check before vehicle fare so "বাসা ভাড়া" isn't treated as transport)
+  if (/(?:বাসা\s*ভাড়া|বাড়ি\s*ভাড়া|রুম\s*ভাড়া|মেস\s*ভাড়া|basa\s*vara|bari\s*vara|room\s*rent|house\s*rent|basha\s*vara)/i.test(lower)) {
+    return { filterItem: 'বাসা ভাড়া', filterCategory: 'bills', filterLabelBn: 'বাসা ভাড়া', icon: '🏠' };
+  }
+
+  // 2. Specific Vehicles (if user explicitly asked for one particular vehicle)
+  if (/(?:রিকশা\s*ভাড়া|রিক্সা\s*ভাড়া|রিকশা|রিক্সা|rickshaw|riksha|riksa)/i.test(lower) && !/(?:গাড়ি\s*ভাড়া|gari\s*vara)/i.test(lower)) {
     return { filterItem: 'রিকশা', filterCategory: 'transport', filterLabelBn: 'রিকশা ভাড়া', icon: '🚕' };
   }
-  if (/(?:বাস\s*ভাড়া|বাস(?:\s*ভাড়া)?|bus(?:\s*fare)?)/i.test(lower)) {
-    return { filterItem: 'বাস', filterCategory: 'transport', filterLabelBn: 'বাস ভাড়া', icon: '🚌' };
-  }
-  if (/(?:সিএনজি\s*ভাড়া|সিএনজি|cng(?:\s*fare)?)/i.test(lower)) {
+  if (/(?:সিএনজি\s*ভাড়া|সিএনজি|cng(?:\s*fare|\s*vara)?)/i.test(lower) && !/(?:গাড়ি\s*ভাড়া|gari\s*vara)/i.test(lower)) {
     return { filterItem: 'সিএনজি', filterCategory: 'transport', filterLabelBn: 'সিএনজি ভাড়া', icon: '🛺' };
   }
-  if (/(?:অটো\s*ভাড়া|অটো|auto(?:\s*fare)?|oto)/i.test(lower)) {
+  if (/(?:বাস\s*ভাড়া|বাস(?:\s*ভাড়া)?|\bbus(?:\s*fare|\s*vara)?\b)/i.test(lower) && !/(?:গাড়ি\s*ভাড়া|gari\s*vara)/i.test(lower)) {
+    return { filterItem: 'বাস', filterCategory: 'transport', filterLabelBn: 'বাস ভাড়া', icon: '🚌' };
+  }
+  if (/(?:অটো\s*ভাড়া|অটো|\bauto(?:\s*fare|\s*vara)?\b|\boto(?:\s*fare|\s*vara)?\b)/i.test(lower) && !/(?:গাড়ি\s*ভাড়া|gari\s*vara)/i.test(lower)) {
     return { filterItem: 'অটো', filterCategory: 'transport', filterLabelBn: 'অটো ভাড়া', icon: '🛺' };
   }
   if (/(?:মেট্রো\s*ভাড়া|মেট্রো|মেট্রোরেল|metro)/i.test(lower)) {
@@ -661,17 +666,11 @@ export const extractExpenseQueryFilter = (text: string): ExtractedExpenseFilter 
   if (/(?:তেল|পেট্রোল|অকটেন|ডিজেল|petrol|octane|diesel)/i.test(lower)) {
     return { filterItem: 'তেল', filterCategory: 'transport', filterLabelBn: 'জ্বালানি/পেট্রোল', icon: '⛽' };
   }
-  // Generic "ভাড়া" (when not house/room rent)
-  if (!/(?:বাসা|বাড়ি|রুম|মেস|basa|basha|bari|room|mess)/i.test(lower) && /(?:ভাড়া|ভাড়া|vara|bhara|fare)/i.test(lower)) {
-    return { filterItem: 'ভাড়া', filterCategory: 'transport', filterLabelBn: 'ভাড়া', icon: '🚕' };
-  }
-  if (/(?:যাতায়াত|যাতায়াত|transport|travel)/i.test(lower)) {
-    return { filterCategory: 'transport', filterLabelBn: 'যাতায়াত খরচ', icon: '🚗' };
-  }
 
-  // 2. Bills & Rent
-  if (/(?:বাসা\s*ভাড়া|বাড়ি\s*ভাড়া|রুম\s*ভাড়া|মেস\s*ভাড়া|basa\s*vara|bari\s*vara|room\s*rent|house\s*rent)/i.test(lower)) {
-    return { filterItem: 'বাসা ভাড়া', filterCategory: 'bills', filterLabelBn: 'বাসা ভাড়া', icon: '🏠' };
+  // 3. All Vehicle / Transport Fares Combined: "গাড়ি ভাড়া", "gari vara", "মোট ভাড়া", "ভাড়া", "যাতায়াত"
+  // When user asks "gari vara koto", "ajker vara koto", "total vara", it gives ALL transport fares (CNG, Auto, Rickshaw, Bus, etc.)
+  if (/(?:গাড়ি\s*ভাড়া|গাড়ির\s*ভাড়া|গাড়ি|gari\s*vara|garir\s*vara|gadi\s*vara|gari\s*fare|যাতায়াত|যাতায়াত|transport|travel|সব\s*ভাড়া|মোট\s*ভাড়া|total\s*vara|all\s*vara|ভাড়া|ভাড়া|\bvara\b|\bbhara\b|\bfare\b)/i.test(lower)) {
+    return { filterCategory: 'transport', filterLabelBn: 'গাড়ি ও যাতায়াত ভাড়া', icon: '🚗' };
   }
   if (/(?:বিদ্যুৎ\s*বিল|কারেন্ট\s*বিল|বিদ্যুৎ|electricity|current\s*bill)/i.test(lower)) {
     return { filterItem: 'বিদ্যুৎ', filterCategory: 'bills', filterLabelBn: 'বিদ্যুৎ বিল', icon: '💡' };
@@ -770,6 +769,9 @@ export const filterExpensesByKeyword = (
     const catBn = (exp.categoryBn || '').toLowerCase();
 
     if (filterCategory && !filterItem) {
+      if (filterCategory === 'transport') {
+        return cat === 'transport' || /(?:ভাড়া|ভাড়া|রিকশা|রিক্সা|সিএনজি|বাস|অটো|উবার|পাঠাও|মেট্রো|ট্রেন|তেল|পেট্রোল|অকটেন|লেগুনা|গাড়ি|vara|bhara|rickshaw|cng|bus|auto|uber|pathao|metro|train|fare)/i.test(title + ' ' + notes);
+      }
       return cat === filterCategory;
     }
 
@@ -783,10 +785,16 @@ export const filterExpensesByKeyword = (
       if (itemLower === 'রিকশা' && /(?:রিকশা|রিক্সা|rickshaw|riksha|riksa)/i.test(title + ' ' + notes)) {
         return true;
       }
-      if (itemLower === 'ভাড়া' && (cat === 'transport' || /(?:ভাড়া|ভাড়া|vara|bhara|fare)/i.test(title + ' ' + notes))) {
+      if (itemLower === 'সিএনজি' && /(?:সিএনজি|cng)/i.test(title + ' ' + notes)) {
         return true;
       }
-      if (itemLower === 'বাস' && /(?:বাস|bus)/i.test(title + ' ' + notes)) {
+      if (itemLower === 'বাস' && /(?:বাস|\bbus\b)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'অটো' && /(?:অটো|\bauto\b|\boto\b)/i.test(title + ' ' + notes)) {
+        return true;
+      }
+      if (itemLower === 'ভাড়া' && (cat === 'transport' || /(?:ভাড়া|ভাড়া|vara|bhara|fare)/i.test(title + ' ' + notes))) {
         return true;
       }
       if (itemLower === 'ওষুধ' && /(?:ওষুধ|ঔষধ|medicine|osud|oshud)/i.test(title + ' ' + notes)) {
