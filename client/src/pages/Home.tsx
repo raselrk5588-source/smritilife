@@ -147,9 +147,15 @@ export default function Home() {
     <div className="bg-[#f6f8f9] min-h-screen pb-2 font-sans">
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       
-      {/* Top Section with Soft Gradient Background */}
-      <div className="relative pt-3 sm:pt-4 pb-5 sm:pb-7 px-3 sm:px-5 rounded-b-[1.75rem] sm:rounded-b-[2rem] overflow-hidden bg-gradient-to-b from-emerald-100/70 via-teal-50/40 to-[#f6f8f9]">
-        <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-200/30 via-teal-100/10 to-transparent pointer-events-none"></div>
+      {/* Top Header Banner */}
+      <div className="p-4 pt-6 md:pt-8 pb-8 flex flex-col justify-between border-b border-slate-100 relative overflow-hidden rounded-b-3xl shadow-sm mb-2 sm:mb-3 bg-slate-900">
+        {/* Cover Theme Background - WhatsApp Image */}
+        <div 
+          className="absolute inset-0 z-0 bg-cover bg-no-repeat" 
+          style={{ backgroundImage: "url('/home-cover.jpg?v=3')", backgroundPosition: "center 35%" }}
+        />
+        {/* Natural Vignette Overlay to maintain photo clarity & text readability */}
+        <div className="absolute inset-0 z-0 bg-gradient-to-t from-black/65 via-black/20 to-black/40"></div>
 
         <div className="relative z-10 pt-1">
           {(() => {
@@ -249,22 +255,22 @@ export default function Home() {
             return (
               <>
                 {/* Greeting & Date Row */}
-                <div className="mb-4 sm:mb-5 flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-600/10 text-[#0A7756] text-[11px] sm:text-xs font-bold mb-1 border border-emerald-600/15">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-emerald-100 text-[11px] sm:text-xs font-bold mb-1 border border-white/20 shadow-xs">
                       <span>{greetingEmoji}</span>
                       <span>{greetingText}</span>
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight">
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight drop-shadow-md">
                       {userName}! 👋
                     </h2>
-                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5 leading-snug">
+                    <p className="text-[11px] sm:text-xs text-emerald-50/90 font-medium mt-0.5 leading-snug drop-shadow-xs">
                       {greetingSubtitle}
                     </p>
                   </div>
 
                   {/* Date Card with Generous Height & Readable Font */}
-                  <div className="bg-white/95 backdrop-blur-md px-3.5 py-3 rounded-2xl shadow-xs border border-emerald-100/90 flex flex-col items-end text-right justify-center shrink-0 min-w-[155px] gap-1.5">
+                  <div className="bg-white/95 backdrop-blur-md px-3.5 py-3 rounded-2xl shadow-lg border border-white/80 flex flex-col items-end text-right justify-center shrink-0 min-w-[155px] gap-1.5">
                     <div className="flex items-center gap-1.5 text-xs sm:text-[13px] font-black text-slate-800 leading-tight">
                       <Calendar className="w-3.5 h-3.5 text-[#0A7756] shrink-0" />
                       <span>{enDate} ({weekdayBn})</span>
@@ -283,7 +289,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="px-3 md:px-5 relative z-20 space-y-3.5 md:space-y-4 mt-2.5 sm:mt-3.5">
+      <div className="px-3 md:px-5 relative z-20 space-y-3.5 md:space-y-4 mt-4 sm:mt-6">
         
         {/* Quick Service Duo: WhatsApp AI & Namaz Tracker */}
         {(() => {

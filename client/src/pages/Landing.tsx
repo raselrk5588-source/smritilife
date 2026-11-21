@@ -489,7 +489,6 @@ export default function Landing() {
                           <div className="text-[10px] text-emerald-200 font-medium">Online • Smart Assistant</div>
                         </div>
                       </div>
-                      <span className="text-[10px] bg-emerald-600/60 px-2 py-0.5 rounded-full font-bold text-emerald-100">AI BOT</span>
                     </div>
 
                     {/* Realistic WhatsApp Chat Stream */}
