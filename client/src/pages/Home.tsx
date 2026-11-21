@@ -148,11 +148,11 @@ export default function Home() {
       <AIAssistantModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       
       {/* Top Header Banner */}
-      <div className="p-4 pt-6 md:pt-8 pb-8 flex flex-col justify-between border-b border-slate-100 relative overflow-hidden rounded-b-3xl shadow-sm mb-2 sm:mb-3 bg-slate-900">
+      <div className="p-4 pt-6 md:pt-8 pb-14 sm:pb-18 flex flex-col justify-between border-b border-slate-100 relative overflow-hidden rounded-b-3xl shadow-sm mb-2 sm:mb-3 bg-slate-900">
         {/* Cover Theme Background - WhatsApp Image */}
         <div 
           className="absolute inset-0 z-0 bg-cover bg-no-repeat" 
-          style={{ backgroundImage: "url('/home-cover.jpg?v=3')", backgroundPosition: "center 35%" }}
+          style={{ backgroundImage: "url('/home-cover.jpg?v=4')", backgroundPosition: "center bottom" }}
         />
         {/* Natural Vignette Overlay to maintain photo clarity & text readability */}
         <div className="absolute inset-0 z-0 bg-gradient-to-t from-black/65 via-black/20 to-black/40"></div>
