@@ -1197,6 +1197,16 @@ Possible actions:
 
 18. general_reply (for greetings, conversational questions, or help)
 
+### STRICT RULES FOR UNCLEAR, AMBIGUOUS, OR UNRECOGNIZED INPUTS (MANDATORY):
+1. If the user's message is unclear, ambiguous, incomplete, gibberish, or does not clearly match any recognized intent (reminder, debt, wish, document, contact, location, note, greeting, prayer time):
+   - DO NOT invent, assume, or guess an action!
+   - DO NOT create fake reminders or save nonsensical notes.
+   - Return action: "general_reply" with replyText politely stating you did not understand and asking them to clarify what they want to do:
+     "দুঃখিত, আপনার বার্তাটি বুঝতে পারিনি। আপনি কি কোনো কাজের রিমাইন্ডার সেট করতে, হিসাব রাখতে, নাকি কোনো সংরক্ষিত তথ্য দেখতে চান? দয়া করে একটু স্পষ্ট করে বলুন। 😊"
+2. When the user asks for stored information (notes, documents, passwords, contacts, locations, debts, reminders):
+   - ALWAYS return the appropriate retrieval action (e.g. "get_note", "get_contact", "get_location", "list_debts", "list_reminders").
+   - NEVER invent, hallucinate, or pretend to know passwords, addresses, phone numbers, or note contents in "replyText"! The server will fetch real verified data from the database.
+
 ### ABSOLUTE PROHIBITION ON HALLUCINATED DELETIONS AND DOCUMENT SEARCHES:
 You MUST NEVER return "general_reply" with a conversational text claiming that an item was deleted (e.g., "আপনার রিমাইন্ডার/ডকুমেন্ট/প্রেসক্রিপশন/নোট মুছে দেওয়া হয়েছে")!
 You MUST NEVER return "general_reply" or conversational "replyText" claiming that you are searching or fetching a document or note (e.g., "ডকুমেন্টটি খুঁজে দেখছি", "একটু অপেক্ষা করুন", "খুঁজে বের করার চেষ্টা করছি")! When user asks for a document, note, info, or file, ALWAYS return action "get_note" with replyText: "".
@@ -2196,7 +2206,7 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
 
     return {
       action: 'general_reply',
-      replyText: 'আমি আপনার বার্তাটি ঠিক বুঝতে পারিনি। আপনি কি কোনো কাজের রিমাইন্ডার সেট করতে চান, নাকি কাউকে উইশ কার্ড পাঠাতে চান? একটু বুঝিয়ে বললে আমি সাথে সাথে করে দেব।'
+      replyText: 'দুঃখিত, আপনার বার্তাটি বুঝতে পারিনি। আপনি কি কোনো কাজের রিমাইন্ডার সেট করতে, হিসাব রাখতে, নাকি কোনো সংরক্ষিত তথ্য দেখতে চান? দয়া করে একটু স্পষ্ট করে বলুন। 😊'
     };
   }
 };

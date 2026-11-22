@@ -334,12 +334,15 @@ export const extractMeetingTopic = (rawText: string, participantNames: string[] 
   function cleanTopicString(str: string): string {
     let s = ' ' + str.trim() + ' ';
 
-    // 1. Remove participant names (with possible possessive suffixes like -er / -এর / -ের / -কে / -k)
+    // 1. Remove participant names (with possible possessive suffixes like -er / -এর / -ের / -র / -r / -কে / -k)
     for (const p of participantNames) {
       if (p && p.length >= 2) {
-        s = s.replace(new RegExp('(\\s|[.,])' + p + '(?:-?ের|-?এর|-?er|-?কে|-?k|-?ke|-?re|-?রে|-?দের|-?der)?(?=\\s|[.,]|$)', 'gi'), ' ');
+        s = s.replace(new RegExp('(\\s|[.,])' + p + '(?:-?ের|-?এর|-?er|-?র|-?r|-?কে|-?k|-?ke|-?re|-?রে|-?দের|-?der)?(?=\\s|[.,]|$)', 'gi'), ' ');
       }
     }
+
+    // Common nickname / contact aliases
+    s = s.replace(/(?:\s|^)(?:bou|wife|roni|tarek|rubel|mamun|shuvo|hasan|rasel)(?:-?ের|-?এর|-?er|-?র|-?r|-?কে|-?k|-?ke)?(?:\s|$)/gi, ' ');
 
     // 2. Remove date and time combinations (e.g. "কাল সকাল ১০টায়", "aj rat 11:45 a", "২ টার সময়")
     s = s
@@ -353,6 +356,8 @@ export const extractMeetingTopic = (rawText: string, participantNames: string[] 
       .replace(/(?:\s|^)(?:somoi|somoy|সময়|সময়ে|টাইমে|time)(?:\s|$)/gi, ' ')
       .replace(/(?:\s|^)(?:akta|ekta|একটা|একটি)(?:\s|$)/gi, ' ')
       .replace(/(?:\s|^)(?:somporke|shomporke|সম্পর্কে|niye|নিয়ে|নিয়ে|biyoy|biyoye|বিষয়ক?|বিষয়ে|er\s*jonno|এর\s*জন্য|topic\s*a|টপিকে|er\s*opore|এর\s*ওপরে|er\s*bapare|এর\s*ব্যাপারে)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:and|ar|আর|ও|এবং)(?:\s|$)/gi, ' ')
+      .replace(/^[,\s.:;\-]+|[,\s.:;\-]+$/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -367,11 +372,18 @@ export const extractMeetingTopic = (rawText: string, participantNames: string[] 
     return { title: `${clean} নিয়ে মিটিং`, cleanTopic: clean };
   }
 
+  function isValidTopic(cand: string): boolean {
+    if (!cand || cand.length < 2) return false;
+    if (/^(?:ache|ase|hobe|আছে|হবে|call|dak|dako|ডাকো|bolo|bolba|reminder)$/i.test(cand)) return false;
+    if (/\b(?:bolo|bolba|reminder|diow|dao)\b/i.test(cand)) return false;
+    return true;
+  }
+
   // 1. Explicit topic label (topic: xyz / subject: xyz / বিষয়: xyz)
   const explicitMatch = text.match(/(?:topic|subject|টপিক|বিষয়|বিষয়|agenda|এজেন্ডা)\s*[:：\-]\s*(.+)$/i);
   if (explicitMatch && explicitMatch[1]) {
     const cleaned = cleanTopicString(explicitMatch[1]);
-    if (cleaned.length > 1) return formatTopic(cleaned);
+    if (isValidTopic(cleaned)) return formatTopic(cleaned);
   }
 
   // 2. Topic AFTER meeting / মিটিং keyword
@@ -379,26 +391,26 @@ export const extractMeetingTopic = (rawText: string, participantNames: string[] 
   const afterMatch = text.match(/(?:মিটিং|meeting)\s*(?:ache|ase|hobe|call\s*koro|ডাকো|হবে|আছে)?\s*(?:[:：\-]|on|about|for|regarding|niye|নিয়ে|নিয়ে|somporke|সম্পর্কে)?\s+(.+)$/i);
   if (afterMatch && afterMatch[1]) {
     const cleaned = cleanTopicString(afterMatch[1]);
-    if (cleaned.length >= 2 && !/^(?:ache|ase|hobe|আছে|হবে|call|dak|dako|ডাকো)$/i.test(cleaned)) {
+    if (isValidTopic(cleaned)) {
       return formatTopic(cleaned);
     }
   }
 
   // 3. Topic BEFORE meeting / মিটিং keyword
   // e.g. "RAC installation issue niye akta meeting ache" or "বাজেট প্ল্যান নিয়ে মিটিং"
-  const beforeMatch = text.match(/(.+?)\s*(?:niye|নিয়ে|নিয়ে|somporke|সম্পর্কে|biyoy|বিষয়|biyoye|বিষয়ে|er\s*jonno|এর\s*জন্য|topic\s*a|টপিকে|er\s*meeting|এর\s*মিটিং)\s*(?:akta\s*|ekta\s*|একটা\s*)?(?:মিটিং|meeting)/i);
+  const beforeMatch = text.match(/(?:সাথে|shathe|with|somoi|সময়|somoy|time|tay|টায়|টায়|diow|dio|dao|দাও|দিও|k\s*bolo|কে\s*বলো|oder|ওদের)?\s*([^,\s].*?)\s*(?:niye|নিয়ে|নিয়ে|somporke|সম্পর্কে|biyoy|বিষয়|biyoye|বিষয়ে|er\s*jonno|এর\s*জন্য|topic\s*a|টপিকে|er\s*meeting|এর\s*মিটিং)\s*(?:akta\s*|ekta\s*|একটা\s*)?(?:মিটিং|meeting)/i);
   if (beforeMatch && beforeMatch[1]) {
     const cleaned = cleanTopicString(beforeMatch[1]);
-    if (cleaned.length >= 2) {
+    if (isValidTopic(cleaned)) {
       return formatTopic(cleaned);
     }
   }
 
   // 4. Topic word attached immediately before meeting (e.g. "urgent client meeting")
-  const attachedMatch = text.match(/(?:^|\s)([\w\u0980-\u09FF\s]+?)\s+(?:মিটিং|meeting)\b/i);
+  const attachedMatch = text.match(/(?:^|\s)([\w\u0980-\u09FF]+(?:\s+[\w\u0980-\u09FF]+){0,2})\s+(?:মিটিং|meeting)\b/i);
   if (attachedMatch && attachedMatch[1]) {
     const cleaned = cleanTopicString(attachedMatch[1]);
-    if (cleaned.length >= 3) {
+    if (isValidTopic(cleaned)) {
       return formatTopic(cleaned);
     }
   }

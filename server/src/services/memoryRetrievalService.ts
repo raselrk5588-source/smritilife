@@ -336,8 +336,8 @@ export async function searchReminders(
       score += 60;
     }
 
-    // Must have matched at least title, description, or medicine to qualify!
-    if (titleOrDescOrMedsMatched && score >= 40) {
+    // Must have matched at least title, description, or medicine with high confidence to qualify!
+    if (titleOrDescOrMedsMatched && score >= 65) {
       scored.push({ reminder: rem, score });
     }
   }

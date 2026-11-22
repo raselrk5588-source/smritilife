@@ -7124,9 +7124,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 }
               }
 
+              const salutation = user.honorific ? ` ${user.honorific}` : '';
               await sendMetaWhatsAppMessage(
                 fromNumber,
-                `দুঃখিত, আপনার "${query}" সম্পর্কিত কোনো তথ্য বা ডকুমেন্ট স্মৃতিতে সেভ করা নেই।\n\n💡 এটি সেভ করতে লিখুন: "${query}: [আপনার তথ্য]"`
+                `📁 দুঃখিত${salutation}, "${query}" সম্পর্কিত কোনো তথ্য, নোট বা ডকুমেন্ট স্মৃতিতে নিবন্ধিত বা সেভ করা নেই।\n\n💡 এটি সেভ করতে চাইলে লিখুন:\n"${query}: [আপনার তথ্য]"`
               );
             }
             break;
@@ -7377,9 +7378,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 `👤 *${matchedContact.name}*\n📞 ফোন: ${matchedContact.phone}\n👥 সম্পর্ক: ${matchedContact.relationship || 'Friend'}\n\n💡 মেসেজ পাঠাতে লিখুন: "${matchedContact.name}-কে মেসেজ দাও যে [আপনার বার্তা]"`
               );
             } else {
+              const salutation = user.honorific ? ` ${user.honorific}` : '';
               await sendMetaWhatsAppMessage(
                 fromNumber,
-                `দুঃখিত, আপনার কনট্যাক্ট লিস্টে "${query}" নামের কোনো নম্বর খুঁজে পাওয়া যায়নি।\n\nসেভ করতে লিখুন: "${query}-র নম্বর সেভ করো: 017XXXXXXXX"`
+                `👤 দুঃখিত${salutation}, "${query}" নামে কোনো কন্ট্যাক্ট বা ফোন নম্বর স্মৃতিতে নিবন্ধিত নেই।\n\n💡 সেভ করতে লিখুন: "${query}-এর নাম্বার: 01XXXXXXXXX"`
               );
             }
             break;
@@ -7468,7 +7470,10 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               }
             }
 
-            await sendMetaWhatsAppMessage(fromNumber, replyMsg || 'দুঃখিত, বুঝতে পারিনি।');
+            const salutation = user.honorific ? ` ${user.honorific}` : '';
+            const defaultHelpMsg = `দুঃখিত${salutation}, আপনার বার্তাটি বুঝতে পারিনি। আপনি কি কোনো কাজের রিমাইন্ডার সেট করতে, হিসাব রাখতে, নাকি কোনো সংরক্ষিত তথ্য দেখতে চান? দয়া করে একটু স্পষ্ট করে বলুন। 😊`;
+            const isVagueReply = !replyMsg || /^(?:দুঃখিত[,\s]*বুঝতে পারিনি[।.]*|sorry|i don'?t understand)$/i.test(replyMsg);
+            await sendMetaWhatsAppMessage(fromNumber, isVagueReply ? defaultHelpMsg : replyMsg);
             break;
           }
         }
