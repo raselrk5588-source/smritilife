@@ -210,7 +210,7 @@ export const sendMeetingInvitation = async (
       timeZone: 'Asia/Dhaka'
     });
 
-    const descLine = meeting.description && meeting.description !== meeting.title ? `\n📝 *বিবরণ:* ${meeting.description}` : '';
+    const descLine = meeting.description && meeting.description !== meeting.title && !meeting.title.includes(meeting.description) && !/(?:bolo|bolba|k\s*bolo|reminder|রিমাইন্ডার)/i.test(meeting.description) ? `\n📝 *বিবরণ:* ${meeting.description}` : '';
 
     const invitationMsg = `📅 *মিটিং ইনভিটেশন (Meeting Invitation)*\n\nআসসালামু আলাইকুম *${participant.name}*!\n\nমিটিং হোস্ট *${hostName}* (${hostPhone}) আপনাকে নিম্নলিখিত মিটিংয়ে যুক্ত হওয়ার জন্য আমন্ত্রণ জানিয়েছেন:\n\n📌 *বিষয়:* ${meeting.title}\n🕒 *সময়:* ${displayTime}\n📅 *তারিখ:* ${displayDate}\n👤 *হোস্ট:* ${hostName}${descLine}\n\n💡 মিটিং শুরুর ২০ মিনিট পূর্বে আপনাকে একটি জেন্টল রিমাইন্ডার এবং মিটিংয়ের সময়ে ফাইনাল অ্যালার্ট পাঠানো হবে।\n\n_(স্মৃতি লাইফ মিটিং ম্যানেজমেন্ট প্ল্যাটফর্ম)_`;
 
@@ -232,7 +232,7 @@ export const sendMeetingPreReminder = async (
 ): Promise<boolean> => {
   try {
     const displayTime = formatTime12Hour(meeting.time);
-    const descLine = meeting.description && meeting.description !== meeting.title ? `\n📝 *বিবরণ:* ${meeting.description}` : '';
+    const descLine = meeting.description && meeting.description !== meeting.title && !meeting.title.includes(meeting.description) && !/(?:bolo|bolba|k\s*bolo|reminder|রিমাইন্ডার)/i.test(meeting.description) ? `\n📝 *বিবরণ:* ${meeting.description}` : '';
 
     const preAlertMsg = `⏳ *মিটিং জেন্টল রিমাইন্ডার (Gentle Reminder)*\n\nআসসালামু আলাইকুম *${participant.name}*!\n\nআর ঠিক *${minutesLeft} মিনিট পর* (${displayTime}-এ) আপনার একটি মিটিং শুরু হতে যাচ্ছে:\n\n📌 *বিষয়:* ${meeting.title}\n👤 *হোস্ট:* ${hostName}\n🕒 *সময়:* ${displayTime}${descLine}\n\nঅনুগ্রহ করে মিটিংয়ে যোগদানের প্রস্তুতি নিন।\n\n_(স্মৃতি লাইফ নোটিফিকেশন)_`;
 
@@ -324,6 +324,89 @@ export const sendMeetingRescheduledNotice = async (
 };
 
 /**
+ * Intelligently extracts the meeting topic/subject from the user message,
+ * removing participants, time/date, commands, and connectors.
+ */
+export const extractMeetingTopic = (rawText: string, participantNames: string[] = []): { title: string; cleanTopic: string } => {
+  let text = (rawText || '').trim();
+
+  // Helper to remove date, time, and participant mentions from candidate
+  function cleanTopicString(str: string): string {
+    let s = ' ' + str.trim() + ' ';
+
+    // 1. Remove participant names (with possible possessive suffixes like -er / -এর / -ের / -কে / -k)
+    for (const p of participantNames) {
+      if (p && p.length >= 2) {
+        s = s.replace(new RegExp('(\\s|[.,])' + p + '(?:-?ের|-?এর|-?er|-?কে|-?k|-?ke|-?re|-?রে|-?দের|-?der)?(?=\\s|[.,]|$)', 'gi'), ' ');
+      }
+    }
+
+    // 2. Remove date and time combinations (e.g. "কাল সকাল ১০টায়", "aj rat 11:45 a", "২ টার সময়")
+    s = s
+      .replace(/(?:\s|^)(?:aj|ajke|আজ|আজকে|kal|kalke|কাল|কালকে|agamikal|আগামীকাল|porshu|পরশু)?\s*(?:সকাল|দুপুর|বিকাল|সন্ধ্যা|রাত|ভোর|sokal|shokal|dupur|bikal|bikale|sondha|shondha|rat|raat|vhor)?\s*[০-৯\d]{1,2}(?::[০-৯\d]{2})?\s*(?:টার\s*সময়|tar\s*somoi|tar\s*somoy|টায়|টায়|tay|টার|tar|টাইমে|সময়ে|সময়|somoi|somoy|টা|ta|am|pm)?(?:\s*(?:a|e|te|তে))?(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:কাল\s*সকাল|আজ\s*সকাল|আজ\s*দুপুর|আজ\s*রাত|কাল\s*রাত|কাল\s*দুপুর|সকাল|দুপুর|বিকাল|সন্ধ্যা|রাত|ভোর|sokal|shokal|dupur|bikal|bikale|sondha|shondha|rat|raat|vhor|aj|ajke|আজ|আজকে|kal|kalke|কাল|কালকে|agamikal|আগামীকাল)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:oder|eder|tader|ওদের|এদের|তাদের|-?দের|-?কে|-?k|-?ke|-?re|-?রে)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:bolo|bolba|bolbe|বলো|বলবে|বলবা|পাঠাও|pathao|send|দাও|দিও|dao|dio|daw)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:akta\s*reminder\s*(?:diow?|dao)?|ekta\s*reminder\s*(?:dao|dio)?|একটা\s*রিমাইন্ডার\s*(?:দিও|দাও)?|রিমাইন্ডার\s*(?:দিও|দাও)|reminder\s*(?:dio|dao)|reminder|রিমাইন্ডার)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:message|msg|মেসেজ|বার্তা)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:er\s*shathe|er\s*sathe|shathe|sathe|সাথে|এর\s*সাথে|with)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:somoi|somoy|সময়|সময়ে|টাইমে|time)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:akta|ekta|একটা|একটি)(?:\s|$)/gi, ' ')
+      .replace(/(?:\s|^)(?:somporke|shomporke|সম্পর্কে|niye|নিয়ে|নিয়ে|biyoy|biyoye|বিষয়ক?|বিষয়ে|er\s*jonno|এর\s*জন্য|topic\s*a|টপিকে|er\s*opore|এর\s*ওপরে|er\s*bapare|এর\s*ব্যাপারে)(?:\s|$)/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return s;
+  }
+
+  function formatTopic(topic: string): { title: string; cleanTopic: string } {
+    const clean = topic.trim();
+    if (/(?:মিটিং|meeting)$/i.test(clean)) {
+      return { title: clean, cleanTopic: clean };
+    }
+    return { title: `${clean} নিয়ে মিটিং`, cleanTopic: clean };
+  }
+
+  // 1. Explicit topic label (topic: xyz / subject: xyz / বিষয়: xyz)
+  const explicitMatch = text.match(/(?:topic|subject|টপিক|বিষয়|বিষয়|agenda|এজেন্ডা)\s*[:：\-]\s*(.+)$/i);
+  if (explicitMatch && explicitMatch[1]) {
+    const cleaned = cleanTopicString(explicitMatch[1]);
+    if (cleaned.length > 1) return formatTopic(cleaned);
+  }
+
+  // 2. Topic AFTER meeting / মিটিং keyword
+  // e.g. "meeting ache smriti life update somporke" or "meeting ache server maintenance niye kal 3 tay"
+  const afterMatch = text.match(/(?:মিটিং|meeting)\s*(?:ache|ase|hobe|call\s*koro|ডাকো|হবে|আছে)?\s*(?:[:：\-]|on|about|for|regarding|niye|নিয়ে|নিয়ে|somporke|সম্পর্কে)?\s+(.+)$/i);
+  if (afterMatch && afterMatch[1]) {
+    const cleaned = cleanTopicString(afterMatch[1]);
+    if (cleaned.length >= 2 && !/^(?:ache|ase|hobe|আছে|হবে|call|dak|dako|ডাকো)$/i.test(cleaned)) {
+      return formatTopic(cleaned);
+    }
+  }
+
+  // 3. Topic BEFORE meeting / মিটিং keyword
+  // e.g. "RAC installation issue niye akta meeting ache" or "বাজেট প্ল্যান নিয়ে মিটিং"
+  const beforeMatch = text.match(/(.+?)\s*(?:niye|নিয়ে|নিয়ে|somporke|সম্পর্কে|biyoy|বিষয়|biyoye|বিষয়ে|er\s*jonno|এর\s*জন্য|topic\s*a|টপিকে|er\s*meeting|এর\s*মিটিং)\s*(?:akta\s*|ekta\s*|একটা\s*)?(?:মিটিং|meeting)/i);
+  if (beforeMatch && beforeMatch[1]) {
+    const cleaned = cleanTopicString(beforeMatch[1]);
+    if (cleaned.length >= 2) {
+      return formatTopic(cleaned);
+    }
+  }
+
+  // 4. Topic word attached immediately before meeting (e.g. "urgent client meeting")
+  const attachedMatch = text.match(/(?:^|\s)([\w\u0980-\u09FF\s]+?)\s+(?:মিটিং|meeting)\b/i);
+  if (attachedMatch && attachedMatch[1]) {
+    const cleaned = cleanTopicString(attachedMatch[1]);
+    if (cleaned.length >= 3) {
+      return formatTopic(cleaned);
+    }
+  }
+
+  return { title: 'জরুরি মিটিং', cleanTopic: 'জরুরি মিটিং' };
+};
+
+/**
  * Parses user input specifically for meeting intents (Create, Cancel, Reschedule)
  */
 export const parseMeetingIntent = (rawText: string): {
@@ -331,6 +414,7 @@ export const parseMeetingIntent = (rawText: string): {
   intent: 'create' | 'cancel' | 'reschedule' | 'none';
   participantNames: string[];
   topic: string;
+  cleanTopic: string;
   time: string;
   targetTime?: string;
   newTime?: string;
@@ -362,6 +446,7 @@ export const parseMeetingIntent = (rawText: string): {
       intent: 'reschedule',
       participantNames: [],
       topic: '',
+      cleanTopic: '',
       time: newTimeStr || '15:00',
       targetTime: oldTimeStr || undefined,
       newTime: newTimeStr || undefined
@@ -384,16 +469,16 @@ export const parseMeetingIntent = (rawText: string): {
       intent: 'cancel',
       participantNames: [],
       topic: '',
+      cleanTopic: '',
       time: targetTimeStr || '',
       targetTime: targetTimeStr
     };
   }
 
   // 3. Meeting Creation Intent with Participants:
-  // e.g. "tarek roni oder akta reminder diow 2 tar somoi RAC installation issue niye akta meeting ache"
-  // "তারেক রনি ওদের একটা রিমাইন্ডার দিও ২ টার সময় RAC installation issue নিয়ে একটা মিটিং আছে"
-  // "তারেক আর রনির সাথে ২টায় মিটিং"
-  const createMatch = text.match(/(?:^|\s)([\w\u0980-\u09FF\s,،\+]+?)\s*(?:oder|eder|tader|ওদের|এদের|তাদের|-?দের|-?কে|-?k|-?ke|-?er\s*shathe|-?এর\s*সাথে)\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:রিমাইন্ডার|reminder|বার্তা|ইনভিটেশন|মেসেজ)?\s*(?:দাও|দিও|পাঠাও|send|daw|dao|dio)?\s*(?:.*)(?:মিটিং|meeting)/i) ||
+  // e.g. "bou,roni,tarek k bolo aj rat 11:45 a meeting ache smriti life update somporke"
+  // "tarek roni oder akta reminder diow 2 tar somoi RAC installation issue niye akta meeting ache"
+  const createMatch = text.match(/(?:^|\s)([\w\u0980-\u09FF\s,،\+]+?)\s*(?:oder|eder|tader|ওদের|এদের|তাদের|-?দের|-?কে|-?k|-?ke|-?er\s*shathe|-?এর\s*সাথে)\s*(?:একটা\s*|akta\s*|ekta\s*)?(?:রিমাইন্ডার|reminder|বার্তা|ইনভিটেশন|মেসেজ)?\s*(?:দাও|দিও|পাঠাও|send|daw|dao|dio|bolo|bolba|বলো|বলবা)?\s*(?:.*)(?:মিটিং|meeting)/i) ||
                       text.match(/(?:^|\s)([\w\u0980-\u09FF\s,،\+]+?)\s*(?:and|ar|আর|ও|এবং)\s*([\w\u0980-\u09FF]+)\s*(?:-?কে|-?k|-?ke|-?দের)?(?:\s+(?:.*))?(?:মিটিং|meeting)/i) ||
                       text.match(/(?:মিটিং|meeting)(?:\s+(?:.*))?\s*(?:shathe|সাথে|with)\s+([\w\u0980-\u09FF\s,،\+]+)/i);
 
@@ -407,32 +492,24 @@ export const parseMeetingIntent = (rawText: string): {
       const splitNames = combined
         .split(/[,،&]|\s+(?:and|ar|আর|ও|এবং|oder|eder|tader|ওদের|এদের|তাদের)\s+/i)
         .map(n => n.trim())
-        .filter(n => n && n.length >= 2 && !/^(?:reminder|akta|ekta|একটা|রিমাইন্ডার|দাও|দিও|dao|dio|daw|somoi|সময়|somoy|niye|নিয়ে|meeting|মিটিং)$/i.test(n));
+        .filter(n => n && n.length >= 2 && !/^(?:reminder|akta|ekta|একটা|রিমাইন্ডার|দাও|দিও|dao|dio|daw|bolo|bolba|বলো|somoi|সময়|somoy|niye|নিয়ে|meeting|মিটিং)$/i.test(n));
 
       rawParticipants.push(...splitNames);
     }
 
-    // Extract time
+    // Extract time & date
     const parsedTime = parseBengaliTime(text);
     const parsedDate = parseRelativeDate(text, parsedTime);
 
-    // Extract topic / title
-    let topic = 'জরুরি মিটিং';
-    const topicMatch = text.match(/(?:somoi|সময়|somoy|time|tay|টায়|টায়)?\s*(.+?)\s*(?:niye|নিয়ে|issue\s*niye|বিষয়ক?|সম্পর্কে)?\s*(?:akta\s*|ekta\s*|একটা\s*)?(?:মিটিং|meeting)/i);
-    if (topicMatch && topicMatch[1] && topicMatch[1].trim().length > 2) {
-      const cand = topicMatch[1].trim()
-        .replace(/^(?:akta|ekta|একটা|somoi|সময়|somoy|tar|তার|টাইমে|time)\s+/i, '')
-        .trim();
-      if (cand.length > 2 && !/^(?:tarek|roni|oder|remind|reminder)$/i.test(cand)) {
-        topic = `${cand} নিয়ে মিটিং`;
-      }
-    }
+    // Extract clean topic and formatted title
+    const { title: topicTitle, cleanTopic } = extractMeetingTopic(text, rawParticipants);
 
     return {
       isMeeting: true,
       intent: 'create',
       participantNames: rawParticipants,
-      topic,
+      topic: topicTitle,
+      cleanTopic,
       time: parsedTime,
       date: parsedDate
     };
@@ -443,6 +520,7 @@ export const parseMeetingIntent = (rawText: string): {
     intent: 'none',
     participantNames: [],
     topic: '',
+    cleanTopic: '',
     time: '14:00'
   };
 };

@@ -29,7 +29,8 @@ import {
   sendMeetingFinalAlert,
   sendMeetingCancellationNotice,
   sendMeetingRescheduledNotice,
-  parseMeetingIntent
+  parseMeetingIntent,
+  extractMeetingTopic
 } from '../services/meetingService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
@@ -4881,6 +4882,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               const meetingDate = meetingIntent.date || new Date();
               const meetingTime = meetingIntent.time || '14:00';
               const meetingTitle = meetingIntent.topic || 'জরুরি মিটিং';
+              const meetingDesc = meetingIntent.cleanTopic && meetingIntent.cleanTopic !== 'জরুরি মিটিং' ? meetingIntent.cleanTopic : '';
               const hostName = user.name || 'হোস্ট';
               const hostPhone = user.whatsapp || user.mobile || fromNumber;
 
@@ -4896,7 +4898,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               await Reminder.create({
                 userId: user._id,
                 title: meetingTitle,
-                description: cleanText,
+                description: meetingDesc,
                 date: meetingDate,
                 time: meetingTime,
                 priority: 'High',
@@ -4919,7 +4921,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                     title: meetingTitle,
                     date: meetingDate,
                     time: meetingTime,
-                    description: cleanText
+                    description: meetingDesc
                   },
                   p
                 );
@@ -5511,7 +5513,9 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 const isMeetingTarget = /মিটিং|meeting|অ্যাপয়েন্টমেন্ট|appointment|কনফারেন্স|conference/i.test(combinedText) || !!aiResponse.data.isMeeting || aiResponse.data.category === 'meeting';
 
                 if (!isWish && isMeetingTarget) {
-                  const meetingTitle = cleanTitle && !cleanTitle.startsWith('মেসেজ') ? cleanTitle : (customMsg || 'জরুরি মিটিং');
+                  const extracted = extractMeetingTopic(cleanText, allowedRecipients.map(r => r.name));
+                  const meetingTitle = extracted.title !== 'জরুরি মিটিং' ? extracted.title : (cleanTitle && !cleanTitle.startsWith('মেসেজ') ? cleanTitle : (customMsg || 'জরুরি মিটিং'));
+                  const meetingDesc = extracted.cleanTopic && extracted.cleanTopic !== 'জরুরি মিটিং' ? extracted.cleanTopic : '';
                   const hostName = user.name || 'হোস্ট';
                   const hostPhone = user.whatsapp || user.mobile || fromNumber;
 
@@ -5527,7 +5531,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   await Reminder.create({
                     userId: user._id,
                     title: meetingTitle,
-                    description: customMsg || cleanText,
+                    description: meetingDesc,
                     date: reminderDate,
                     time: reminderTime,
                     priority: 'High',
@@ -5549,7 +5553,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                         title: meetingTitle,
                         date: reminderDate,
                         time: reminderTime,
-                        description: customMsg || cleanText
+                        description: meetingDesc
                       },
                       p
                     );

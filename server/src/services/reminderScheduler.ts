@@ -142,7 +142,7 @@ export const startReminderScheduler = () => {
 
             const salutation = remUser?.honorific ? ` ${remUser.honorific}` : (remUser?.name ? ` ${remUser.name.split(' ')[0]}` : '');
             const displayTime = formatTime12Hour(rem.time);
-            const descLine = rem.description ? `\n📝 বিবরণ: ${rem.description}` : '';
+            const descLine = rem.description && rem.description !== rem.title && !rem.title.includes(rem.description) && !/(?:bolo|bolba|k\s*bolo|reminder|রিমাইন্ডার)/i.test(rem.description) ? `\n📝 বিবরণ: ${rem.description}` : '';
 
             const preAlertBody = `👋 আসসালামু আলাইকুম${salutation}!\n\n⏳ আর ঠিক *${diffMinutes} মিনিট পর* (${displayTime}-এ) আপনার একটি মিটিং রয়েছে:\n📌 *"${rem.title}"*${descLine}`;
 
