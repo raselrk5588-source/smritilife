@@ -695,7 +695,7 @@ export const extractExpenseQueryFilter = (text: string): ExtractedExpenseFilter 
   if (/(?:কাঁচা\s*বাজার|বাজার|bazar|bazaar)/i.test(lower)) {
     return { filterItem: 'বাজার', filterCategory: 'food', filterLabelBn: 'বাজার', icon: '🛒' };
   }
-  if (/(?:চা|কফি|tea|coffee|cha|kofi)/i.test(lower)) {
+  if (/(?:চা|কফি|tea|coffee|\bcha\b|kofi)/i.test(lower)) {
     return { filterItem: 'চা', filterCategory: 'food', filterLabelBn: 'চা/কফি', icon: '☕' };
   }
   if (/(?:নাস্তা|সকালের\s*নাস্তা|বিকালে?র\s*নাস্তা|nasta|nashta|breakfast)/i.test(lower)) {
@@ -843,6 +843,16 @@ export const parseExpenseInput = (text: string, referenceDate: Date = new Date()
   // Exclude complaints, feedback, or inquiries about reminders, wishes, messages, or bots
   const isNonExpenseTopic = /(?:wish|শুভেচ্ছা|birthday|জন্মদিন|reminder|রিমাইন্ডার|message|বার্তা|gadha|গাধা|keno\s*reminder|reminder\s*(?:hisabe|hisebe)|কেন\s*রিমাইন্ডার|রিমাইন্ডার\s*(?:হিসেবে|হিসাবে)|pathano\s*holo|পাঠানো\s*হলো|wish\s*kore|wish\s*patha)/i.test(clean);
   if (isNonExpenseTopic) {
+    return null;
+  }
+
+  // Exclude period / menstrual cycle queries from expense tracking
+  if (/(?:পিরিয়ড|পিরিয়ড|মাসিক|মেনস্ট্রুয়াল|মেন্স|period|priod|peroid|oeriod|peiod|pariod|menstrual|masik|mashik|menses|cycle)/i.test(clean)) {
+    return null;
+  }
+
+  // Exclude How-To / usage / feature questions from expense tracking
+  if (/(?:কি\s*ভাবে|কী\s*ভাবে|kivabe|ki\s*vabe|how\s*to|কী\s*করে|কি\s*করে|ki\s*kore|rules?|নিয়ম|পদ্ধতি|ব্যবহার|use\s*kora|use\s*korbo|rakhbo\s*ki\s*vabe|রাখবো\s*কীভাবে|করবো\s*কীভাবে|kaj\s*kore|কাজ\s*করে)/i.test(clean)) {
     return null;
   }
 

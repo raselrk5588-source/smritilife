@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import SystemSettings from '../models/SystemSettings';
 import AITrainingRule from '../models/AITrainingRule';
+import { detectFeatureGuide } from './featureGuideService';
 
 // In-memory chat history for WhatsApp users (In production, save to Redis or DB)
 export const chatHistories = new Map<string, any[]>();
@@ -949,8 +950,10 @@ CRITICAL LANGUAGE MIRRORING RULES:
      "আসসালামু আলাইকুম! আমার নাম স্মৃতি লাইফ (Smriti Life), আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট। 😊 আমি আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
    * For how are you ("কেমন আছো?", "kemon acho"):
      "আলহামদুলিল্লাহ, আমি বেশ ভালো আছি! আশা করি আপনিও ভালো আছেন। 😊 আজ আপনাকে কীভাবে সাহায্য করতে পারি বলুন?"
-   * For what you do or help ("কী করতে পারো?", "help"):
-     "আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট স্মৃতি লাইফ (Smriti Life)। 😊\n\nআমি যা যা করতে পারি:\n• যেকোনো কাজের রিমাইন্ডার মনে করিয়ে দেওয়া\n• নির্ধারিত সময়ে কাউকে স্বয়ংক্রিয় মেসেজ পাঠানো\n• প্রিয়জনকে সুন্দর উইশ কার্ড পাঠিয়ে দেওয়া\n• প্রেসক্রিপশন ও জরুরি ফাইল সংরক্ষণ ও সরবরাহ করা\n\nআপনি কী করতে চান বলুন?"
+   * For what you do, capabilities, or help ("কী করতে পারো?", "help", "সব ফিচার কি কি", "ফিচার লিস্ট"):
+     "আমি আপনার পার্সোনাল এআই অ্যাসিস্ট্যান্ট স্মৃতি লাইফ (Smriti Life)। 😊\n\nআমার প্রধান ফিচারসমূহ:\n• ⏰ রিমাইন্ডার ও ওয়েক-আপ অ্যালার্ম (কাজ, ওষুধ, বা ঘুম থেকে ওঠার নোটিফিকেশন)\n• 📅 মিটিং শিডিউলার (ইনভিটেশন ও ২০ মিনিট আগের রিমাইন্ডার)\n• 💰 দৈনন্দিন খরচ ট্র্যাকার (সারাদিনের খরচ ও মাসিক সামারি)\n• 🤝 ধার-দেনা ও বাকি ট্র্যাকার (লেনদেনের স্পষ্ট হিসাব)\n• 🌸 পিরিয়ড ও সাইকেল ট্র্যাকার (মাসিক সাইকেল ট্র্যাক ও অগ্রিম রিমাইন্ডার)\n• 🎉 এআই উইশ কার্ড (প্রিয়জনকে আকর্ষণীয় শুভেচ্ছা কার্ড পাঠানো)\n• 📁 সুরক্ষিত ডকুমেন্ট ভল্ট (এনআইডি, পাসপোর্ট, প্রেসক্রিপশন সংরক্ষণ)\n• 📍 লোকেশন ও দরকারি নোট (ঠিকানা, গুগল ম্যাপস ও পাসওয়ার্ড)\n• 🚨 ইমার্জেন্সি এসওএস (বিপদে লাইভ লোকেশন সহ জরুরি অ্যালার্ট)\n• 🕌 ৫ ওয়াক্ত নামাজ ও রমজানের সময়সূচি\n\nযেকোনো ফিচার কীভাবে ব্যবহার করবেন তা জানতে আমাকে নির্দ্বিধায় জিজ্ঞাসা করুন! 😊"
+   * For How-To or Feature Usage Questions (e.g. "পিরিয়ড সাইকেল কীভাবে হিসাব রাখবো?", "খরচ কীভাবে সেভ করবো?", "ধার দেনা কীভাবে রাখবো?", "মিটিং কীভাবে করবো?"):
+     ALWAYS reply with action "general_reply" and provide a warm, detailed, step-by-step Bengali guide explaining how to use that specific feature, including concrete example messages they can try!
 
 Your capabilities include:
 1. Listing/viewing existing reminders ("list_reminders").
@@ -1296,6 +1299,15 @@ export const analyzeMessage = async (whatsappNumber: string, userMessage: string
       return {
         action: 'general_reply',
         replyText: `আপনাকেও অনেক অনেক ধন্যবাদ${salutationPrefix}! 🌸 যেকোনো প্রয়োজনে আমাকে নিশ্চিন্তে জানাতে পারেন।`
+      };
+    }
+
+    // FAST-PATH 1B: Instant Feature Guide & Usage Instructions (<1ms response)
+    const guideReply = detectFeatureGuide(cleanMsg, userHonorific);
+    if (guideReply) {
+      return {
+        action: 'general_reply',
+        replyText: guideReply
       };
     }
 

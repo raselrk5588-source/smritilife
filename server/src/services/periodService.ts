@@ -63,7 +63,7 @@ export const getDhakaMidnight = (date: Date = new Date()): Date => {
  */
 export const looksPeriodRelated = (text: string): boolean => {
   if (!text) return false;
-  return /(?:পিরিয়ড|পিরিয়ড|মাসিক|মেনস্ট্রুয়াল|মেন্স|period|priod|menstrual|masik|mashik|menses|cycle\s*day|সাইকেল\s*ডে|সাইকেলের\s*কত\s*দিন|সাইকেলের\s*কয়দিন)/i.test(text);
+  return /(?:পিরিয়ড|পিরিয়ড|মাসিক|মেনস্ট্রুয়াল|মেন্স|period|priod|peroid|oeriod|peiod|pariod|menstrual|masik|mashik|menses|cycle\s*day|সাইকেল\s*ডে|সাইকেলের\s*কত\s*দিন|সাইকেলের\s*কয়দিন|cycle\s*tracker|সাইকেল\s*ট্র্যাকার|period\s*cycle|পিরিয়ড\s*সাইকেল)/i.test(text);
 };
 
 /**
@@ -484,6 +484,27 @@ export const handleWhatsAppPeriodCommand = async (
 
   const clean = text.trim();
   const enDigitsText = bnToEnDigits(clean);
+
+  // 0. How-to / Usage Guide Inquiry
+  const isHowTo = /(?:কি\s*ভাবে|কী\s*ভাবে|kivabe|ki\s*vabe|how\s*to|কী\s*করে|কি\s*করে|ki\s*kore|rules?|নিয়ম|পদ্ধতি|help|সাহায্য|ব্যবহার|use\s*kora|use\s*korbo|rakhbo\s*ki\s*vabe|রাখবো\s*কীভাবে|হিসাব\s*রাখবো|হিসাব\s*রাখব|হিসাব\s*রাখতে|hisab\s*rakhbo|kaj\s*kore|কাজ\s*করে)/i.test(clean);
+  if (isHowTo) {
+    return (
+      `🌸 *পিরিয়ড ও সাইকেল ট্র্যাকার ব্যবহার নির্দেশিকা*\n\n` +
+      `স্মৃতি লাইফে আপনার মাসিক/পিরিয়ড সাইকেলের হিসাব রাখা অত্যন্ত সহজ ও নিরাপদ:\n\n` +
+      `📌 *১. পিরিয়ড শুরুর তারিখ সেভ করতে:*\n` +
+      `যখন পিরিয়ড শুরু হবে, শুধু মেসেজ পাঠাবেন:\n` +
+      `👉 *"আজ থেকে পিরিয়ড শুরু"*\n` +
+      `অথবা পেছনের কোনো তারিখ হলে লিখুন:\n` +
+      `👉 *"১০ তারিখ পিরিয়ড শুরু হয়েছিল"*\n\n` +
+      `📌 *২. আপনার সাইকেল দৈর্ঘ্য সেট করতে:*\n` +
+      `সাধারণত মাসিক সাইকেল ২৮ দিন হয়ে থাকে। আপনার সাইকেল ভিন্ন হলে লিখুন:\n` +
+      `👉 *"আমার পিরিয়ড সাইকেল ৩০ দিনের"*\n\n` +
+      `📌 *৩. বর্তমান সাইকেলের হিসাব ও পরবর্তী ডেট জানতে:*\n` +
+      `যেকোনো সময় শুধু লিখুন:\n` +
+      `👉 *"পিরিয়ডের কত দিন চলছে?"* বা *"পরের পিরিয়ড কবে?"*\n\n` +
+      `🔔 *অটোমেটিক রিমাইন্ডার:* আপনার পরবর্তী মাসিক শুরুর সম্ভাব্য তারিখের ২ দিন আগে স্মৃতি লাইফ আপনাকে প্রস্তুতি ও যত্নের জন্য একটি শান্ত রিমাইন্ডার পাঠিয়ে দেবে! 🌸`
+    );
+  }
 
   // 1. Delete / Reset command
   if (/(?:delete|del|remove|reset|ডিলিট|মুছে|রিসেট)/i.test(clean)) {

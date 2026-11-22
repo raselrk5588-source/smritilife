@@ -79,6 +79,7 @@ import {
   ParsedDebtItem
 } from '../services/debtService';
 import { handleWhatsAppPeriodCommand, looksPeriodRelated } from '../services/periodService';
+import { detectFeatureGuide } from '../services/featureGuideService';
 import { detectDocumentCategory, saveFileToDisk, uploadBufferToMeta, findMatchingDocument, findMatchingDocumentWithVersion, convertEnglishDigitsToBengali, formatDocumentListMessage, calculateItemDuration, getDocumentBuffer, extractCleanDocumentTitleAndNotes, analyzeDocumentWithAI, isConsumableItem, extractNewDocumentTitle } from '../services/documentService';
 
 export interface ReminderActionState {
@@ -4256,6 +4257,16 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           await sendMetaWhatsAppMessage(
             fromNumber,
             `🕌 *আজকের ৫ ওয়াক্ত নামাজের সময়সূচি*\n📍 জেলা: *${times.districtBn}*\n📅 ${times.hijriDay} ${times.hijriMonthName} ${times.hijriYear} হিজরি\n\n• ফজর: *${times.prayers.fajrFormatted}* (সেহরি শেষ: ${times.sehriFormatted})\n• সূর্যোদয়: *${times.prayers.sunriseFormatted}*\n• জোহর: *${times.prayers.dhuhrFormatted}*\n• আসর: *${times.prayers.asrFormatted}*\n• মাগরিব: *${times.prayers.maghribFormatted}* (ইফতার)\n• এশা: *${times.prayers.ishaFormatted}*\n\n💡 জেলা পরিবর্তন করতে লিখুন: "আমার জেলা চট্টগ্রাম" বা আপনার জেলার নাম`
+          );
+          return;
+        }
+
+        // --- STEP 2.84: Feature Guides & How-To Inquiries ---
+        const featureGuideReply = detectFeatureGuide(cleanText, user.honorific);
+        if (featureGuideReply) {
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${featureGuideReply}` : featureGuideReply
           );
           return;
         }
