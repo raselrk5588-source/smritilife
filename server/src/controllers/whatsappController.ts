@@ -22,6 +22,15 @@ import { triggerSosAlert, updateEmergencyProfile, resolveSosAlert } from '../ser
 import { analyzeMessage, analyzeAudioMessage, transcribeAudioMessage, formatTime12Hour, parseBengaliTime, parseRelativeDate, matchRelativeDuration, cleanPersonName, hasExplicitDateOrDay, invalidateRulesCache, getLastUserTurn } from '../services/aiWhatsAppService';
 import { searchReminders, formatReminderMatchMessage, formatMultipleRemindersMessage } from '../services/memoryRetrievalService';
 import { deliverWishCard, getOccasionImageUrl, getOccasionTitle } from '../services/wishDeliveryService';
+import {
+  resolveMeetingParticipants,
+  sendMeetingInvitation,
+  sendMeetingPreReminder,
+  sendMeetingFinalAlert,
+  sendMeetingCancellationNotice,
+  sendMeetingRescheduledNotice,
+  parseMeetingIntent
+} from '../services/meetingService';
 import { cancelAlarmRinger } from '../services/reminderScheduler';
 import { getRamadanTimes, matchDistrict, RAMADAN_DUAS, formatBanglaTime, BD_DISTRICTS } from '../services/ramadanService';
 import {
@@ -4727,6 +4736,224 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           }
         }
 
+        // --- STEP 2.9: Meeting Management Handler (Create, Cancel, Reschedule) ---
+        const meetingIntent = parseMeetingIntent(cleanText);
+
+        if (meetingIntent.isMeeting) {
+          // Case A: Meeting Cancellation ("dupur 2 tar meeting cancle ba aj korbo na", "২টার মিটিং বাতিল করো", "আজকের মিটিং ক্যানসেল")
+          if (meetingIntent.intent === 'cancel') {
+            console.log(`[MeetingHandler] Meeting cancel intent detected: "${cleanText}"`);
+            let query: any = {
+              userId: user._id,
+              status: 'Pending',
+              $or: [
+                { isMeeting: true },
+                { category: 'meeting' },
+                { title: /(?:মিটিং|meeting)/i }
+              ]
+            };
+            if (meetingIntent.targetTime) {
+              query.time = meetingIntent.targetTime;
+            }
+
+            let meetingToCancel = await Reminder.findOne(query).sort({ date: 1, time: 1 });
+            if (!meetingToCancel && meetingIntent.targetTime) {
+              meetingToCancel = await Reminder.findOne({
+                userId: user._id,
+                status: 'Pending',
+                $or: [
+                  { isMeeting: true },
+                  { category: 'meeting' },
+                  { title: /(?:মিটিং|meeting)/i }
+                ]
+              }).sort({ date: 1, time: 1 });
+            }
+
+            if (meetingToCancel) {
+              meetingToCancel.status = 'Cancelled';
+              await meetingToCancel.save();
+
+              const displayTime = formatTime12Hour(meetingToCancel.time);
+              const hostDisplayName = meetingToCancel.hostName || user.name || 'হোস্ট';
+
+              const participantNamesList: string[] = [];
+              if (meetingToCancel.participants && meetingToCancel.participants.length > 0) {
+                for (const p of meetingToCancel.participants) {
+                  await sendMeetingCancellationNotice(hostDisplayName, meetingToCancel, p);
+                  participantNamesList.push(p.name);
+                }
+              }
+
+              let cancelReply = `✅ আপনার *"${meetingToCancel.title}"* (${displayTime}) মিটিংটি বাতিল করা হয়েছে!`;
+              if (participantNamesList.length > 0) {
+                cancelReply += `\n\n📩 অংশগ্রহণকারী (${participantNamesList.join(', ')})-দের হোয়াটসঅ্যাপে মিটিং বাতিলের নোটিশ পাঠিয়ে দেওয়া হয়েছে।`;
+              }
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${cancelReply}` : cancelReply
+              );
+              return;
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                '⚠️ দুঃখিত, আপনার বর্তমানে বাতিল করার মতো কোনো পেন্ডিং মিটিং শিডিউল পাওয়া যায়নি।'
+              );
+              return;
+            }
+          }
+
+          // Case B: Meeting Reschedule ("dupur 2 tar meeting ta 3 tay dao", "২টার মিটিং পিছিয়ে ৩টায় দাও", "আজকের মিটিং ৩টায় রিশিডিউল করো")
+          if (meetingIntent.intent === 'reschedule') {
+            console.log(`[MeetingHandler] Meeting reschedule intent detected: "${cleanText}"`);
+            let query: any = {
+              userId: user._id,
+              status: 'Pending',
+              $or: [
+                { isMeeting: true },
+                { category: 'meeting' },
+                { title: /(?:মিটিং|meeting)/i }
+              ]
+            };
+            if (meetingIntent.targetTime) {
+              query.time = meetingIntent.targetTime;
+            }
+
+            let meetingToReschedule = await Reminder.findOne(query).sort({ date: 1, time: 1 });
+            if (!meetingToReschedule) {
+              meetingToReschedule = await Reminder.findOne({
+                userId: user._id,
+                status: 'Pending',
+                $or: [
+                  { isMeeting: true },
+                  { category: 'meeting' },
+                  { title: /(?:মিটিং|meeting)/i }
+                ]
+              }).sort({ date: 1, time: 1 });
+            }
+
+            if (meetingToReschedule) {
+              const oldTime = meetingToReschedule.time;
+              const newTime = meetingIntent.newTime || '15:00';
+              meetingToReschedule.time = newTime;
+              meetingToReschedule.isPreReminderSent = false;
+              meetingToReschedule.preReminderDispatchedDate = undefined;
+              meetingToReschedule.lastDispatchedDate = undefined;
+              await meetingToReschedule.save();
+
+              const oldDisplayTime = formatTime12Hour(oldTime);
+              const newDisplayTime = formatTime12Hour(newTime);
+              const hostDisplayName = meetingToReschedule.hostName || user.name || 'হোস্ট';
+
+              const participantNamesList: string[] = [];
+              if (meetingToReschedule.participants && meetingToReschedule.participants.length > 0) {
+                for (const p of meetingToReschedule.participants) {
+                  await sendMeetingRescheduledNotice(hostDisplayName, meetingToReschedule, p, oldTime, newTime);
+                  participantNamesList.push(p.name);
+                }
+              }
+
+              let reschedReply = `✅ আপনার *"${meetingToReschedule.title}"* মিটিংটি সফলভাবে *${newDisplayTime}*-এ রিশিডিউল করা হয়েছে! (পূর্ববর্তী সময়: ${oldDisplayTime})`;
+              if (participantNamesList.length > 0) {
+                reschedReply += `\n\n📩 অংশগ্রহণকারী (${participantNamesList.join(', ')})-দের পরিবর্তিত নতুন সময়ের আপডেট মেসেজ পাঠানো হয়েছে।\n⏳ মিটিং শুরুর ২০ মিনিট পূর্বে সকলকে জেন্টল রিমাইন্ডার দেওয়া হবে।`;
+              }
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reschedReply}` : reschedReply
+              );
+              return;
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                '⚠️ দুঃখিত, রিশিডিউল করার মতো কোনো পেন্ডিং মিটিং পাওয়া যায়নি।'
+              );
+              return;
+            }
+          }
+
+          // Case C: Meeting Creation with Participants directly detected
+          if (meetingIntent.intent === 'create' && meetingIntent.participantNames.length > 0) {
+            console.log(`[MeetingHandler] Meeting create intent with participants detected: "${cleanText}"`);
+            const { resolved, notFound } = await resolveMeetingParticipants(user._id, meetingIntent.participantNames);
+
+            if (resolved.length > 0) {
+              const meetingDate = meetingIntent.date || new Date();
+              const meetingTime = meetingIntent.time || '14:00';
+              const meetingTitle = meetingIntent.topic || 'জরুরি মিটিং';
+              const hostName = user.name || 'হোস্ট';
+              const hostPhone = user.whatsapp || user.mobile || fromNumber;
+
+              const participantsData = resolved.map(r => ({
+                name: r.name,
+                phone: r.phone,
+                invited: true,
+                preReminderSent: false,
+                finalReminderSent: false,
+                status: 'invited' as const
+              }));
+
+              await Reminder.create({
+                userId: user._id,
+                title: meetingTitle,
+                description: cleanText,
+                date: meetingDate,
+                time: meetingTime,
+                priority: 'High',
+                category: 'meeting',
+                repeat: 'Once',
+                status: 'Pending',
+                isMeeting: true,
+                hostName,
+                hostPhone,
+                preReminderMinutes: 20,
+                participants: participantsData
+              });
+
+              // Send immediate invitation to all participants
+              for (const p of resolved) {
+                await sendMeetingInvitation(
+                  hostName,
+                  hostPhone,
+                  {
+                    title: meetingTitle,
+                    date: meetingDate,
+                    time: meetingTime,
+                    description: cleanText
+                  },
+                  p
+                );
+              }
+
+              const displayTime = formatTime12Hour(meetingTime);
+              const displayDate = meetingDate.toLocaleDateString('bn-BD', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                timeZone: 'Asia/Dhaka'
+              });
+
+              let hostConfirm = `✅ আপনার মিটিং রিমাইন্ডার ও ইনভিটেশন সফলভাবে সেট করা হয়েছে!\n\n📌 *বিষয়:* ${meetingTitle}\n🕒 *সময়:* ${displayTime}\n📅 *তারিখ:* ${displayDate}\n👤 *হোস্ট:* ${hostName}\n\n👥 *অংশগ্রহণকারী (${resolved.length} জন):*\n`;
+              resolved.forEach((r, idx) => {
+                hostConfirm += `${idx + 1}. 👤 *${r.name}* (${r.phone})\n`;
+              });
+
+              hostConfirm += `\n📩 সকল অংশগ্রহণকারীকে এখনই ইনভিটেশন পাঠানো হয়েছে।\n⏳ মিটিং শুরুর ২০ মিনিট পূর্বে একটি জেন্টল রিমাইন্ডার এবং নির্ধারিত সময়ে ফাইনাল রিমাইন্ডার উভয় পক্ষকে পাঠানো হবে।`;
+
+              if (notFound.length > 0) {
+                hostConfirm += `\n\n⚠️ দ্রষ্টব্য: "${notFound.join(', ')}" নামে কোনো নম্বর আপনার কন্ট্যাক্ট লিস্টে পাওয়া যায়নি।`;
+              }
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${hostConfirm}` : hostConfirm
+              );
+              return;
+            }
+          }
+        }
+
         // --- STEP 3: Regular AI Message & Audio Analysis ---
         let aiResponse: any;
 
@@ -5281,6 +5508,80 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                 else if (/ভালোবাসা|love|valentine/i.test(combinedText)) occasion = 'love';
                 const occasionTitle = getOccasionTitle(occasion);
 
+                const isMeetingTarget = /মিটিং|meeting|অ্যাপয়েন্টমেন্ট|appointment|কনফারেন্স|conference/i.test(combinedText) || !!aiResponse.data.isMeeting || aiResponse.data.category === 'meeting';
+
+                if (!isWish && isMeetingTarget) {
+                  const meetingTitle = cleanTitle && !cleanTitle.startsWith('মেসেজ') ? cleanTitle : (customMsg || 'জরুরি মিটিং');
+                  const hostName = user.name || 'হোস্ট';
+                  const hostPhone = user.whatsapp || user.mobile || fromNumber;
+
+                  const participantsData = allowedRecipients.map(r => ({
+                    name: r.name,
+                    phone: r.phone,
+                    invited: true,
+                    preReminderSent: false,
+                    finalReminderSent: false,
+                    status: 'invited' as const
+                  }));
+
+                  await Reminder.create({
+                    userId: user._id,
+                    title: meetingTitle,
+                    description: customMsg || cleanText,
+                    date: reminderDate,
+                    time: reminderTime,
+                    priority: 'High',
+                    category: 'meeting',
+                    repeat: 'Once',
+                    status: 'Pending',
+                    isMeeting: true,
+                    hostName,
+                    hostPhone,
+                    preReminderMinutes: 20,
+                    participants: participantsData
+                  });
+
+                  for (const p of allowedRecipients) {
+                    await sendMeetingInvitation(
+                      hostName,
+                      hostPhone,
+                      {
+                        title: meetingTitle,
+                        date: reminderDate,
+                        time: reminderTime,
+                        description: customMsg || cleanText
+                      },
+                      p
+                    );
+                  }
+
+                  const displayTime = formatTime12Hour(reminderTime);
+                  const displayDate = reminderDate.toLocaleDateString('bn-BD', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    timeZone: 'Asia/Dhaka'
+                  });
+
+                  let hostConfirm = `✅ আপনার মিটিং রিমাইন্ডার ও ইনভিটেশন সফলভাবে সেট করা হয়েছে!\n\n📌 *বিষয়:* ${meetingTitle}\n🕒 *সময়:* ${displayTime}\n📅 *তারিখ:* ${displayDate}\n👤 *হোস্ট:* ${hostName}\n\n👥 *অংশগ্রহণকারী (${allowedRecipients.length} জন):*\n`;
+                  allowedRecipients.forEach((r, idx) => {
+                    hostConfirm += `${idx + 1}. 👤 *${r.name}* (${r.phone})\n`;
+                  });
+
+                  hostConfirm += `\n📩 সকল অংশগ্রহণকারীকে এখনই ইনভিটেশন পাঠানো হয়েছে।\n⏳ মিটিং শুরুর ২০ মিনিট পূর্বে একটি জেন্টল রিমাইন্ডার এবং নির্ধারিত সময়ে ফাইনাল রিমাইন্ডার উভয় পক্ষকে পাঠানো হবে।`;
+
+                  if (notFoundNames.length > 0) {
+                    hostConfirm += `\n\n⚠️ দ্রষ্টব্য: "${notFoundNames.join(', ')}" নামে কোনো নম্বর আপনার কন্ট্যাক্ট লিস্টে পাওয়া যায়নি।`;
+                  }
+
+                  await sendMetaWhatsAppMessage(
+                    fromNumber,
+                    (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${hostConfirm}` : hostConfirm
+                  );
+                  break;
+                }
+
                 let firstSmartCardId = '';
 
                 for (const target of allowedRecipients) {
@@ -5534,6 +5835,134 @@ export const receiveWebhook = async (req: Request, res: Response) => {
               }
             }
             break;
+
+          case 'cancel_meeting': {
+            let query: any = {
+              userId: user._id,
+              status: 'Pending',
+              $or: [
+                { isMeeting: true },
+                { category: 'meeting' },
+                { title: /(?:মিটিং|meeting)/i }
+              ]
+            };
+            if (aiResponse.data?.time) {
+              query.time = aiResponse.data.time;
+            }
+
+            let meetingToCancel = await Reminder.findOne(query).sort({ date: 1, time: 1 });
+            if (!meetingToCancel) {
+              meetingToCancel = await Reminder.findOne({
+                userId: user._id,
+                status: 'Pending',
+                $or: [
+                  { isMeeting: true },
+                  { category: 'meeting' },
+                  { title: /(?:মিটিং|meeting)/i }
+                ]
+              }).sort({ date: 1, time: 1 });
+            }
+
+            if (meetingToCancel) {
+              meetingToCancel.status = 'Cancelled';
+              await meetingToCancel.save();
+
+              const displayTime = formatTime12Hour(meetingToCancel.time);
+              const hostDisplayName = meetingToCancel.hostName || user.name || 'হোস্ট';
+
+              const participantNamesList: string[] = [];
+              if (meetingToCancel.participants && meetingToCancel.participants.length > 0) {
+                for (const p of meetingToCancel.participants) {
+                  await sendMeetingCancellationNotice(hostDisplayName, meetingToCancel, p);
+                  participantNamesList.push(p.name);
+                }
+              }
+
+              let cancelReply = `✅ আপনার *"${meetingToCancel.title}"* (${displayTime}) মিটিংটি বাতিল করা হয়েছে!`;
+              if (participantNamesList.length > 0) {
+                cancelReply += `\n\n📩 অংশগ্রহণকারী (${participantNamesList.join(', ')})-দের হোয়াটসঅ্যাপে মিটিং বাতিলের নোটিশ পাঠিয়ে দেওয়া হয়েছে।`;
+              }
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${cancelReply}` : cancelReply
+              );
+              break;
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                '⚠️ দুঃখিত, আপনার বর্তমানে বাতিল করার মতো কোনো পেন্ডিং মিটিং শিডিউল পাওয়া যায়নি।'
+              );
+              break;
+            }
+          }
+
+          case 'reschedule_meeting': {
+            let query: any = {
+              userId: user._id,
+              status: 'Pending',
+              $or: [
+                { isMeeting: true },
+                { category: 'meeting' },
+                { title: /(?:মিটিং|meeting)/i }
+              ]
+            };
+            if (aiResponse.data?.oldTime) {
+              query.time = aiResponse.data.oldTime;
+            }
+
+            let meetingToReschedule = await Reminder.findOne(query).sort({ date: 1, time: 1 });
+            if (!meetingToReschedule) {
+              meetingToReschedule = await Reminder.findOne({
+                userId: user._id,
+                status: 'Pending',
+                $or: [
+                  { isMeeting: true },
+                  { category: 'meeting' },
+                  { title: /(?:মিটিং|meeting)/i }
+                ]
+              }).sort({ date: 1, time: 1 });
+            }
+
+            if (meetingToReschedule) {
+              const oldTime = meetingToReschedule.time;
+              const newTime = aiResponse.data?.newTime || '15:00';
+              meetingToReschedule.time = newTime;
+              meetingToReschedule.isPreReminderSent = false;
+              meetingToReschedule.preReminderDispatchedDate = undefined;
+              meetingToReschedule.lastDispatchedDate = undefined;
+              await meetingToReschedule.save();
+
+              const oldDisplayTime = formatTime12Hour(oldTime);
+              const newDisplayTime = formatTime12Hour(newTime);
+              const hostDisplayName = meetingToReschedule.hostName || user.name || 'হোস্ট';
+
+              const participantNamesList: string[] = [];
+              if (meetingToReschedule.participants && meetingToReschedule.participants.length > 0) {
+                for (const p of meetingToReschedule.participants) {
+                  await sendMeetingRescheduledNotice(hostDisplayName, meetingToReschedule, p, oldTime, newTime);
+                  participantNamesList.push(p.name);
+                }
+              }
+
+              let reschedReply = `✅ আপনার *"${meetingToReschedule.title}"* মিটিংটি সফলভাবে *${newDisplayTime}*-এ রিশিডিউল করা হয়েছে! (পূর্ববর্তী সময়: ${oldDisplayTime})`;
+              if (participantNamesList.length > 0) {
+                reschedReply += `\n\n📩 অংশগ্রহণকারী (${participantNamesList.join(', ')})-দের পরিবর্তিত নতুন সময়ের আপডেট মেসেজ পাঠানো হয়েছে।\n⏳ মিটিং শুরুর ২০ মিনিট পূর্বে সকলকে জেন্টল রিমাইন্ডার দেওয়া হবে।`;
+              }
+
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                (isVoiceNote && voiceTranscribedText) ? `🎤 _"${voiceTranscribedText}"_\n\n${reschedReply}` : reschedReply
+              );
+              break;
+            } else {
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                '⚠️ দুঃখিত, রিশিডিউল করার মতো কোনো পেন্ডিং মিটিং পাওয়া যায়নি।'
+              );
+              break;
+            }
+          }
 
           case 'cancel_reminder':
           case 'delete_reminder': {

@@ -6,6 +6,7 @@ import { deliverWishCard, sendMetaWhatsAppTemplate, getOccasionImageUrl, getOcca
 import { formatTime12Hour } from './aiWhatsAppService';
 import { sendMetaWhatsAppButtons, userReminderState } from '../controllers/whatsappController';
 import { getRamadanTimes, RAMADAN_DUAS } from './ramadanService';
+import { sendMeetingPreReminder, sendMeetingFinalAlert } from './meetingService';
 
 export interface ActiveAlarmRinger {
   reminderId: string;
@@ -147,6 +148,22 @@ export const startReminderScheduler = () => {
 
             await sendWhatsAppAlert(targetPhone, preAlertBody);
             console.log(`[ReminderScheduler] Dispatched gentle pre-reminder for "${rem.title}" (${displayTime}) to ${targetPhone}`);
+
+            // Also dispatch gentle pre-reminder to all meeting participants!
+            if (rem.participants && rem.participants.length > 0) {
+              const hostDisplayName = rem.hostName || remUser?.name || 'হোস্ট';
+              for (const p of rem.participants) {
+                if (p.phone && !p.preReminderSent) {
+                  await sendMeetingPreReminder(hostDisplayName, rem, p, diffMinutes);
+                  p.preReminderSent = true;
+                }
+              }
+              await Reminder.updateOne(
+                { _id: rem._id },
+                { $set: { participants: rem.participants } }
+              );
+              console.log(`[ReminderScheduler] Dispatched gentle pre-reminder to ${rem.participants.length} meeting participants for "${rem.title}"`);
+            }
           }
         }
       }
@@ -447,6 +464,22 @@ export const startReminderScheduler = () => {
                 await sendWhatsAppAlert(senderNumber, fallbackText);
               }
               console.log(`[ReminderScheduler] Interactive prompt sent for "${reminder.title}" to ${senderNumber}`);
+
+              // If this is a meeting with participants, dispatch final meeting alert to all participants!
+              if (reminder.participants && reminder.participants.length > 0) {
+                const hostDisplayName = reminder.hostName || user?.name || 'হোস্ট';
+                for (const p of reminder.participants) {
+                  if (p.phone && !p.finalReminderSent) {
+                    await sendMeetingFinalAlert(hostDisplayName, reminder, p);
+                    p.finalReminderSent = true;
+                  }
+                }
+                await Reminder.updateOne(
+                  { _id: reminder._id },
+                  { $set: { participants: reminder.participants } }
+                );
+                console.log(`[ReminderScheduler] Dispatched final meeting alert to ${reminder.participants.length} participants for "${reminder.title}"`);
+              }
             }
           }
 

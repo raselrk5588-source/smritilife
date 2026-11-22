@@ -988,10 +988,17 @@ Possible actions:
    - "time"?: string (HH:mm if time changed)
    - "newTitle"?: string (Optional, if user also wants to rename the reminder)
 
-4. cancel_reminder:
-   When user wants to cancel or stop a specific reminder by title or serial number.
-   Examples: "1 number ta cancel koro", "মিটিং ক্যান্সেল করো".
-   Data: { "index"?: number, "searchQuery"?: string }
+4. cancel_reminder / cancel_meeting:
+   When user wants to cancel or stop a specific reminder or meeting.
+   Examples:
+   - "1 number ta cancel koro" -> action: "cancel_reminder", data: { "index": 1 }
+   - "মিটিং ক্যান্সেল করো" -> action: "cancel_meeting", data: { "searchQuery": "মিটিং" }
+   - "dupur 2 tar meeting cancle ba aj korbo na" -> action: "cancel_meeting", data: { "searchQuery": "মিটিং", "time": "14:00" }
+   - "আজকের মিটিং বাতিল করো" -> action: "cancel_meeting", data: { "searchQuery": "মিটিং" }
+   - "আজকে মিটিং হবে না" / "আজ মিটিং করবো না" -> action: "cancel_meeting", data: { "searchQuery": "মিটিং" }
+   - "dupur 2 tar meeting ta 3 tay dao" -> action: "reschedule_meeting", data: { "searchQuery": "মিটিং", "oldTime": "14:00", "newTime": "15:00" }
+   - "মিটিং পিছিয়ে ৩টায় দাও" -> action: "reschedule_meeting", data: { "searchQuery": "মিটিং", "newTime": "15:00" }
+   Data: { "index"?: number, "searchQuery"?: string, "time"?: string, "oldTime"?: string, "newTime"?: string }
 
 5. delete_reminder:
    When user wants to delete a specific reminder permanently by title, keyword, or serial number from list.
@@ -1031,6 +1038,10 @@ Possible actions:
      * "I love you message daw rasel k" -> action: "create_reminder", data: { "recipientNames": ["Rasel"], "customMessage": "I love you", "sendNow": true, "title": "মেসেজ পাঠানো (Rasel)" }
      * "Bou k message daw i love you" -> action: "create_reminder", data: { "recipientNames": ["Bou"], "customMessage": "i love you", "sendNow": true, "title": "মেসেজ পাঠানো (Bou)" }
      * "akta message daw roni,bou k j kal amra ghurte jabo" -> action: "create_reminder", data: { "recipientNames": ["roni", "bou"], "customMessage": "kal amra ghurte jabo", "sendNow": true }
+    - Multi-Participant Meeting Reminders & Invitations (MEETING RULES):
+      * When user schedules a meeting with one or more colleagues/friends (e.g. "tarek roni oder akta reminder diow 2 tar somoi RAC installation issue niye akta meeting ache", "তারেক রনি ওদের একটা রিমাইন্ডার দিও ২ টার সময় RAC installation issue নিয়ে একটা মিটিং আছে"):
+        action: "create_reminder", data: { "title": "RAC installation issue নিয়ে মিটিং", "category": "meeting", "isMeeting": true, "time": "14:00", "recipientNames": ["tarek", "roni"], "customMessage": "RAC installation issue নিয়ে মিটিং" }
+      * "কাল দুপুর ২টায় তারেক ও রনির সাথে RAC installation মিটিং আছে" -> action: "create_reminder", data: { "title": "RAC installation নিয়ে মিটিং", "category": "meeting", "isMeeting": true, "time": "14:00", "recipientNames": ["তারেক", "রনি"], "customMessage": "RAC installation নিয়ে মিটিং" }
     - Recurring Reminders (Monthly, Weekly, Daily):
       * "amake poti mas ar 2 tarik a akta reminder diow Boss k report joma dite hobe" বা "প্রতি মাসের ২ তারিখে বসকে রিপোর্ট দেওয়ার রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "Boss কে রিপোর্ট জমা দেওয়া", "repeat": "Monthly", "date": "2026-11-02", "time": "10:00" }
       * "প্রতি মাসের ৫ তারিখে বাসা ভাড়া দেওয়ার রিমাইন্ডার দিও" -> action: "create_reminder", data: { "title": "বাসা ভাড়া দেওয়া", "repeat": "Monthly", "time": "10:00" }

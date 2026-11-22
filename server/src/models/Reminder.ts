@@ -8,6 +8,15 @@ export interface IMedicineItem {
   endDate?: Date;
 }
 
+export interface IMeetingParticipant {
+  name: string;
+  phone: string;
+  invited?: boolean;
+  preReminderSent?: boolean;
+  finalReminderSent?: boolean;
+  status?: 'invited' | 'confirmed' | 'declined';
+}
+
 export interface IReminder extends Document {
   userId: mongoose.Types.ObjectId;
   title: string;
@@ -30,6 +39,10 @@ export interface IReminder extends Document {
   isPreReminderSent?: boolean;
   preReminderDispatchedDate?: string;
   lastDispatchedDate?: string;
+  isMeeting?: boolean;
+  hostName?: string;
+  hostPhone?: string;
+  participants?: IMeetingParticipant[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +54,15 @@ const MedicineItemSchema = new Schema({
   startDate: { type: Date },
   endDate: { type: Date }
 }, { _id: true });
+
+const MeetingParticipantSchema = new Schema({
+  name: { type: String, required: true },
+  phone: { type: String, required: true },
+  invited: { type: Boolean, default: true },
+  preReminderSent: { type: Boolean, default: false },
+  finalReminderSent: { type: Boolean, default: false },
+  status: { type: String, enum: ['invited', 'confirmed', 'declined'], default: 'invited' }
+}, { _id: false });
 
 const ReminderSchema: Schema = new Schema(
   {
@@ -64,7 +86,11 @@ const ReminderSchema: Schema = new Schema(
     preReminderMinutes: { type: Number, default: 0 },
     isPreReminderSent: { type: Boolean, default: false },
     preReminderDispatchedDate: { type: String },
-    lastDispatchedDate: { type: String }
+    lastDispatchedDate: { type: String },
+    isMeeting: { type: Boolean, default: false },
+    hostName: { type: String },
+    hostPhone: { type: String },
+    participants: [MeetingParticipantSchema]
   },
   { timestamps: true }
 );
