@@ -2504,11 +2504,14 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           });
 
           if (sosResult.totalContacts > 0) {
-            const contactNames = (user.emergencyContacts || []).map(c => `${c.name} (${c.phone})`).join('\n• ');
-            await sendMetaWhatsAppMessage(
-              fromNumber,
-              `🚨 *জরুরি বিপদকালীন অ্যালার্ট (SOS) সক্রিয় করা হয়েছে!* 🚨\n\n✅ আপনার *${sosResult.contactsNotifiedCount} জন জরুরি কন্টাক্টকে* হোয়াটসঅ্যাপে সতর্কবার্তা পাঠানো হয়েছে:\n• ${contactNames}\n\n🚔 *জাতীয় জরুরি সেবা:* ৯৯৯ (999) - পুলিশ, অ্যাম্বুলেন্স, ফায়ার সার্ভিস\n🛡️ *নারী ও শিশু নির্যাতন প্রতিরোধ সেল:* ১০৯ (109)\n🚑 *জাতীয় স্বাস্থ্য বাতায়ন:* ১৬২৬৩ (16263)\n\n_শান্ত থাকুন। আপনি একা নন! বিপদ কেটে গেলে লিখুন: "আমি এখন নিরাপদ"_ 🤲`
-            );
+            const isSelfContact = (user.emergencyContacts || []).some(c => normalizeMobile(c.phone) === normalizeMobile(fromNumber));
+            if (!isSelfContact) {
+              const contactNames = (user.emergencyContacts || []).map(c => `${c.name} (${c.phone})`).join('\n• ');
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🚨 *জরুরি বিপদকালীন অ্যালার্ট (SOS) সক্রিয় করা হয়েছে!* 🚨\n\n✅ আপনার *${sosResult.contactsNotifiedCount} জন জরুরি কন্টাক্টকে* হোয়াটসঅ্যাপে সতর্কবার্তা পাঠানো হয়েছে:\n• ${contactNames}\n\n🚔 *জাতীয় জরুরি সেবা:* ৯৯৯ (999) - পুলিশ, অ্যাম্বুলেন্স, ফায়ার সার্ভিস\n🛡️ *নারী ও শিশু নির্যাতন প্রতিরোধ সেল:* ১০৯ (109)\n🚑 *জাতীয় স্বাস্থ্য বাতায়ন:* ১৬২৬৩ (16263)\n\n_শান্ত থাকুন। আপনি একা নন! বিপদ কেটে গেলে লিখুন: "আমি এখন নিরাপদ"_ 🤲`
+              );
+            }
           } else {
             await sendMetaWhatsAppMessage(
               fromNumber,

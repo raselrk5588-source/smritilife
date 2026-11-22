@@ -24,6 +24,7 @@ import Ramadan from './pages/Ramadan';
 import Expenses from './pages/Expenses';
 import Debts from './pages/Debts';
 import PeriodTracker from './pages/PeriodTracker';
+import PregnancyTracker from './pages/PregnancyTracker';
 import Documents from './pages/Documents';
 import FCommerce from './pages/FCommerce';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -75,6 +76,7 @@ function App() {
           <Route path="expenses" element={<Expenses />} />
           <Route path="debts" element={<Debts />} />
           <Route path="period" element={<PeriodTracker />} />
+          <Route path="pregnancy" element={<PregnancyTracker />} />
           <Route path="documents" element={<Documents />} />
           <Route path="fcommerce" element={<FCommerce />} />
           <Route path="admin" element={<Profile />} /> {/* Re-mapped admin to Profile for the bottom nav link to work visually */}

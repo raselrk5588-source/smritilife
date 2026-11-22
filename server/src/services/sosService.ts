@@ -47,6 +47,23 @@ export async function triggerSosAlert(params: TriggerSosParams): Promise<Trigger
   const medicalNotes = user.medicalNotes || '';
   const contacts = user.emergencyContacts || [];
 
+  // Prevent duplicate SOS dispatches within 15 seconds for the same user
+  const recentAlert = await SosAlert.findOne({
+    userId: user._id,
+    createdAt: { $gte: new Date(Date.now() - 15 * 1000) }
+  });
+  if (recentAlert) {
+    console.log(`[SOS] Duplicate SOS trigger suppressed for user ${userId} within 15s`);
+    return {
+      success: true,
+      alertId: recentAlert._id.toString(),
+      contactsNotifiedCount: recentAlert.emergencyContactsNotified?.length || 0,
+      totalContacts: contacts.length,
+      contacts: recentAlert.emergencyContactsNotified || [],
+      message: '🚨 জরুরি অ্যালার্ট ইতিমধ্যে পাঠানো হয়েছে।'
+    };
+  }
+
   // Generate Google Maps URL if coordinates provided
   let mapUrl = '';
   if (latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null) {
@@ -58,36 +75,58 @@ export async function triggerSosAlert(params: TriggerSosParams): Promise<Trigger
 
   // Format emergency message for contacts
   const buildContactAlertMessage = (contactName: string) => {
-    let msg = `🚨 *জরুরি বিপদকালীন অ্যালার্ট (SOS)!* 🚨\n\n`;
-    msg += `আসসালামু আলাইকুম ${contactName},\n`;
-    msg += `আপনার প্রিয়জন *${userName}* (${userPhone}) এইমাত্র স্মৃতি লাইফ থেকে একটি *জরুরি সাহায্য অ্যালার্ট* পাঠিয়েছেন!\n\n`;
+    const now = new Date();
+    const formattedDateTime = now.toLocaleDateString('bn-BD', {
+      timeZone: 'Asia/Dhaka',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }) + ' | ' + now.toLocaleTimeString('bn-BD', {
+      timeZone: 'Asia/Dhaka',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
 
-    if (mapUrl) {
-      msg += `📍 *বর্তমান লাইভ লোকেশন:*\n${mapUrl}\n\n`;
+    let locationText = mapUrl;
+    if (!locationText) {
+      if (address) {
+        locationText = address;
+      } else if (user.district) {
+        locationText = `${user.district}, বাংলাদেশ`;
+      } else {
+        locationText = 'অবস্থান পাওয়া যায়নি (ডিভাইস জিপিএস অফ ছিল)';
+      }
     }
-    if (address) {
-      msg += `🏠 *ঠিকানা / এলাকা:* ${address}\n`;
-    }
+
+    let msg = `🚨 *SMRITILIFE SOS EMERGENCY ALERT*\n\n`;
+    msg += `👤 *সাহায্য প্রার্থীর তথ্য:*\nনাম: *${userName}*\nমোবাইল: *${userPhone}*\n\n`;
+    msg += `⚠️ *তিনি বর্তমানে জরুরি পরিস্থিতিতে রয়েছেন। তাঁর দ্রুত আপনার সাহায্য প্রয়োজন। অনুগ্রহ করে দ্রুত তাঁর সঙ্গে যোগাযোগ করুন।*\n\n`;
+    msg += `📍 *বর্তমান অবস্থান:*\n${locationText}\n\n`;
     if (bloodGroup) {
       msg += `🩸 *রক্তের গ্রুপ:* ${bloodGroup}\n`;
     }
     if (medicalNotes) {
-      msg += `🩺 *মেডিকেল তথ্য:* ${medicalNotes}\n`;
+      msg += `🩺 *মেডিকেল নোট:* ${medicalNotes}\n`;
     }
-    if (note) {
-      msg += `⚠️ *বার্তা:* "${note}"\n`;
+    if (note && note.trim() && !/^(?:sos|বাঁচাও|help)$/i.test(note.trim())) {
+      msg += `📝 *বার্তা:* "${note.trim()}"\n`;
     }
-
-    msg += `\n📞 *তাঁকে দ্রুত কল করুন:* ${userPhone}\n`;
-    msg += `_অনুগ্রহ করে দ্রুত যোগাযোগ করুন অথবা জাতীয় জরুরি সেবা ৯৯৯-এ সহায়তা নিন!_`;
+    if (bloodGroup || medicalNotes || (note && note.trim() && !/^(?:sos|বাঁচাও|help)$/i.test(note.trim()))) {
+      msg += `\n`;
+    }
+    msg += `🕒 *SOS পাঠানোর সময়:* ${formattedDateTime}\n\n`;
+    msg += `_SmritiLife Emergency Alert_`;
 
     return msg;
   };
 
-  // Dispatch alert to each emergency contact
+  // Dispatch alert to each emergency contact (deduplicating phone numbers)
+  const dispatchedPhones = new Set<string>();
   for (const contact of contacts) {
     const cleanPhone = normalizeMobile(contact.phone);
-    if (!cleanPhone) continue;
+    if (!cleanPhone || dispatchedPhones.has(cleanPhone)) continue;
+    dispatchedPhones.add(cleanPhone);
 
     const alertText = buildContactAlertMessage(contact.name);
     try {

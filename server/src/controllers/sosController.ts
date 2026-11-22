@@ -15,12 +15,16 @@ export const triggerWebSos = async (req: Request, res: Response) => {
     }
 
     const { latitude, longitude, address, note } = req.body;
+    console.log('[triggerWebSos] received payload:', { latitude, longitude, address, note });
+
+    const numLat = latitude !== undefined && latitude !== null && latitude !== '' ? Number(latitude) : undefined;
+    const numLng = longitude !== undefined && longitude !== null && longitude !== '' ? Number(longitude) : undefined;
 
     const result = await triggerSosAlert({
       userId: userId.toString(),
       source: 'web',
-      latitude: latitude ? Number(latitude) : undefined,
-      longitude: longitude ? Number(longitude) : undefined,
+      latitude: numLat && !isNaN(numLat) ? numLat : undefined,
+      longitude: numLng && !isNaN(numLng) ? numLng : undefined,
       address: address ? String(address).trim() : undefined,
       note: note ? String(note).trim() : undefined
     });

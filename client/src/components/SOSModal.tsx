@@ -109,6 +109,8 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
   const [lastAlert, setLastAlert] = useState<any>(null);
   const [isSirenActive, setIsSirenActive] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('');
+  const isDispatchingRef = useRef(false);
+  const cachedCoordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
   
   // Profile / Contacts State
   const [bloodGroup, setBloodGroup] = useState<string>('');
@@ -124,10 +126,39 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
   useEffect(() => {
     if (isOpen) {
       fetchSosProfile();
+      // Prefetch GPS location immediately when modal opens so it's ready when user taps
+      if (navigator.geolocation) {
+        setLocationStatus('জিপিএস সংযোগ খোঁজা হচ্ছে...');
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+            cachedCoordsRef.current = coords;
+            setLocationStatus('✅ জিপিএস লোকেশন প্রস্তুত');
+          },
+          (err) => {
+            console.warn('[SOS] High-accuracy location prefetch failed, trying low accuracy...', err);
+            navigator.geolocation.getCurrentPosition(
+              (pos2) => {
+                const coords = { latitude: pos2.coords.latitude, longitude: pos2.coords.longitude };
+                cachedCoordsRef.current = coords;
+                setLocationStatus('✅ জিপিএস লোকেশন প্রস্তুত');
+              },
+              (err2) => {
+                console.warn('[SOS] Geolocation prefetch failed completely:', err2);
+                setLocationStatus('⚠️ লোকেশন পারমিশন দিন');
+              },
+              { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+            );
+          },
+          { enableHighAccuracy: true, timeout: 4000, maximumAge: 30000 }
+        );
+      }
     } else {
       stopCountdown();
       siren.stop();
       setIsSirenActive(false);
+      cachedCoordsRef.current = null;
+      setLocationStatus('');
     }
   }, [isOpen]);
 
@@ -154,18 +185,22 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
   };
 
   const handleStartCountdown = () => {
-    if (countdown !== null) return;
-    setCountdown(3);
+    if (countdown !== null || isTriggering || isDispatchingRef.current) return;
+    let count = 3;
+    setCountdown(count);
+    if (countdownRef.current) clearInterval(countdownRef.current);
     countdownRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev === null || prev <= 1) {
+      count -= 1;
+      if (count <= 0) {
+        if (countdownRef.current) {
           clearInterval(countdownRef.current);
           countdownRef.current = null;
-          dispatchSos();
-          return null;
         }
-        return prev - 1;
-      });
+        setCountdown(null);
+        dispatchSos();
+      } else {
+        setCountdown(count);
+      }
     }, 1000);
   };
 
@@ -178,10 +213,16 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
   };
 
   const dispatchSos = async () => {
+    if (isDispatchingRef.current) return;
+    isDispatchingRef.current = true;
     setIsTriggering(true);
     setLocationStatus('জিপিএস লোকেশন নেওয়া হচ্ছে...');
 
+    let payloadSent = false;
     const sendPayload = async (coords?: { latitude: number; longitude: number }) => {
+      if (payloadSent) return;
+      payloadSent = true;
+
       try {
         const token = localStorage.getItem('token');
         const res = await fetch(`${import.meta.env.VITE_API_URL}/sos/trigger`, {
@@ -198,9 +239,6 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
         });
 
         const data = await res.json();
-        setIsTriggering(false);
-        setLocationStatus('');
-
         if (data.success) {
           toast.success(data.message, { duration: 6000 });
           setLastAlert({
@@ -213,12 +251,24 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
           toast.error(data.message || 'অ্যালার্ট পাঠানো যায়নি। ৯৯৯-এ কল করুন!');
         }
       } catch (err: any) {
+        toast.error('ইন্টারনেট বা সার্ভার সমস্যা। অবিলম্বে ৯৯৯ এ কল দিন!');
+      } finally {
         setIsTriggering(false);
         setLocationStatus('');
-        toast.error('ইন্টারনেট বা সার্ভার সমস্যা। অবিলম্বে ৯৯৯ এ কল দিন!');
+        setTimeout(() => {
+          isDispatchingRef.current = false;
+        }, 3000);
       }
     };
 
+    // 1. If coordinates are already pre-fetched and ready, dispatch immediately!
+    if (cachedCoordsRef.current) {
+      console.log('[SOS] Dispatching with pre-fetched coordinates:', cachedCoordsRef.current);
+      sendPayload(cachedCoordsRef.current);
+      return;
+    }
+
+    // 2. Otherwise request coordinates with high-accuracy, falling back to low-accuracy
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -227,11 +277,23 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
             longitude: pos.coords.longitude
           });
         },
-        () => {
-          // Timeout or permission denied, dispatch without coordinates
-          sendPayload();
+        (err) => {
+          console.warn('[SOS] High accuracy failed, trying low accuracy fallback...', err);
+          navigator.geolocation.getCurrentPosition(
+            (pos2) => {
+              sendPayload({
+                latitude: pos2.coords.latitude,
+                longitude: pos2.coords.longitude
+              });
+            },
+            (err2) => {
+              console.warn('[SOS] Geolocation completely failed:', err2);
+              sendPayload();
+            },
+            { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+          );
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 4000, maximumAge: 30000 }
       );
     } else {
       sendPayload();

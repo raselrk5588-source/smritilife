@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake, FolderArchive, Store, MessageSquare } from 'lucide-react';
+import { Search, Bell, Mic, FileText, Calendar, Users, Gift, LayoutTemplate, Phone, Video, ShoppingCart, Cake, Bot, ChevronRight, MoreVertical, Moon, Wallet, Handshake, FolderArchive, Store, MessageSquare, Baby } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import AIAssistantModal from '../components/AIAssistantModal';
@@ -356,8 +356,8 @@ export default function Home() {
           );
         })()}
 
-        {/* Quick Access Pills Grid */}
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+        {/* Quick Access Pills Grid - 4 Columns for Clean Breathable Spacing */}
+        <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
           <Link to="/app/notes" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 transition active:scale-95">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center mb-1 relative">
               <FileText className="w-4 h-4 md:w-5 md:h-5" />
@@ -403,11 +403,57 @@ export default function Home() {
             </div>
             <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('এফ-কমার্স', 'F-Commerce')}</span>
           </Link>
-          <Link to="/app/period" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center mb-1">
-              <Heart className="w-4 h-4 md:w-5 md:h-5" />
+          <Link to="/app/contacts" className="bg-white py-2.5 md:py-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:bg-slate-50 active:scale-95 transition">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center mb-1">
+              <Users className="w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('পিরিয়ড কেয়ার', 'Period Care')}</span>
+            <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight truncate px-1 w-full">{t('কন্টাক্টস', 'Contacts')}</span>
+          </Link>
+        </div>
+
+        {/* Women Health & Maternal Care Section: Period & Pregnancy (2 Columns) */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <Link
+            to="/app/period"
+            className="bg-gradient-to-r from-rose-50 via-pink-50 to-rose-50/50 rounded-2xl p-2.5 sm:p-3 border border-rose-200/70 shadow-xs hover:shadow-md active:scale-95 transition flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-pink-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Heart className="w-4 h-4 sm:w-4.5 sm:h-4.5 fill-white" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight truncate">
+                  {t('পিরিয়ড কেয়ার', 'Period Care')}
+                </h4>
+                <p className="text-[10px] sm:text-[11px] text-rose-600 font-medium truncate">
+                  {t('সাইকেল ট্র্যাকার', 'Cycle Tracker')}
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-rose-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+
+          <Link
+            to="/app/pregnancy"
+            className="bg-gradient-to-r from-pink-50 via-amber-50/40 to-pink-50/50 rounded-2xl p-2.5 sm:p-3 border border-pink-200/70 shadow-xs hover:shadow-md active:scale-95 transition flex items-center justify-between group relative overflow-hidden"
+          >
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-pink-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Baby className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1">
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight truncate">
+                    {t('মাতৃত্ব কেয়ার', 'Pregnancy')}
+                  </h4>
+                  <span className="text-[8px] bg-rose-500 text-white font-extrabold px-1 rounded-full leading-tight shrink-0">নতুন</span>
+                </div>
+                <p className="text-[10px] sm:text-[11px] text-pink-600 font-medium truncate">
+                  {t('সাপ্তাহিক বিকাশ ও কিক', 'Weekly Guide & Kick')}
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-pink-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
 
