@@ -334,11 +334,11 @@ export default function Auth() {
           <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-8 shadow-xl flex-1 flex flex-col justify-center animate-in fade-in slide-in-from-bottom-8 duration-500">
             <div className="text-center mb-6 sm:mb-8 flex flex-col items-center">
               {/* Brand Logo */}
-              <div className="w-16 h-16 sm:w-20 sm:h-20 mb-3 flex items-center justify-center">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 mb-3 flex items-center justify-center">
                 <img 
                   src="/smritilifeIcon.gif" 
                   alt="SmritiLife Logo" 
-                  className="w-full h-full object-contain" 
+                  className="w-full h-full object-contain drop-shadow-sm select-none" 
                 />
               </div>
 

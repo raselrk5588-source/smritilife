@@ -93,7 +93,7 @@ export default function MainLayout() {
         <div className="w-full max-w-5xl mx-auto px-4 flex items-center justify-between gap-4">
           {/* Brand Logo & Name */}
           <Link to="/app" className="flex items-center space-x-2.5 group select-none shrink-0">
-            <div className="w-8 h-8 flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center group-hover:scale-105 transition-all duration-300 shrink-0">
               <img 
                 src="/smritilifeIcon.gif" 
                 alt="SmritiLife AI" 
@@ -158,7 +158,7 @@ export default function MainLayout() {
         {isMainTab && (
           <header className="sticky top-0 z-40 md:hidden flex justify-between items-center px-4 h-14 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
             <Link to="/app" className="flex items-center gap-2 select-none">
-              <div className="w-8 h-8 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center shrink-0">
                 <img 
                   src="/smritilifeIcon.gif" 
                   alt="SmritiLife AI" 

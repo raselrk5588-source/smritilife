@@ -143,17 +143,9 @@ export const startReminderScheduler = () => {
             const displayTime = formatTime12Hour(rem.time);
             const descLine = rem.description ? `\n📝 বিবরণ: ${rem.description}` : '';
 
-            const preAlertBody = `👋 আসসালামু আলাইকুম${salutation}!\n\n⏳ আর ঠিক *${diffMinutes} মিনিট পর* (${displayTime}-এ) আপনার একটি মিটিং রয়েছে:\n📌 *"${rem.title}"*${descLine}\n\nমিটিংয়ের লিংক ও প্রয়োজনীয় প্রস্তুতি কি রেডি আছে? 🚀`;
+            const preAlertBody = `👋 আসসালামু আলাইকুম${salutation}!\n\n⏳ আর ঠিক *${diffMinutes} মিনিট পর* (${displayTime}-এ) আপনার একটি মিটিং রয়েছে:\n📌 *"${rem.title}"*${descLine}`;
 
-            const preButtons = [
-              { id: `pre_rem_ready_${rem._id}`, title: 'আমি প্রস্তুত ✅' },
-              { id: `pre_rem_delay_${rem._id}`, title: '১০ মিনিট পেছাও ⏱️' }
-            ];
-
-            const sent = await sendMetaWhatsAppButtons(targetPhone, preAlertBody, preButtons);
-            if (!sent) {
-              await sendWhatsAppAlert(targetPhone, `${preAlertBody}\n\n👉 প্রস্তুত থাকলে লিখুন: "আমি প্রস্তুত"\n👉 পেছাতে চাইলে লিখুন: "১০ মিনিট পেছাও"`);
-            }
+            await sendWhatsAppAlert(targetPhone, preAlertBody);
             console.log(`[ReminderScheduler] Dispatched gentle pre-reminder for "${rem.title}" (${displayTime}) to ${targetPhone}`);
           }
         }
