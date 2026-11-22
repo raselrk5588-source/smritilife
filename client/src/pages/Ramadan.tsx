@@ -166,7 +166,7 @@ export default function Ramadan() {
       });
 
       if (res.ok) {
-        toast.success('স্বয়ংক্রিয় সতর্কবার্তা আপডেট হয়েছে! 🌙', { icon: '✅' });
+        toast.success('স্বয়ংক্রিয় বার্তা আপডেট হয়েছে! 🌙', { icon: '✅' });
       } else {
         toast.error('সেভ করতে ব্যর্থ হয়েছে');
       }
@@ -463,7 +463,7 @@ export default function Ramadan() {
                 <Bell className="w-4 h-4 animate-bounce" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">হোয়াটসঅ্যাপ অটো সতর্কবার্তা</h3>
+                <h3 className="text-sm font-bold text-white">হোয়াটসঅ্যাপ অটো বার্তা</h3>
                 <p className="text-[11px] text-emerald-200/60">সেহরি ও ইফতারের পূর্বে স্বয়ংক্রিয় অ্যালার্ম ও ওয়েক-আপ কল</p>
               </div>
             </div>
