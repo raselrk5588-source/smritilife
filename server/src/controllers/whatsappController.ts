@@ -3239,6 +3239,41 @@ export const receiveWebhook = async (req: Request, res: Response) => {
           return;
         }
 
+        if (buttonId.startsWith('pre_rem_ready_')) {
+          const remId = buttonId.replace('pre_rem_ready_', '');
+          const reminder = await Reminder.findById(remId);
+          const title = reminder?.title || 'মিটিং';
+          const displayTime = reminder?.time ? formatTime12Hour(reminder.time) : '';
+          const salutation = user.honorific ? ` ${user.honorific}` : '';
+          await sendMetaWhatsAppMessage(
+            fromNumber,
+            `🌟 দারুণ${salutation}! আপনার "${title}" মিটিংয়ের প্রস্তুতি সম্পূর্ণ জেনে খুব ভালো লাগলো।\nঠিক ${displayTime}-এ চূড়ান্ত রিমাইন্ডার অ্যালার্ট পৌঁছে যাবে। সফল মিটিংয়ের শুভকামনা! 🎯`
+          );
+          return;
+        }
+
+        if (buttonId.startsWith('pre_rem_delay_')) {
+          const remId = buttonId.replace('pre_rem_delay_', '');
+          const reminder = await Reminder.findById(remId);
+          if (reminder && reminder.time) {
+            const [h, m] = reminder.time.split(':').map(Number);
+            if (!isNaN(h) && !isNaN(m)) {
+              const totalM = h * 60 + m + 10;
+              const newH = Math.floor((totalM % 1440) / 60);
+              const newM = totalM % 60;
+              const newTimeStr = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+              await Reminder.findByIdAndUpdate(remId, { time: newTimeStr });
+              const newDisplay = formatTime12Hour(newTimeStr);
+              const salutation = user.honorific ? ` ${user.honorific}` : '';
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `⏱️ ঠিক আছে${salutation}! মিটিংয়ের রিমাইন্ডারটি ১০ মিনিট পিছিয়ে *${newDisplay}*-এ পুনঃনির্ধারণ করা হলো। নির্দিষ্ট সময়ে আপনাকে চূড়ান্ত অ্যালার্ট দেওয়া হবে! 👍`
+              );
+              return;
+            }
+          }
+        }
+
         // --- STEP 2: Handle Pending Wish Name Response ---
         const activeWishState = userWishState.get(user._id.toString());
         if (activeWishState && activeWishState.expiresAt > Date.now() && activeWishState.waitingForName) {
@@ -3493,6 +3528,53 @@ export const receiveWebhook = async (req: Request, res: Response) => {
             `💤 অ্যালার্মটি ৫ মিনিটের জন্য স্নুজ করা হলো (পরবর্তী অ্যালার্ম: ${formatTime12Hour(newTime)})। ঠিক ৫ মিনিট পর আপনাকে আবার ডাকা হবে!`
           );
           return;
+        }
+
+        // --- Handle Pre-Reminder textual replies ("আমি প্রস্তুত" / "১০ মিনিট পেছাও") ---
+        const isPreReadyIntent = /^(?:আমি\s*প্রস্তুত|প্রস্তুত|রেডি|ready|আমি\s*রেডি|all\s*ready|prepared|prep\s*done)\b/i.test(cleanText.trim());
+        const isPreDelayIntent = /(?:১০\s*মিনিট\s*পেছাও|১০\s*মিনিট\s*পিছাও|১০\s*মি\s*পেছাও|10\s*min\s*delay|delay\s*10|10\s*mnt\s*pore|১০\s*মিনিট\s*পরে|10\s*মিনিট\s*পেছাও)/i.test(cleanText.trim());
+
+        if (isPreReadyIntent || isPreDelayIntent) {
+          const nowPre = new Date();
+          const dhakaDateStr = nowPre.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+          const dhakaTimeStr = nowPre.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false, hour: '2-digit', minute: '2-digit' });
+          const todayStart = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
+          const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
+
+          const upcomingPreReminder = await Reminder.findOne({
+            userId: user._id,
+            status: 'Pending',
+            isPreReminderSent: true,
+            date: { $lte: todayEnd, $gte: todayStart },
+            time: { $gt: dhakaTimeStr }
+          }).sort({ time: 1 });
+
+          if (upcomingPreReminder) {
+            const salutation = user.honorific ? ` ${user.honorific}` : '';
+            if (isPreReadyIntent) {
+              const displayTime = formatTime12Hour(upcomingPreReminder.time);
+              await sendMetaWhatsAppMessage(
+                fromNumber,
+                `🌟 দারুণ${salutation}! আপনার "${upcomingPreReminder.title}" মিটিংয়ের প্রস্তুতি সম্পূর্ণ জেনে খুব ভালো লাগলো।\nঠিক ${displayTime}-এ চূড়ান্ত রিমাইন্ডার পৌঁছে যাবে। শুভকামনা! 🎯`
+              );
+              return;
+            } else if (isPreDelayIntent && upcomingPreReminder.time) {
+              const [h, m] = upcomingPreReminder.time.split(':').map(Number);
+              if (!isNaN(h) && !isNaN(m)) {
+                const totalM = h * 60 + m + 10;
+                const newH = Math.floor((totalM % 1440) / 60);
+                const newM = totalM % 60;
+                const newTimeStr = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+                await Reminder.findByIdAndUpdate(upcomingPreReminder._id, { time: newTimeStr });
+                const newDisplay = formatTime12Hour(newTimeStr);
+                await sendMetaWhatsAppMessage(
+                  fromNumber,
+                  `⏱️ ঠিক আছে${salutation}! মিটিংয়ের রিমাইন্ডারটি ১০ মিনিট পিছিয়ে *${newDisplay}*-এ পুনঃনির্ধারণ করা হলো। নির্দিষ্ট সময়ে আপনাকে চূড়ান্ত অ্যালার্ট দেওয়া হবে! 👍`
+                );
+                return;
+              }
+            }
+          }
         }
 
         // Check if user has an active reminder waiting for time OR if user is correcting a recently rescheduled/alerted reminder
@@ -5388,6 +5470,9 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   calculatedDate = new Date(Date.UTC(targetYear, targetMonth, targetDay, 0, 0, 0));
                 }
 
+                const isMeeting = /মিটিং|meeting|অ্যাপয়েন্টমেন্ট|appointment|ইন্টারভিউ|interview|ক্লায়েন্ট|client|কনফারেন্স|conference|সেমিনার|seminar|জুম|zoom|গুগল মিট|google meet|meet/i.test(`${finalTitle || ''} ${customMsg || ''} ${cleanText || ''}`);
+                const preMins = isMeeting ? 20 : 0;
+
                 await Reminder.create({
                   userId: user._id,
                   title: finalTitle,
@@ -5395,10 +5480,11 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   date: calculatedDate,
                   time: reminderTime,
                   priority: 'Medium',
-                  category: finalCategory,
+                  category: isMeeting ? 'meeting' : finalCategory,
                   repeat: finalRepeat,
                   status: 'Pending',
-                  isAlarm: isWakeup
+                  isAlarm: isWakeup,
+                  preReminderMinutes: preMins
                 });
 
                 let reply = '';
@@ -5433,6 +5519,9 @@ export const receiveWebhook = async (req: Request, res: Response) => {
                   }
 
                   reply = `${icon} আপনার ${isMedicine ? 'ওষুধের ' : (isWakeup ? 'ওয়েক-আপ অ্যালার্ম ' : '')}রিমাইন্ডার *"${finalTitle}"* ${repeatStr}সময় *${formattedTime}*-এ সফলভাবে সেট করা হয়েছে!${dateInfo}`;
+                  if (isMeeting) {
+                    reply += `\n\n💡 *স্মার্ট মিটিং প্রস্তুতি:* মিটিং শুরুর ২০ মিনিট আগে আপনাকে একটি জেন্টল প্রি-রিমাইন্ডার পাঠানো হবে যাতে আপনি লিংক ও নোটস নিয়ে প্রস্তুত হতে পারেন! 🚀`;
+                  }
                 }
 
                 await sendMetaWhatsAppMessage(

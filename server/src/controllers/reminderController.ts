@@ -30,6 +30,8 @@ export const createReminder = async (req: Request, res: Response) => {
     }
 
     const isWakeup = category === 'wakeup' || category === 'alarm' || isAlarm === true;
+    const isMeeting = /মিটিং|meeting|অ্যাপয়েন্টমেন্ট|appointment|ইন্টারভিউ|interview|ক্লায়েন্ট|client|কনফারেন্স|conference|সেমিনার|seminar|জুম|zoom|গুগল মিট|google meet|meet/i.test(`${title || ''} ${description || ''} ${category || ''}`);
+    const preMins = req.body.preReminderMinutes !== undefined ? Number(req.body.preReminderMinutes) : (isMeeting ? 20 : 0);
 
     // If medicine routine reminder already exists for this slot, merge medicines
     if (category === 'medicine' && medicineRoutine) {
@@ -90,7 +92,8 @@ export const createReminder = async (req: Request, res: Response) => {
       durationDays: durationDays ? Number(durationDays) : undefined,
       mealTiming,
       medicineRoutine,
-      medicines: Array.isArray(medicines) ? medicines : undefined
+      medicines: Array.isArray(medicines) ? medicines : undefined,
+      preReminderMinutes: preMins
     });
     const savedReminder = await reminder.save();
     res.status(201).json(savedReminder);

@@ -107,6 +107,58 @@ export const startReminderScheduler = () => {
       const todayStart = new Date(`${dhakaDateStr}T00:00:00.000+06:00`);
       const todayEnd = new Date(`${dhakaDateStr}T23:59:59.999+06:00`);
 
+      // --- Pre-reminder dispatch for upcoming meetings (e.g. 20 mins before) ---
+      const [curH, curM] = dhakaTimeStr.split(':').map(Number);
+      const currentMinutes = curH * 60 + curM;
+
+      const preDueReminders = await Reminder.find({
+        status: 'Pending',
+        preReminderMinutes: { $gt: 0 },
+        date: { $lte: todayEnd, $gte: todayStart },
+        time: { $gt: dhakaTimeStr },
+        isPreReminderSent: { $ne: true },
+        preReminderDispatchedDate: { $ne: dhakaDateStr }
+      });
+
+      if (preDueReminders.length > 0) {
+        for (const rem of preDueReminders) {
+          const [rH, rM] = (rem.time || '').split(':').map(Number);
+          if (isNaN(rH) || isNaN(rM)) continue;
+          const reminderMinutes = rH * 60 + rM;
+          const diffMinutes = reminderMinutes - currentMinutes;
+          const windowMins = rem.preReminderMinutes || 20;
+
+          if (diffMinutes > 0 && diffMinutes <= windowMins) {
+            const claimedPre = await Reminder.findOneAndUpdate(
+              { _id: rem._id, isPreReminderSent: { $ne: true }, preReminderDispatchedDate: { $ne: dhakaDateStr } },
+              { $set: { isPreReminderSent: true, preReminderDispatchedDate: dhakaDateStr } }
+            );
+            if (!claimedPre) continue;
+
+            const remUser = await User.findById(rem.userId);
+            const targetPhone = remUser?.whatsapp || remUser?.mobile;
+            if (!targetPhone) continue;
+
+            const salutation = remUser?.honorific ? ` ${remUser.honorific}` : (remUser?.name ? ` ${remUser.name.split(' ')[0]}` : '');
+            const displayTime = formatTime12Hour(rem.time);
+            const descLine = rem.description ? `\n📝 বিবরণ: ${rem.description}` : '';
+
+            const preAlertBody = `👋 আসসালামু আলাইকুম${salutation}!\n\n⏳ আর ঠিক *${diffMinutes} মিনিট পর* (${displayTime}-এ) আপনার একটি মিটিং রয়েছে:\n📌 *"${rem.title}"*${descLine}\n\nমিটিংয়ের লিংক ও প্রয়োজনীয় প্রস্তুতি কি রেডি আছে? 🚀`;
+
+            const preButtons = [
+              { id: `pre_rem_ready_${rem._id}`, title: 'আমি প্রস্তুত ✅' },
+              { id: `pre_rem_delay_${rem._id}`, title: '১০ মিনিট পেছাও ⏱️' }
+            ];
+
+            const sent = await sendMetaWhatsAppButtons(targetPhone, preAlertBody, preButtons);
+            if (!sent) {
+              await sendWhatsAppAlert(targetPhone, `${preAlertBody}\n\n👉 প্রস্তুত থাকলে লিখুন: "আমি প্রস্তুত"\n👉 পেছাতে চাইলে লিখুন: "১০ মিনিট পেছাও"`);
+            }
+            console.log(`[ReminderScheduler] Dispatched gentle pre-reminder for "${rem.title}" (${displayTime}) to ${targetPhone}`);
+          }
+        }
+      }
+
       // Find pending reminders due for today with time <= currentTime and not already dispatched today
       const dueReminders = await Reminder.find({
         status: 'Pending',
@@ -455,7 +507,8 @@ export const startReminderScheduler = () => {
             } else {
               await Reminder.findByIdAndUpdate(reminder._id, {
                 date: nextDate,
-                status: 'Pending'
+                status: 'Pending',
+                isPreReminderSent: false
               });
               console.log(`🔄 [ReminderScheduler] Recurring (${reminder.repeat}) reminder "${reminder.title}" advanced to: ${nextDate.toISOString().split('T')[0]}`);
             }
